@@ -88,6 +88,47 @@
       return { readOnly: true, userId: user.id, profileId: profile.id, schoolId: profile.school_id, school: schoolResult.data, classCount: rows.length, classes: rows, duplicateClassNames: duplicates };
     }
 
+    async function auditClassConfigurationReconciliation(legacyClassNames) {
+      const user = await requireAuthenticatedUser();
+      const profile = await getActiveSchoolProfile(user);
+      const [classesResult, formAssignmentsResult, teacherAssignmentsResult] = await Promise.all([
+        client.from('classes').select('id,level,arm,class_name').eq('school_id', profile.school_id).order('class_name', { ascending: true }),
+        client.from('form_master_assignments').select('id,class_id,academic_session_id').eq('school_id', profile.school_id),
+        client.from('teacher_assignments').select('id,class_id,subject_id,academic_session_id,is_active').eq('school_id', profile.school_id)
+      ]);
+      for (const result of [classesResult, formAssignmentsResult, teacherAssignmentsResult]) {
+        if (result.error) throw result.error;
+      }
+      const classes = classesResult.data || [];
+      const legacyNames = Array.isArray(legacyClassNames)
+        ? legacyClassNames.map(value => String(value || '').trim()).filter(Boolean)
+        : [];
+      const normalise = value => String(value || '').trim().toUpperCase().replace(/\\s+/g, '');
+      const dbNames = classes.map(row => normalise(row.class_name));
+      const oldNames = legacyNames.map(normalise);
+      const dbSet = new Set(dbNames), oldSet = new Set(oldNames);
+      const duplicates = [];
+      const seen = new Set();
+      classes.forEach(row => {
+        const key = normalise(row.class_name);
+        if (seen.has(key)) duplicates.push(row.class_name);
+        seen.add(key);
+      });
+      return {
+        readOnly: true,
+        schoolId: profile.school_id,
+        supabaseClassCount: classes.length,
+        legacyClassCount: legacyNames.length,
+        matchedClassCount: classes.filter(row => oldSet.has(normalise(row.class_name))).length,
+        missingInSupabase: legacyNames.filter(name => !dbSet.has(normalise(name))),
+        missingInLegacy: classes.filter(row => !oldSet.has(normalise(row.class_name))).map(row => row.class_name),
+        duplicateSupabaseClassNames: duplicates,
+        formMasterAssignmentCount: (formAssignmentsResult.data || []).length,
+        teacherAssignmentCount: (teacherAssignmentsResult.data || []).length,
+        classes: classes.map(row => ({ id: row.id, level: row.level, arm: row.arm, class_name: row.class_name }))
+      };
+    }
+
     async function auditSchoolDataCounts() {
       const user = await requireAuthenticatedUser();
       const profile = await getActiveSchoolProfile(user);
@@ -344,7 +385,7 @@
       return data;
     }
 
-    return Object.freeze({ select, insert, update, upsert, remove, auditSchoolAndClasses, auditSchoolDataCounts, auditStudentEnrolmentIntegrity, auditAssignmentIntegrity, auditStaffAndAcademicConfiguration, getStaffDirectory, createStaffDirectoryRecord, updateStaffDirectoryRecord });
+    return Object.freeze({ select, insert, update, upsert, remove, auditSchoolAndClasses, auditClassConfigurationReconciliation, auditSchoolDataCounts, auditStudentEnrolmentIntegrity, auditAssignmentIntegrity, auditStaffAndAcademicConfiguration, getStaffDirectory, createStaffDirectoryRecord, updateStaffDirectoryRecord });
   }
   global.SupabasePersistence = Object.freeze({ create });
 })(window);
