@@ -6225,7 +6225,8 @@ async function decideStudentChangeRequest(request, button) {
 
 // ===================== STAFF DATABASE =====================
 function getDefaultPortalStaffFields() {
-  return ['photo', 'fullName', 'designation', 'department', 'qualification', 'specialisation', 'phone', 'email', 'dateEmployed', 'biography'];
+  // Privacy-first defaults: contact details, photographs and employment dates require separate administrator selection.
+  return ['fullName', 'designation', 'department', 'qualification', 'specialisation', 'biography'];
 }
 
 function syncStaffDatabaseFromExistingRecords() {
