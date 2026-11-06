@@ -227,3 +227,8 @@ Any future change to Storage, public profile fields, permissions or database sch
 ---
 
 **Training principle:** The administrator is responsible for the accuracy and publication approval of each staff record. The system provides validation and controlled storage; it does not decide or invent staff information.
+
+
+### Public profile field selection
+
+The default public profile selection is privacy-first: name, designation, department, qualification, specialisation and biography. Phone, email, photograph and date employed are not selected by default and require deliberate administrator selection. Review existing saved selections before publishing a profile; this code change does not rewrite previously saved selections.
