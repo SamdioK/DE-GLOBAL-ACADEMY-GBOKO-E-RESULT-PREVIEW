@@ -103,7 +103,7 @@
       const legacyNames = Array.isArray(legacyClassNames)
         ? legacyClassNames.map(value => String(value || '').trim()).filter(Boolean)
         : [];
-      const normalise = value => String(value || '').trim().toUpperCase().replace(/\\s+/g, '');
+      const normalise = value => String(value || '').trim().toUpperCase().replace(/\s+/g, '');
       const dbNames = classes.map(row => normalise(row.class_name));
       const oldNames = legacyNames.map(normalise);
       const dbSet = new Set(dbNames), oldSet = new Set(oldNames);
