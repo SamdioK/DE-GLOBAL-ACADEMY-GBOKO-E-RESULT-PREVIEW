@@ -159,3 +159,12 @@ The administrator operating procedures, field definitions, manual completion wor
 - Changed default public staff-profile fields to a privacy-first selection. Contact details, photographs and employment dates require separate administrator selection.
 - The change does not rewrite existing saved portal field selections or any staff records.
 - The audit records remaining live negative tests and the future narrowly scoped public-directory read path. Do not weaken private staff-directory RLS to implement public display.
+
+
+## Public staff directory — secure read-path design (2026-11-06)
+
+- Added [Public Staff Directory — Secure Read-Path Design](PUBLIC-STAFF-DIRECTORY-SECURE-READ-PATH.md).
+- The design proposes anonymous read access only to an explicit allow-list of public profile columns and only for records with Active status and `show_on_portal = true`.
+- It explicitly prohibits broad anonymous table access, public access to contact details and private metadata, and use of a service-role key in the browser.
+- The design includes a proposed SQL migration, frontend integration requirements, positive and negative acceptance tests, and a rollback plan.
+- **No SQL was executed and no Supabase grants, RLS policies, schema or staff records were changed.** The migration requires review and approval before execution.
