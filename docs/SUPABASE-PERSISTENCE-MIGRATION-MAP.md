@@ -146,3 +146,8 @@ The preview and live repositories share the same Supabase project. Any staff wri
 - Qualification selection is limited to a maximum of eight options.
 - The existing status and public visibility controls remain administrator-controlled. No existing staff records were bulk edited or published by this code change.
 - Public visibility remains false until an administrator explicitly enables it on an individual record.
+
+
+## Staff Database training documentation
+
+The administrator operating procedures, field definitions, manual completion workflow, publication safeguards, validation, troubleshooting and practical training exercise are documented in [Staff Database — Administrator Operational and Training Manual](STAFF-DATABASE-ADMIN-TRAINING-MANUAL.md). This manual applies to the current Supabase-connected Staff Database implementation and records its known limitations.
