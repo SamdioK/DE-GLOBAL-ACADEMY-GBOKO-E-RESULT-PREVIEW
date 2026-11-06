@@ -6415,7 +6415,7 @@ function renderStaffDatabase() {
       '</div>';
     }).join('') +
     '<div class="input-group"><label>Photo</label><input id="staffPhoto" type="file" accept="image/*"></div><div class="input-group"><label>Account Status</label><select id="staffStatus"><option>Active</option><option>Inactive</option><option>Suspended</option></select></div><div class="input-group"><label><input id="staffShowOnPortal" type="checkbox"> Show on School Portal</label></div></div><button class="btn btn-success" id="saveStaffRecordBtn">Add Staff Record</button> <button class="btn" id="clearStaffRecordBtn" style="background:#eee">Clear / Cancel</button></div>' +
-    '<div class="card"><div class="input-group"><label for="staffDatabaseSearch">🔍 Search staff database</label><input id="staffDatabaseSearch" type="search" placeholder="Search by name, ID, department, designation, subject, phone or email"></div><div id="staffDatabaseRows"></div></div>';
+    '<div class="card"><h3>Staff Record Completeness</h3><p style="color:#666">This summary identifies missing information. It does not invent or automatically fill staff details.</p><div id="staffCompletenessSummary" style="margin:10px 0"></div><div class="input-group"><label for="staffDatabaseSearch">🔍 Search staff database</label><input id="staffDatabaseSearch" type="search" placeholder="Search by name, ID, department, designation, subject, phone or email"></div><div id="staffDatabaseRows"></div></div>';
   document.getElementById('staffDatabaseTab').innerHTML = html;
   var inputIds = fields
     .filter(function(field) {
@@ -6543,6 +6543,30 @@ function renderStaffDatabase() {
       'Add Staff Record';
   }
   function renderRows() {
+    var summary = document.getElementById('staffCompletenessSummary');
+    if (summary) {
+      var completenessFields = [
+        ['staffId', 'Staff ID'], ['gender', 'Gender'], ['designation', 'Designation'],
+        ['department', 'Department'], ['qualification', 'Qualification'],
+        ['specialisation', 'Specialisation'], ['employmentType', 'Employment type'],
+        ['dateEmployed', 'Date employed']
+      ];
+      var summaryRows = completenessFields.map(function(field) {
+        var populated = staffDatabase.filter(function(record) {
+          var value = record[field[0]];
+          return Array.isArray(value) ? value.length > 0 : String(value || '').trim() !== '';
+        }).length;
+        return '<div style="display:flex;justify-content:space-between;gap:12px;padding:7px 0;border-bottom:1px solid #eee"><span>' +
+          escapeManagementText(field[1]) + '</span><strong>' + populated + ' / ' + staffDatabase.length + '</strong></div>';
+      }).join('');
+      var incompleteCount = staffDatabase.filter(function(record) {
+        return !record.gender || !record.designation || !record.department ||
+          !record.employmentType || !(Array.isArray(record.qualification) ? record.qualification.length : String(record.qualification || '').trim());
+      }).length;
+      summary.innerHTML = '<p><strong>' + incompleteCount + ' of ' + staffDatabase.length +
+        '</strong> records have one or more missing core profile fields.</p>' + summaryRows +
+        '<p style="font-size:12px;color:#64748b">Staff IDs remain optional for now and must be entered manually by the administrator.</p>';
+    }
     var query = document.getElementById('staffDatabaseSearch').value.trim().toLowerCase();
     var matches = staffDatabase.filter(function(record) { return fields.some(function(field) { return String(record[field[0]] || '').toLowerCase().indexOf(query) !== -1; }) || String(record.staffId || '').toLowerCase().indexOf(query) !== -1; });
     document.getElementById('staffDatabaseRows').innerHTML = matches.length ? '<div style="overflow-x:auto"><table><thead><tr><th>Photo</th><th>Staff ID</th><th>Name</th><th>Gender</th><th>Employment Type</th><th>Designation / Department</th><th>Specialisation</th><th>Status</th><th>Portal</th><th>Actions</th></tr></thead><tbody>' + matches.map(function(record) { return '<tr><td>' + (record.photo ? '<img src="' + escapeManagementText(record.photo) + '" alt="" style="width:48px;height:54px;object-fit:cover;border-radius:4px">' : '—') + '</td><td>' + escapeManagementText(record.staffId) + '</td><td>' + escapeManagementText(record.fullName) + '</td><td>' + escapeManagementText(record.gender) + '</td><td>' + escapeManagementText(record.employmentType) + '</td><td>' + escapeManagementText(record.designation) + ' / ' + escapeManagementText(record.department) + '</td><td>' + escapeManagementText(record.specialisation) + '</td><td>' + escapeManagementText(record.status) + '</td><td>' + (record.showOnPortal ? 'Yes' : 'No') + '</td><td style="white-space:nowrap"><button class="btn btn-primary staff-edit" data-id="' + escapeManagementText(record.id) + '">Edit</button> <button class="btn ' + (record.status === 'Active' ? 'btn-danger' : 'btn-success') + ' staff-toggle" data-id="' + escapeManagementText(record.id) + '">' + (record.status === 'Active' ? 'Deactivate' : 'Activate') + '</button></td></tr>'; }).join('') + '</tbody></table></div>' : '<p style="color:#999">No matching staff records.</p>';
@@ -6561,16 +6585,24 @@ function renderStaffDatabase() {
       document.getElementById('departmentOther').focus();
       return;
     }
-    if (!document.getElementById('gender').value) {
-      showToast('Please select a gender', 'error');
-      document.getElementById('gender').focus();
+    var selectedQualifications = getSelectedQualifications();
+    if (selectedQualifications.length > 8) {
+      showToast('A maximum of 8 qualifications can be selected.', 'error');
       return;
     }
-
-    if (!document.getElementById('employmentType').value) {
-      showToast('Please select an employment type', 'error');
-      document.getElementById('employmentType').focus();
-      return;
+    if (document.getElementById('staffShowOnPortal').checked) {
+      var publicationRequirements = [
+        ['gender', 'Gender'], ['designation', 'Designation / Position'],
+        ['department', 'Department'], ['employmentType', 'Employment Type']
+      ];
+      var missingPublicationFields = publicationRequirements.filter(function(item) {
+        return !String(document.getElementById(item[0]).value || '').trim();
+      }).map(function(item) { return item[1]; });
+      if (!selectedQualifications.length && !editingQualificationLegacy) missingPublicationFields.push('Qualification');
+      if (missingPublicationFields.length) {
+        showToast('Complete these fields before publishing: ' + missingPublicationFields.join(', '), 'error');
+        return;
+      }
     }
     var file = document.getElementById('staffPhoto').files[0];
     if (file) { showToast('Staff photo upload will be enabled after the Supabase Storage policy is verified. Save the record without a new photo for now.', 'error'); return; }
