@@ -10,7 +10,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script src="supabase-persistence.js?v=202611061606"></script>
+<script src="supabase-persistence.js?v=202611062135"></script>
 <script src="score-entry-engine.js"></script>
 <style>
 * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -7247,7 +7247,7 @@ function renderDashboard() {
   html += '<button class="btn btn-primary" onclick="showTab(\'masters\'); document.querySelectorAll(\'.tab\').forEach(function(t){t.classList.remove(\'active\'); if(t.textContent===\'Masters\')t.classList.add(\'active\');});" style="padding: 10px 20px;">Manage Subject Teachers</button></div>';
 
   if (currentUser && currentUser.type === 'admin') {
-    html += '<div class="card" style="margin-top:20px;border-left:4px solid #667eea;"><h3>Supabase Migration Readiness</h3><p style="color:#666;">Run read-only checks of the linked school, classes and school data counts. No records are changed or downloaded by the count audit.</p><button type="button" class="btn btn-primary" id="runSupabaseSchoolAuditBtn">Run Read-only School &amp; Class Audit</button><div id="supabaseSchoolAuditResult" style="margin-top:14px;"></div><hr style="margin:18px 0;"><button type="button" class="btn btn-primary" id="runSupabaseDataCountAuditBtn">Run Read-only School Data Inventory</button><div id="supabaseDataCountAuditResult" style="margin-top:14px;"></div><hr style="margin:18px 0;"><button type="button" class="btn btn-primary" id="runStudentEnrolmentIntegrityBtn">Run Student Enrolment Integrity Check</button><div id="studentEnrolmentIntegrityResult" style="margin-top:14px;"></div><hr style="margin:18px 0;"><button type="button" class="btn btn-primary" id="runAssignmentIntegrityBtn">Run Assignment Integrity Check</button><div id="assignmentIntegrityResult" style="margin-top:14px;"></div><hr style="margin:18px 0;"><button type="button" class="btn btn-primary" id="runStaffAcademicAuditBtn">Run Staff &amp; Academic Configuration Audit</button><div id="staffAcademicAuditResult" style="margin-top:14px;"></div></div>';
+    html += '<div class="card" style="margin-top:20px;border-left:4px solid #667eea;"><h3>Supabase Migration Readiness</h3><p style="color:#666;">Run read-only checks of the linked school, classes and school data counts. No records are changed or downloaded by the count audit.</p><button type="button" class="btn btn-primary" id="runSupabaseSchoolAuditBtn">Run Read-only School &amp; Class Audit</button><div id="supabaseSchoolAuditResult" style="margin-top:14px;"></div><hr style="margin:18px 0;"><button type="button" class="btn btn-primary" id="runClassConfigurationReconciliationBtn">Run Class Configuration Reconciliation</button><div id="classConfigurationReconciliationResult" style="margin-top:14px;"></div><hr style="margin:18px 0;"><button type="button" class="btn btn-primary" id="runSupabaseDataCountAuditBtn">Run Read-only School Data Inventory</button><div id="supabaseDataCountAuditResult" style="margin-top:14px;"></div><hr style="margin:18px 0;"><button type="button" class="btn btn-primary" id="runStudentEnrolmentIntegrityBtn">Run Student Enrolment Integrity Check</button><div id="studentEnrolmentIntegrityResult" style="margin-top:14px;"></div><hr style="margin:18px 0;"><button type="button" class="btn btn-primary" id="runAssignmentIntegrityBtn">Run Assignment Integrity Check</button><div id="assignmentIntegrityResult" style="margin-top:14px;"></div><hr style="margin:18px 0;"><button type="button" class="btn btn-primary" id="runStaffAcademicAuditBtn">Run Staff &amp; Academic Configuration Audit</button><div id="staffAcademicAuditResult" style="margin-top:14px;"></div></div>';
   }
 
   document.getElementById('dashboardTab').innerHTML = html;
@@ -7490,6 +7490,52 @@ function renderDashboard() {
       }
     });
   }
+
+  var classReconciliationButton = document.getElementById('runClassConfigurationReconciliationBtn');
+  if (classReconciliationButton) {
+    classReconciliationButton.addEventListener('click', async function() {
+      var output = document.getElementById('classConfigurationReconciliationResult');
+      classReconciliationButton.disabled = true;
+      classReconciliationButton.textContent = 'Reconciling class configuration...';
+      output.textContent = 'Comparing legacy class-arm names with Supabase classes and counting assignment records. This is read-only; no data will be changed.';
+      try {
+        if (!supabasePersistence || typeof supabasePersistence.auditClassConfigurationReconciliation !== 'function') {
+          throw new Error('Class configuration reconciliation is not available. Reload the portal after deployment.');
+        }
+        var legacyNames = Array.isArray(classArms) ? classArms.map(function(item) { return item && item.name; }).filter(Boolean) : [];
+        var report = await supabasePersistence.auditClassConfigurationReconciliation(legacyNames);
+        var safe = function(value) {
+          return String(value == null ? '' : value).replace(/[&<>"']/g, function(ch) {
+            return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch];
+          });
+        };
+        var issueCount = report.missingInSupabase.length + report.missingInLegacy.length + report.duplicateSupabaseClassNames.length;
+        var classRows = report.classes.map(function(item) {
+          return '<tr><td>' + safe(item.class_name) + '</td><td>' + safe(item.level) + '</td><td>' + safe(item.arm) + '</td><td><code>' + safe(item.id) + '</code></td></tr>';
+        }).join('');
+        var list = function(values) { return values.length ? values.map(safe).join(', ') : 'None'; };
+        output.innerHTML =
+          '<div style="background:' + (issueCount ? '#fff7e6' : '#eef8f0') + ';padding:12px;border-radius:8px;"><strong>' +
+          (issueCount ? 'Reconciliation requires review. No records were changed.' : 'Class names match between the legacy list and Supabase.') +
+          '</strong><p>Supabase classes: ' + safe(report.supabaseClassCount) + ' | Legacy class arms: ' + safe(report.legacyClassCount) +
+          ' | Matched: ' + safe(report.matchedClassCount) + '</p><p>Form Master assignments: ' + safe(report.formMasterAssignmentCount) +
+          ' | Teacher/subject assignments: ' + safe(report.teacherAssignmentCount) + '</p></div>' +
+          '<h4>Legacy classes missing from Supabase</h4><p>' + list(report.missingInSupabase) + '</p>' +
+          '<h4>Supabase classes missing from legacy list</h4><p>' + list(report.missingInLegacy) + '</p>' +
+          '<h4>Duplicate Supabase class names</h4><p>' + list(report.duplicateSupabaseClassNames) + '</p>' +
+          '<div style="overflow-x:auto;margin-top:12px;"><table><thead><tr><th>Class name</th><th>Level</th><th>Arm</th><th>Supabase class ID</th></tr></thead><tbody>' +
+          (classRows || '<tr><td colspan="4">No classes returned.</td></tr>') + '</tbody></table></div>' +
+          '<p><strong>Safety:</strong> This report only reads records. It does not modify class records, assignments, student enrolments or legacy browser data.</p>';
+        window.lastClassConfigurationReconciliationReport = report;
+      } catch (error) {
+        output.innerHTML = '<div style="background:#fff0f0;color:#9b1c1c;padding:12px;border-radius:8px;"><strong>Reconciliation could not be completed.</strong><p>' + safeAuditMessage(error) + '</p></div>';
+      } finally {
+        classReconciliationButton.disabled = false;
+        classReconciliationButton.textContent = 'Run Class Configuration Reconciliation';
+      }
+    });
+  }
+
 }
 
 function safeAuditMessage(error) {
