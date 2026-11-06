@@ -151,3 +151,11 @@ The preview and live repositories share the same Supabase project. Any staff wri
 ## Staff Database training documentation
 
 The administrator operating procedures, field definitions, manual completion workflow, publication safeguards, validation, troubleshooting and practical training exercise are documented in [Staff Database — Administrator Operational and Training Manual](STAFF-DATABASE-ADMIN-TRAINING-MANUAL.md). This manual applies to the current Supabase-connected Staff Database implementation and records its known limitations.
+
+
+## Staff Database security review (2026-11-06)
+
+- Added a source-code security and access review in [Staff Database — Security and Access Audit](STAFF-DATABASE-SECURITY-ACCESS-AUDIT.md).
+- Changed default public staff-profile fields to a privacy-first selection. Contact details, photographs and employment dates require separate administrator selection.
+- The change does not rewrite existing saved portal field selections or any staff records.
+- The audit records remaining live negative tests and the future narrowly scoped public-directory read path. Do not weaken private staff-directory RLS to implement public display.
