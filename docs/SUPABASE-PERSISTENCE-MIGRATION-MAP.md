@@ -1,11 +1,13 @@
 # Supabase Persistence Migration — Data Mapping and Safety Audit
 
-Repository: `SamdioK/dgagboko`  
-Working branch: `feature/supabase-persistence-migration`  
+Repository: `SamdioK/DE-GLOBAL-ACADEMY-GBOKO-E-RESULT-PREVIEW`  
+Working branch: `main`  
+Preview URL: `https://samdiok.github.io/DE-GLOBAL-ACADEMY-GBOKO-E-RESULT-PREVIEW/`  
 Audit date: 2026-11-06
 
 ## Status
 
+- Preview deployment: GitHub Actions run `42285393666` completed successfully on 2026-11-06.  
 - `supabase-persistence.js` provides authenticated Supabase CRUD helpers.
 - `index.html` loads that helper after the Supabase JS client and initialises it after creating `supabaseClient`.
 - The legacy `CloudStorage` implementation is intentionally still active.
