@@ -125,3 +125,12 @@ The staff directory write policies and table constraints were reviewed before en
 6. Confirm the public portal's staff display and field-selection behaviour separately before retiring its legacy data path.
 
 The preview and live repositories share the same Supabase project. Any staff write made from the preview portal is a real write to the shared school database.
+
+## Class configuration reconciliation — implementation status (2026-11-06)
+
+- Added `auditClassConfigurationReconciliation` to `supabase-persistence.js`.
+- The audit reads the authenticated school's `classes`, `form_master_assignments` and `teacher_assignments` rows under existing RLS.
+- The administrator dashboard now compares Supabase class names with the legacy `classArms` names and reports unmatched names, duplicate Supabase class names and assignment counts.
+- The audit is strictly read-only. It does not change class rows, assignments, enrolments or browser storage.
+- The legacy `classArms` object remains the active UI model for now because it contains additional fields (Form Master display name, activation state and legacy student-name arrays) that do not map directly to the `classes` table.
+- Do not replace `classArms` with Supabase class rows until the separate assignment and student-enrolment workflows have been mapped and tested.
