@@ -134,3 +134,15 @@ The preview and live repositories share the same Supabase project. Any staff wri
 - The audit is strictly read-only. It does not change class rows, assignments, enrolments or browser storage.
 - The legacy `classArms` object remains the active UI model for now because it contains additional fields (Form Master display name, activation state and legacy student-name arrays) that do not map directly to the `classes` table.
 - Do not replace `classArms` with Supabase class rows until the separate assignment and student-enrolment workflows have been mapped and tested.
+
+
+## Staff database completion and public profile safeguards (2026-11-06)
+
+- Added a live completeness summary to the administrator Staff Database view. It reports populated counts for staff ID, gender, designation, department, qualification, specialisation, employment type and date employed.
+- The summary is calculated from the 15 (or current number of) rows loaded from Supabase. It does not write to the database or invent missing values.
+- Staff IDs remain optional and manually administered, as instructed. No automatic ID generation has been introduced.
+- Administrators may save incomplete records while keeping them unpublished, so existing records can be completed gradually from verified information.
+- When an administrator enables public portal visibility, the form now requires gender, designation, department, employment type and at least one qualification (or a preserved legacy qualification). Missing requirements are reported before saving.
+- Qualification selection is limited to a maximum of eight options.
+- The existing status and public visibility controls remain administrator-controlled. No existing staff records were bulk edited or published by this code change.
+- Public visibility remains false until an administrator explicitly enables it on an individual record.
