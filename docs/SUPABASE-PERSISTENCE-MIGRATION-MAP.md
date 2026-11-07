@@ -232,3 +232,30 @@ The schema inventory alone does not authorise a write migration. Before preparin
 5. Reconcile legacy data against existing Supabase rows using stable identifiers and explicit conflict rules.
 
 No data migration has been executed. The original browser data and existing Supabase records remain untouched. Preview and live deployments share the same Supabase project.
+
+
+## Legacy storage migration — Phase 2B integrity reconciliation prepared (2026-11-07)
+
+The user supplied the complete Phase 2 baseline outputs for the school's known Supabase database:
+
+- School identity confirmed: DE-GLOBAL ACADEMY GBOKO, UUID `b135a823-0a04-4b4b-86dd-2b20ea5e9fac`.
+- Baseline counts: 743 students, 743 enrolments, 8 passports, 30 classes, 51 subjects, 1 academic session, 3 terms, 6 assessment configurations, 16 Form Master assignments, 1 teacher assignment, 29 student import batches, 838 import rows, 15 staff directory rows, 0 results and 0 Form Master student assessments.
+- Unique indexes, relevant write policies and student/enrolment/passport foreign-key constraints were reviewed from the supplied SQL results.
+- Results and assessment tables currently have no records. Result entry must continue through the role- and assignment-restricted workflow. Student import and passport writes remain subject to their existing RLS policies.
+
+### Phase 2B audit files
+
+- [Phase 2B Integrity Reconciliation SQL](LEGACY-STORAGE-MIGRATION-PHASE-2B-INTEGRITY-RECONCILIATION.sql)
+- [Phase 2B Integrity Reconciliation Operational and Training Manual](LEGACY-STORAGE-MIGRATION-PHASE-2B-INTEGRITY-RECONCILIATION-MANUAL.md)
+
+The new SQL is read-only and contains nine result sections. It checks school identity and totals, active students without active enrolments, cross-school or missing enrolment references, duplicate active student/session enrolments, normalised duplicate admission numbers, passport ownership/updater/path metadata, student profile links, missing active register numbers/SIDs, and class/session distribution.
+
+### Current gate
+
+- Phase 2 baseline schema audit: results supplied and reviewed.
+- Phase 2B SQL and training manual: committed to `main`; execution and review pending.
+- Data migration: not started.
+- Browser legacy storage: must remain intact.
+- No database records, schema, indexes, policies or Storage objects have been changed by these documentation commits.
+
+A non-zero audit result is a review item, not permission to delete, merge, archive or overwrite a record. Missing student profile links may be legitimate for students without portal accounts. Passport metadata checks do not prove that the underlying Storage object exists. Any SID repair must use the approved generation workflow. The next gate after Phase 2B review is a backup/export of the original browser's legacy data before any category-specific migration.
