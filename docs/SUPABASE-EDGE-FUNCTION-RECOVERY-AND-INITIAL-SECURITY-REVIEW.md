@@ -105,3 +105,24 @@ The recovered source uses major-version or semver-range imports rather than a si
 ## 6. Safety decision
 
 **No production deployment is authorised by this review.** Keep both deployment inputs set to `no` until the findings and deployment configuration above are resolved. Do not delete browser storage or alter existing student, staff, class, result or enrolment records as part of this source-recovery phase.
+
+## 7. Live gateway JWT configuration verification — 7 November 2026
+
+The project administrator inspected the Supabase Dashboard setting **Verify JWT with legacy secret** for all ten recovered functions and confirmed that all settings match the expected configuration:
+
+| Function | Expected | Administrator-confirmed live setting |
+|---|---|---|
+| `student-admission-login` | OFF | OFF |
+| `provision-student-account` | ON | ON |
+| `change-student-password` | ON | ON |
+| `reset-student-password` | ON | ON |
+| `create-form-master` | ON | ON |
+| `manage-form-master` | ON | ON |
+| `change-form-master-password` | ON | ON |
+| `reset-form-master-password` | ON | ON |
+| `create-school-administrator` | ON | ON |
+| `create-subject-teacher` | ON | ON |
+
+No gateway setting was changed. This confirmation records the administrator's dashboard inspection; it is not an independent API export of function configuration.
+
+The custom secret name `STUDENT_RESET_ENCRYPTION_KEY_V1` was also confirmed visible in Supabase Edge Function Secrets. Its value and cryptographic validity have not been inspected and must remain confidential.
