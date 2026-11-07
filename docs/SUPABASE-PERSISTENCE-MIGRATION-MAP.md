@@ -476,3 +476,19 @@ The proposed transactional SQL:
 - Returns four verification result sets after the transaction.
 
 **Status:** SQL and manual prepared and committed; execution and verification pending. Do not connect the school profile form to writes until the user returns all four verification outputs. This phase does not migrate other legacy browser data or remove local storage.
+
+
+## Supabase-first migration — Phase 5A architecture baseline (2026-11-07)
+
+A fresh source inspection of `index.html` and `supabase-persistence.js` confirmed that the legacy `CloudStorage` class is still active. Its save/load methods use optional `window.storage`, IndexedDB and `localStorage`; they do not persist through Supabase. `saveAllData()` still writes multiple permanent data categories through this legacy layer. The Staff Database remains the identified separate Supabase-backed screen.
+
+The target architecture, category-by-category sequencing, Storage design requirements, cutover checklist, safety rules and Phase 5B/5C gates are documented in:
+
+- [Phase 5A — Supabase-First Persistence Architecture and Migration Work Plan](SUPABASE-FIRST-PERSISTENCE-PHASE-5A-ARCHITECTURE.md)
+- [Phase 5A — Supabase-First Persistence Operational and Training Manual](SUPABASE-FIRST-PERSISTENCE-PHASE-5A-MANUAL.md)
+
+**Phase 5A status:** architecture and migration plan documented; no database, Storage bucket, RLS, browser data or production application behaviour changed.
+
+**Next gate:** before any Phase 5B production write, inspect Supabase migration history and verify whether the prepared Phase 4D secure school-profile update migration has already been applied. Do not blindly apply it. Then verify actual school table grants/RLS and build the narrow school-profile persistence path.
+
+The preview and live site share the same Supabase project. All production writes require backup, explicit approval, read-back reconciliation and role/device testing.
