@@ -6226,7 +6226,7 @@ async function decideStudentChangeRequest(request, button) {
 // ===================== STAFF DATABASE =====================
 function getDefaultPortalStaffFields() {
   // Privacy-first defaults: contact details, photographs and employment dates require separate administrator selection.
-  return ['fullName', 'designation', 'department', 'qualification', 'specialisation', 'biography'];
+  return ['fullName', 'designation', 'department', 'qualification', 'specialisation'];
 }
 
 function syncStaffDatabaseFromExistingRecords() {
@@ -6809,25 +6809,33 @@ async function showPublicPortal() {
     return;
   }
   sections += '<section class="card"><h3>News, Advertisements &amp; Announcements</h3>' + (portalNews.length ? portalNews.slice().reverse().map(function(item) { var images = Array.isArray(item.photos) ? item.photos : (item.photo ? [item.photo] : []); return '<article style="padding:12px 0;border-bottom:1px solid #eee"><p><strong>' + escapeManagementText(item.category || 'Announcement') + '</strong></p><h4>' + escapeManagementText(item.title) + '</h4><p style="color:#777;font-size:12px">' + escapeManagementText(item.date || '') + '</p><p>' + escapeManagementText(item.message).replace(/\n/g, '<br>') + '</p>' + (images.length ? '<div class="grid grid-3" style="margin-top:10px">' + images.map(function(photo) { return '<img class="portal-photo" src="' + escapeManagementText(photo) + '" alt="' + escapeManagementText(item.title) + '" style="width:100%;max-height:220px;object-fit:contain;cursor:zoom-in">'; }).join('') + '</div>' : '') + '</article>'; }).join('') : '<p style="color:#999">No announcements at this time.</p>') + '</section>';
-  syncStaffDatabaseFromExistingRecords();
-  var portalFieldLabels = { designation: 'Position', department: 'Department', qualification: 'Qualification', specialisation: 'Specialisation / Subject', phone: 'Phone', email: 'Email', dateEmployed: 'Date Employed', biography: 'Biography' };
-  var portalStaff = portalStaffSelections.map(function(selection) {
-    var record = staffDatabase.find(function(item) { return String(item.id) === String(selection.staffId); });
-    if (!record || record.status !== 'Active' || record.showOnPortal !== true) return null;
-    var selectedFields = Array.isArray(selection.fields) ? selection.fields : getDefaultPortalStaffFields();
-    var details = selectedFields.filter(function(field) { return field !== 'photo' && field !== 'fullName' && field !== 'qualification' && portalFieldLabels[field] && record[field]; }).map(function(field) { return '<p><strong>' + portalFieldLabels[field] + ':</strong> ' + escapeManagementText(record[field]) + '</p>'; }).join('');
-    if (selectedFields.indexOf('qualification') !== -1) {
-      var qualificationValues = Array.isArray(record.qualification)
-        ? record.qualification.slice()
-        : (record.qualification ? [record.qualification] : []);
-      if (record.qualificationLegacy) qualificationValues.push(record.qualificationLegacy);
-      if (qualificationValues.length) {
-        details += '<p><strong>Qualification:</strong> ' + escapeManagementText(qualificationValues.join('; ')) + '</p>';
-      }
+  var portalStaff = [];
+  var portalStaffLoadError = '';
+  if (supabaseClient) {
+    try {
+      var publicStaffResult = await supabaseClient.rpc('get_public_school_staff_directory');
+      if (publicStaffResult.error) throw publicStaffResult.error;
+      portalStaff = Array.isArray(publicStaffResult.data) ? publicStaffResult.data : [];
+    } catch (staffDirectoryError) {
+      console.error('Public staff directory could not be loaded:', staffDirectoryError);
+      portalStaffLoadError = 'The staff directory is temporarily unavailable.';
     }
-    return '<article class="management-profile" style="margin:8px 0">' + (selectedFields.indexOf('photo') !== -1 && record.photo ? '<img src="' + escapeManagementText(record.photo) + '" alt="' + escapeManagementText(record.fullName) + '" class="portal-photo" style="cursor:zoom-in">' : '') + '<div>' + (selectedFields.indexOf('fullName') !== -1 ? '<h4>' + escapeManagementText(record.fullName) + '</h4>' : '') + details + '</div></article>';
-  }).filter(Boolean);
-  sections += '<section class="card"><h3>Staff List</h3>' + (portalStaff.length ? '<div class="grid grid-3">' + portalStaff.join('') + '</div>' : '<p style="color:#999">No staff profiles are currently published.</p>') + '</section>';
+  } else {
+    portalStaffLoadError = 'The staff directory is temporarily unavailable.';
+  }
+  sections += '<section class="card"><h3>Staff List</h3>' +
+    (portalStaffLoadError ? '<p class="alert alert-info">' + escapeManagementText(portalStaffLoadError) + '</p>' :
+      (portalStaff.length ? '<div class="grid grid-3">' + portalStaff.map(function(record) {
+        return '<article class="management-profile" style="margin:8px 0">' +
+          (record.photo_url ? '<img src="' + escapeManagementText(record.photo_url) + '" alt="' + escapeManagementText(record.full_name || 'Staff member') + '" class="portal-photo" style="cursor:zoom-in">' : '') +
+          '<div><h4>' + escapeManagementText(record.full_name || '') + '</h4>' +
+          (record.designation ? '<p><strong>Position:</strong> ' + escapeManagementText(record.designation) + '</p>' : '') +
+          (record.department ? '<p><strong>Department:</strong> ' + escapeManagementText(record.department) + '</p>' : '') +
+          (record.qualification ? '<p><strong>Qualification:</strong> ' + escapeManagementText(record.qualification) + '</p>' : '') +
+          (record.specialisation ? '<p><strong>Specialisation / Subject:</strong> ' + escapeManagementText(record.specialisation) + '</p>' : '') +
+          '</div></article>';
+      }).join('') + '</div>' : '<p style="color:#999">No staff profiles are currently published.</p>')) +
+    '</section>';
   sections += '<section class="card"><h3>Prefect List</h3>' + (prefects.length ? '<div style="overflow-x:auto"><table><thead><tr><th>Name</th><th>Class</th><th>Portfolio</th><th>Photo</th></tr></thead><tbody>' + prefects.map(function(item) { return '<tr><td>' + escapeManagementText(item.name) + '</td><td>' + escapeManagementText(item.className) + '</td><td>' + escapeManagementText(item.portfolio) + '</td><td>' + (item.photo ? '<img class="portal-photo" src="' + escapeManagementText(item.photo) + '" alt="Prefect ' + escapeManagementText(item.name) + '" style="width:55px;height:65px;object-fit:cover;cursor:zoom-in">' : '—') + '</td></tr>'; }).join('') + '</tbody></table></div>' : '<p style="color:#999">No prefects listed.</p>') + '</section>';
   sections += '<section class="card"><h3>Duty Master Roster</h3><p>Term length: ' + escapeManagementText(portalSettings.termWeeks || 12) + ' weeks</p>' + (dutyRoster.length ? '<div style="overflow-x:auto"><table><thead><tr><th>Week</th><th>Duty Master</th><th>Schedule</th></tr></thead><tbody>' + dutyRoster.slice().sort(function(a,b) { return a.week-b.week; }).map(function(item) { return '<tr><td>Week ' + escapeManagementText(item.week) + '</td><td>' + escapeManagementText(item.name) + '</td><td>' + escapeManagementText(item.schedule) + '</td></tr>'; }).join('') + '</tbody></table></div>' : '<p style="color:#999">Duty roster not published.</p>') + '</section>';
   cloudStorage.globalLoad('portal:developer').then(function(dev) {
