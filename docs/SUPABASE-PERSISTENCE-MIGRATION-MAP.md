@@ -259,3 +259,28 @@ The new SQL is read-only and contains nine result sections. It checks school ide
 - No database records, schema, indexes, policies or Storage objects have been changed by these documentation commits.
 
 A non-zero audit result is a review item, not permission to delete, merge, archive or overwrite a record. Missing student profile links may be legitimate for students without portal accounts. Passport metadata checks do not prove that the underlying Storage object exists. Any SID repair must use the approved generation workflow. The next gate after Phase 2B review is a backup/export of the original browser's legacy data before any category-specific migration.
+
+
+## Phase 2B integrity reconciliation — results reviewed (2026-11-07)
+
+The school returned all nine Phase 2B result sets. The identity and totals match the baseline: 743 students, 743 enrolments, 743 active enrolments and 8 passport metadata rows. Results 2–6 returned no rows. Result 8 reported zero active enrolments missing register numbers and zero missing SIDs. Result 9 listed 16 class/session groups whose counts sum to 743; every group had zero missing student, class or session references.
+
+Result 7 returned 742 student records with null `profile_id`. This is an account-link finding, not by itself an academic-record integrity error. Source inspection of `index.html` confirms the normal student admission login flow requires an active `profiles` row with role `student` and a matching `students.profile_id` link. The administrator interface has a separate Create Login action that invokes the `provision-student-account` Edge Function for eligible students. No automatic account creation is performed by this audit.
+
+### Phase 2C follow-up
+
+- [Phase 2C Student Login Readiness Audit SQL](LEGACY-STORAGE-MIGRATION-PHASE-2C-STUDENT-LOGIN-READINESS-AUDIT.sql)
+- [Phase 2C Student Login Readiness Operational and Training Manual](LEGACY-STORAGE-MIGRATION-PHASE-2C-STUDENT-LOGIN-READINESS-MANUAL.md)
+
+Phase 2C is read-only. It groups students by status, login status, profile-link state and admission-number readiness; reviews linked profile roles/active states/password-change flags; and checks whether any profile is linked to multiple student rows. It does not create accounts or alter records.
+
+### Current migration gate
+
+- Phase 2B core integrity checks: results received and reviewed; no reported issues in the tested enrolment, duplicate, passport-metadata, register-number or SID conditions.
+- Student account readiness: 742 missing profile links require an explicit school decision about which students need portal access; no bulk provisioning is authorised.
+- Phase 2C account-readiness audit: prepared; execution pending.
+- Legacy browser export/backup: not yet performed.
+- Legacy data migration: not started.
+- No production database records, schema, indexes, policies or Storage objects have been changed by this audit work.
+
+Do not infer that the eight passport objects physically exist from metadata checks alone. Do not infer that all students must have portal accounts. Do not manually insert profiles, set student profile links, generate SIDs or bypass the Edge Function. The next migration stage remains a backup/export of the original browser's legacy data after the account-readiness follow-up is understood.
