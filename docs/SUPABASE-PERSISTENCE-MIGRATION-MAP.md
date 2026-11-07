@@ -284,3 +284,27 @@ Phase 2C is read-only. It groups students by status, login status, profile-link 
 - No production database records, schema, indexes, policies or Storage objects have been changed by this audit work.
 
 Do not infer that the eight passport objects physically exist from metadata checks alone. Do not infer that all students must have portal accounts. Do not manually insert profiles, set student profile links, generate SIDs or bypass the Edge Function. The next migration stage remains a backup/export of the original browser's legacy data after the account-readiness follow-up is understood.
+
+
+## Phase 2C student login readiness — results reviewed (2026-11-07)
+
+The school confirmed that **student login accounts are created by the administrator and the login details are given to the respective students**. Student academic records do not automatically require portal accounts.
+
+The four Phase 2C result sets were returned and reviewed:
+
+- 743 active students have nonblank admission numbers.
+- 1 active student has login status `created` and a linked profile.
+- 742 active students have login status `not_created` and no profile link.
+- The one linked profile has role `student`, is active, and has `must_change_password = false`.
+- The duplicate-profile-link query returned no rows.
+
+The 742 unlinked records are therefore awaiting administrator-authorised account creation; they are not automatically data-integrity errors. No accounts were created, no profile links were changed, and no student data was modified during this audit.
+
+The administrator must use the existing **Create Login** interface and the server-side `provision-student-account` workflow for each authorised student. Direct profile inserts, manual profile linking, bulk provisioning and password handling in browser storage are prohibited. The deployed Edge Function source and configuration still need review before a wider provisioning exercise.
+
+### Phase 2C files and status
+
+- [Phase 2C Student Login Readiness Audit SQL](LEGACY-STORAGE-MIGRATION-PHASE-2C-STUDENT-LOGIN-READINESS-AUDIT.sql)
+- [Phase 2C Student Login Readiness Operational and Training Manual](LEGACY-STORAGE-MIGRATION-PHASE-2C-STUDENT-LOGIN-READINESS-MANUAL.md)
+
+**Phase 2C audit: complete.** The account policy and actual aggregate results are recorded in the manual. Account creation remains a separate administrator-controlled activity. The next migration gate is a protected export/backup of legacy data from the original browser/device. Do not clear local browser storage or begin bulk migration until the export is preserved, inspected and reconciled against Supabase.
