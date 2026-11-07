@@ -58,3 +58,6 @@ After a deployment:
 The workflow now has a third input, `download_existing_functions`. Set it to `yes` to list the project's deployed Edge Functions, download their source into the temporary GitHub runner, and upload the source as a private Actions artifact named `deployed-edge-functions-source`. The artifact expires after three days.
 
 This is a recovery/audit operation only. It does not deploy, modify or delete functions. Review the downloaded source for embedded credentials, private keys, tokens, or environment-specific values before committing any source to the repository. The Supabase CLI download does not include import maps or `deno.json` files; restore and review dependencies separately where needed. Do not enable function deployment until the recovered code has been inspected and tested.
+
+## Recovering function source into a review branch
+The recovery job now also creates or updates the branch `recovered-edge-functions-20261107` with the nine deployed function sources that are not already represented by the corrected source-controlled login handler. It deliberately excludes the downloaded legacy `student-admission-login` file so it cannot overwrite the corrected version already on `main`. The job does not merge the branch or deploy functions. Review and merge only after comparing source and completing tests.
