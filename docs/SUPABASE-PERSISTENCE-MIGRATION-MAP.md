@@ -168,3 +168,31 @@ The administrator operating procedures, field definitions, manual completion wor
 - It explicitly prohibits broad anonymous table access, public access to contact details and private metadata, and use of a service-role key in the browser.
 - The design includes a proposed SQL migration, frontend integration requirements, positive and negative acceptance tests, and a rollback plan.
 - **No SQL was executed and no Supabase grants, RLS policies, schema or staff records were changed.** The migration requires review and approval before execution.
+
+## Legacy storage migration — Phase 1 update (2026-11-07)
+
+A source-code inventory confirmed that the legacy `CloudStorage` implementation remains active. It still uses `window.storage`, IndexedDB (`EResultDB`) and `localStorage`; the temporary password-reset operation lock also uses `sessionStorage`. The source contains 75 calls to the legacy CloudStorage API and the following key families: school configuration, student batches, class arms, Form Masters, subject assignments, management staff, sub-administrators, portal news, prefects, duty roster, portal settings, signatures, ID-card settings, developer profile and score-entry preferences.
+
+The legacy persistence path has **not** been removed. Its remaining data categories require a verified destination schema, RLS review, original-device backup where data exists only in browser storage, migration, read-back reconciliation and role-based acceptance tests.
+
+### New-device login correction
+
+The former startup routine used the browser-local `school:main` key to decide whether to show one-time school setup or the login form. This made a new browser/device appear unregistered even though the school is already provisioned in Supabase.
+
+The startup routine has been changed so that the login view is always the default and the setup view is hidden. Any local school configuration is optional branding cache only and cannot control access to the login screen. Each user still signs in separately on each device; Supabase sessions are not copied from one device to another.
+
+### Phase 1 files
+
+- [Legacy Storage Migration — Phase 1 Operational and Training Manual](LEGACY-STORAGE-MIGRATION-PHASE-1-MANUAL.md)
+- [Read-only Supabase Schema Audit SQL](LEGACY-STORAGE-MIGRATION-SCHEMA-AUDIT.sql)
+
+The SQL inventory must be run by an authorised user in Supabase SQL Editor. It retrieves public table/column metadata, foreign keys, RLS policies and Storage bucket settings. It performs no writes.
+
+### Current status and next gate
+
+- New-device login code correction: committed; deployment and live cross-device verification pending.
+- Schema and RLS inventory: prepared; awaiting the five result sets from Supabase.
+- Data migration: not yet executed. No production data has been copied, overwritten or deleted.
+- Legacy storage removal: not yet authorised or safe.
+
+Do not proceed with bulk student/result migration until the actual destination schema, existing Supabase counts, source-device legacy export and conflict rules have been reviewed. The preview and live sites share the same Supabase project.
