@@ -1474,7 +1474,7 @@ async function loadSchoolData() {
   schoolInfo.address = authoritativeSchoolProfile.address || '';
   schoolInfo.email = authoritativeSchoolProfile.email || '';
   schoolInfo.phone = authoritativeSchoolProfile.phone || '';
-  schoolInfo.logo = authoritativeSchoolProfile.logo_url || '';
+  schoolInfo.logo = authoritativeSchoolProfile.logo_url || schoolInfo.logo || '';
   schoolInfo.motto = authoritativeSchoolProfile.motto || '';
   currentSchool.schoolName = authoritativeSchoolProfile.name || '';
   currentSchool.name = authoritativeSchoolProfile.name || '';
@@ -1482,7 +1482,7 @@ async function loadSchoolData() {
   currentSchool.location = authoritativeSchoolProfile.address || '';
   currentSchool.email = authoritativeSchoolProfile.email || '';
   currentSchool.phone = authoritativeSchoolProfile.phone || '';
-  currentSchool.logo = authoritativeSchoolProfile.logo_url || '';
+  currentSchool.logo = authoritativeSchoolProfile.logo_url || currentSchool.logo || schoolInfo.logo || '';
 
   var migrated = migrateOldClassNames() || removedLegacyFormMasterPasswords || removedLegacySubjectAssignmentPasswords;
   if (syncStaffDatabaseFromExistingRecords()) migrated = true;
