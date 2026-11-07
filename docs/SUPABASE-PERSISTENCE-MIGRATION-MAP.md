@@ -196,3 +196,39 @@ The SQL inventory must be run by an authorised user in Supabase SQL Editor. It r
 - Legacy storage removal: not yet authorised or safe.
 
 Do not proceed with bulk student/result migration until the actual destination schema, existing Supabase counts, source-device legacy export and conflict rules have been reviewed. The preview and live sites share the same Supabase project.
+
+## Legacy storage migration — Phase 2 baseline preparation (2026-11-07)
+
+The user supplied the remaining destination-schema inventory for the core academic tables:
+- `schools`: school identity and basic branding/contact fields.
+- `students`: admission number, names, gender, guardian details, status, login state and student house.
+- `student_enrolments`: student/class/session links, register number, SID and archive metadata.
+- `student_passports`: private Storage object path linked to school and student.
+- `subjects`: school-scoped subject name/code, active state, section/group and trade/optional flags.
+- `teacher_assignments`: school, teacher, class, subject and session links with active state.
+- `terms`: school-scoped term name, number and current state.
+- `profiles`: role, active state, password-change requirement and account metadata.
+- `results`: CA1/CA2/CA3, examination, total, grade, remark, workflow status and timestamps.
+- `form_master_student_assessments`: affective/psychomotor ratings, attendance, comment and next-term fees.
+- `school_staff_directory`: staff profile and employment fields.
+
+The private `student-passports` Storage bucket is configured for JPEG, PNG and WebP with a 5 MB limit. Do not make it public. Passport migration must preserve private access and use the existing `student_passports.storage_path` relationship.
+
+The source review confirms that `supabase-persistence.js` already contains authenticated, school-scoped, read-only audit helpers for school/class data, data counts, student enrolment integrity, assignment integrity and staff/academic configuration. It also confirms that this persistence foundation does not itself read or write browser storage. The legacy `CloudStorage` path remains active in `index.html`.
+
+### Phase 2 baseline audit file
+
+- [Legacy Storage Migration — Phase 2 Baseline Audit SQL](LEGACY-STORAGE-MIGRATION-PHASE-2-BASELINE-AUDIT.sql)
+
+This is a read-only audit. It checks the known school identity, existing row counts for migration-sensitive tables, unique indexes, destination write policies and structural constraints for students/enrolments/passports. It does not create, alter, insert, update or delete database objects or records.
+
+### Migration gate
+
+The schema inventory alone does not authorise a write migration. Before preparing category-specific import SQL:
+1. Confirm the school identity returned by Result 1 of the Phase 2 audit.
+2. Review existing row counts and unique indexes to prevent duplicates.
+3. Review destination write policies and identify which writes must use existing Edge Functions/RPCs.
+4. Export and preserve the original browser's legacy data before any cutover.
+5. Reconcile legacy data against existing Supabase rows using stable identifiers and explicit conflict rules.
+
+No data migration has been executed. The original browser data and existing Supabase records remain untouched. Preview and live deployments share the same Supabase project.
