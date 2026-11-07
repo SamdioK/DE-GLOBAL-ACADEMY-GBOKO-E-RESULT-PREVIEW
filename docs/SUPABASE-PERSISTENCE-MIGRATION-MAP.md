@@ -336,3 +336,24 @@ The original-browser backup was received and inspected as a read-only snapshot. 
 **Phase 3 classification is complete; no data migration was performed.** The original backup and browser data remain preserved, and Supabase records/schema/RLS/Storage remain unchanged.
 
 Next: Phase 3B read-only reconciliation of school identity, classes, assessment configurations, teacher assignment and staff directory against current Supabase rows. Count matches alone do not prove record identity. Any SQL must be run by the authorised user in Supabase SQL Editor. No production write is authorised by this classification.
+
+
+## Phase 3B read-only reconciliation prepared (2026-11-07)
+
+The next read-only comparison has been prepared for the captured legacy configuration:
+
+- School identity confirmation.
+- Exact matching of the 30 legacy class names against school-scoped Supabase classes.
+- Detection of duplicate normalised Supabase class names.
+- Comparison of six legacy class-level assessment configurations against current Supabase configuration rows, including session, term, score maxima and active state.
+- Inspection of current school-scoped teacher assignment IDs and class/subject/session references, without returning teacher names or contact details.
+- Staff-directory aggregate counts and column metadata only.
+
+### Phase 3B files
+
+- [Phase 3B Read-only Reconciliation SQL](LEGACY-STORAGE-MIGRATION-PHASE-3B-READ-ONLY-RECONCILIATION.sql)
+- [Phase 3B Operational and Training Manual](LEGACY-STORAGE-MIGRATION-PHASE-3B-READ-ONLY-RECONCILIATION-MANUAL.md)
+
+The SQL is SELECT-only. It contains no insert, update, delete, DDL, RPC or Storage operation. It does not migrate records and does not authorise a write. The user must run it in Supabase SQL Editor and return the seven labelled result sets. If any SQL error occurs, stop and return the exact error instead of modifying the query by guesswork.
+
+**Current status:** Phase 3 classification is complete. Phase 3B reconciliation is prepared and awaiting the user's seven read-only result sets. The original browser data and all Supabase records remain unchanged.
