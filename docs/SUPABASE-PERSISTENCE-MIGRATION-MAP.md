@@ -445,3 +445,34 @@ The role helper is not a complete school-profile authorisation policy by itself.
 - [Phase 4C Operational and Training Manual](LEGACY-STORAGE-MIGRATION-PHASE-4C-SCHOOL-PRIVILEGE-AUDIT-MANUAL.md)
 
 Phase 4C is SELECT-only and awaits six result sets. Do not execute grants, revokes, policies or data updates until the privilege and RLS design is reviewed.
+
+
+## Phase 4C — School privilege audit results reviewed (2026-11-07)
+
+The user supplied all six Phase 4C result sets.
+
+- `public.schools` has table-level grants for `anon` and `authenticated`, including INSERT, UPDATE, DELETE, TRUNCATE, REFERENCES and TRIGGER; none is grantable onward.
+- The column privilege view reports the same broad effective column access, reflecting the table-level grants.
+- RLS is enabled and not forced; the table owner is `postgres`.
+- The existing role helpers `has_role`, `has_permission` and `current_user_role` are SECURITY DEFINER with `search_path=public`; EXECUTE is available to PUBLIC, anon and authenticated.
+- The reviewed `has_role` function checks an active profile and active primary or additional role, but a school UPDATE policy must separately verify that the active caller profile belongs to the exact target school.
+- The only reported school constraint is the primary key on `id`.
+
+The earlier Phase 4B audit found authenticated SELECT policy access and no school UPDATE policy. Therefore broad SQL grants do not by themselves establish that ordinary authenticated updates currently pass RLS. The broad grants are nevertheless excessive and must be narrowed before a profile write path is enabled.
+
+No database changes were made during Phase 4C.
+
+## Phase 4D — Secure school profile update migration prepared (2026-11-07)
+
+Files:
+- [Phase 4D secure school profile update SQL](LEGACY-STORAGE-MIGRATION-PHASE-4D-SECURE-SCHOOL-PROFILE-UPDATE.sql)
+- [Phase 4D operational and training manual](LEGACY-STORAGE-MIGRATION-PHASE-4D-SECURE-SCHOOL-PROFILE-UPDATE-MANUAL.md)
+
+The proposed transactional SQL:
+- Revokes direct table privileges from anon on `public.schools`.
+- Removes broad authenticated INSERT, UPDATE, DELETE and administrative table privileges while retaining authenticated SELECT.
+- Grants authenticated UPDATE only on `name`, `address`, `phone`, `email`, `logo_url`, `motto` and `updated_at`.
+- Adds an UPDATE RLS policy requiring `public.has_role('administrator')` and an active profile whose `school_id` matches the target school, for both USING and WITH CHECK.
+- Returns four verification result sets after the transaction.
+
+**Status:** SQL and manual prepared and committed; execution and verification pending. Do not connect the school profile form to writes until the user returns all four verification outputs. This phase does not migrate other legacy browser data or remove local storage.
