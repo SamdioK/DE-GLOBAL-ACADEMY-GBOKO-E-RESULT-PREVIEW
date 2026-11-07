@@ -95,7 +95,7 @@
       if (Object.prototype.hasOwnProperty.call(payload, 'name') && !payload.name) {
         throw new Error('School name is required.');
       }
-      if (payload.email && !/^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(payload.email)) {
+      if (payload.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(payload.email)) {
         throw new Error('Enter a valid school email address.');
       }
       return payload;
