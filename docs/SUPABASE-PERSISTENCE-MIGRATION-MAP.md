@@ -492,3 +492,17 @@ The target architecture, category-by-category sequencing, Storage design require
 **Next gate:** before any Phase 5B production write, inspect Supabase migration history and verify whether the prepared Phase 4D secure school-profile update migration has already been applied. Do not blindly apply it. Then verify actual school table grants/RLS and build the narrow school-profile persistence path.
 
 The preview and live site share the same Supabase project. All production writes require backup, explicit approval, read-back reconciliation and role/device testing.
+
+## Phase 5B — School profile pre-flight audit prepared (2026-11-07)
+
+A source review confirms the current School Information form still writes its school profile, logo, principal signature, stamp and stamp signature through the legacy browser-storage path. The form combines several domains: school identity belongs in `schools`, session belongs in `academic_sessions`, principal identity needs a verified staff/profile relationship, and image assets require Supabase Storage with private access policies. No direct Supabase school-profile write path has been implemented.
+
+The prepared Phase 4D migration is present in the repository, but its execution status is not established by source control. The production migration history and live grants/policies must be reconciled before the migration or frontend update path is considered.
+
+### Phase 5B pre-flight files
+- [Phase 5B Read-only Pre-flight SQL](SUPABASE-FIRST-PERSISTENCE-PHASE-5B-PREFLIGHT-AUDIT.sql)
+- [Phase 5B Read-only Pre-flight Operational and Training Manual](SUPABASE-FIRST-PERSISTENCE-PHASE-5B-PREFLIGHT-MANUAL.md)
+
+The SQL checks migration-history table/version status, table and column grants, RLS policies and state, actual school columns, and the known school row. It performs no writes. A missing migration-history table is explicitly treated as UNKNOWN, not proof that Phase 4D is unapplied. Reconcile with the linked CLI migration list; do not run `db push` or the Phase 4D migration during this audit.
+
+**Current status:** pre-flight package prepared. No Supabase database, Storage, browser data or application behaviour changed. Await all SQL results and the linked CLI migration-list output before designing the narrow school-profile update integration.
