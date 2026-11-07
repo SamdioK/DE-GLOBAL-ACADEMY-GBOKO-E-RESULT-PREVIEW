@@ -379,3 +379,28 @@ No database records, schema, RLS policies, Storage objects or browser-local reco
 ### Next gate
 
 Proceed to a category-specific migration design and validation plan only after identifying the next legacy data category and its authorised destination/workflow. Preserve existing classes and assessment configurations; do not recreate them. Resolve the Mathematics assignment status through the normal administrator workflow if required. Keep staff IDs manual. Every future migration must include a dry run, conflict handling, read-back reconciliation, role-based tests and its own operational/training manual.
+
+
+## Phase 4A — School identity and academic context validation prepared (2026-11-07)
+
+Phase 4A begins category-by-category migration design with the school profile and academic context. The preserved school-prefixed `schoolInfo` object contains school name (DE-GLOBAL ACADEMY GBOKO), address (Gboko), blank email and phone, session (2026/2027), blank logo/signature/comment fields, and an embedded PNG school-stamp data URL. The `MAIN` namespace remains a legacy browser namespace, not a school identifier.
+
+### Proposed field mapping
+
+- `schoolInfo.name` -> existing `schools.name`, compare only.
+- `schoolInfo.address` -> `schools.address`, compare and require administrator confirmation before any correction.
+- `schoolInfo.email` and `schoolInfo.phone` -> existing `schools.email` and `schools.phone`; blank legacy values must never clear populated destination fields.
+- `schoolInfo.session` -> compare with the existing school-scoped `academic_sessions.name`; do not duplicate session state in `schools`.
+- Legacy term identity is not supplied by this object; use existing `terms` rows and an explicit administrator decision for current term.
+- Logo/signature/stamp assets remain deferred. Do not store base64 data in URL columns; any later asset migration requires private Storage design, metadata and scoped access.
+
+Source inspection confirms that the current frontend still loads `schoolInfo` from `CloudStorage` and writes it through `saveAllData()`. The existing `supabase-persistence.js` helper includes an authenticated, school-scoped read of the `schools` row but no school-profile update method. Thus school-profile editing is not yet proven to be Supabase-persistent.
+
+### Phase 4A files
+
+- [Phase 4A School and Academic Context — Read-only SQL](LEGACY-STORAGE-MIGRATION-PHASE-4A-SCHOOL-ACADEMIC-CONTEXT.sql)
+- [Phase 4A School and Academic Context — Operational and Training Manual](LEGACY-STORAGE-MIGRATION-PHASE-4A-SCHOOL-ACADEMIC-CONTEXT-MANUAL.md)
+
+The SQL is SELECT-only and returns five labelled result sets: current school row, academic sessions, terms, schema column inventory, and RLS state/policies for `schools`, `academic_sessions`, and `terms`. It performs no insert, update, delete, DDL, RPC or Storage operation.
+
+**Current status:** Phase 4A validation package prepared and committed. Await the user's five result sets and school administrator decisions on the official address/contact values and current session/term. No write migration or frontend persistence change is authorised yet.
