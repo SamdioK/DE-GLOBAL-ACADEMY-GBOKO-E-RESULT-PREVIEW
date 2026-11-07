@@ -544,19 +544,29 @@ document.addEventListener('DOMContentLoaded', async function() {
 });
 
 async function initApp() {
-  var existing = await cloudStorage.globalLoad('school:main');
-  if (existing) {
-    if (Object.prototype.hasOwnProperty.call(existing, 'password')) {
-      delete existing.password;
-      await cloudStorage.globalSave('school:main', existing);
+  // The school is already provisioned in Supabase. Browser storage is device-specific
+  // and must never decide whether this school needs first-time registration.
+  // Always present the Supabase login choices on every device/browser.
+  var setupView = document.getElementById('setupView');
+  var loginView = document.getElementById('loginView');
+  if (setupView) setupView.classList.add('hidden');
+  if (loginView) loginView.classList.remove('hidden');
+
+  // Read cached school branding only as an optional convenience; never use it
+  // to gate authentication or expose the one-time setup form.
+  try {
+    var existing = await cloudStorage.globalLoad('school:main');
+    if (existing && typeof existing === 'object') {
+      if (Object.prototype.hasOwnProperty.call(existing, 'password')) {
+        delete existing.password;
+        await cloudStorage.globalSave('school:main', existing);
+      }
+      currentSchool = Object.assign({}, currentSchool, existing);
     }
-    currentSchool = existing;
-    document.getElementById('setupView').classList.add('hidden');
-    document.getElementById('loginView').classList.remove('hidden');
-  } else {
-    document.getElementById('loginView').classList.add('hidden');
-    document.getElementById('setupView').classList.remove('hidden');
+  } catch (storageError) {
+    console.warn('Optional local school branding cache is unavailable:', storageError);
   }
+
   setupEventListeners();
 }
 
