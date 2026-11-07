@@ -11,15 +11,13 @@ jobs:
     runs-on: ubuntu-latest
     env:
       SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
-      SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
-      SUPABASE_PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_REF }}
+      SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
     steps:
       - name: Check required secrets
         shell: bash
         run: |
           test -n "$SUPABASE_ACCESS_TOKEN" || { echo "Missing SUPABASE_ACCESS_TOKEN"; exit 1; }
-          test -n "$SUPABASE_DB_PASSWORD" || { echo "Missing SUPABASE_DB_PASSWORD"; exit 1; }
-          test -n "$SUPABASE_PROJECT_REF" || { echo "Missing SUPABASE_PROJECT_REF"; exit 1; }
+          test -n "$SUPABASE_DB_URL" || { echo "Missing SUPABASE_DB_URL (use the Supabase IPv4-compatible Session pooler connection string)"; exit 1; }
 
       - uses: actions/checkout@v4
 
@@ -27,11 +25,8 @@ jobs:
         with:
           version: latest
 
-      - name: Link the existing production project
-        run: supabase link --project-ref "$SUPABASE_PROJECT_REF"
-
-      - name: List local and remote migration history (read-only)
+      - name: List local and remote migration history (read-only via IPv4 pooler)
         shell: bash
         run: |
-          echo "This command lists migration history only. It does not apply migrations."
-          supabase migration list --remote
+          echo "This command only lists migration history; it does not apply migrations."
+          supabase migration list --db-url "$SUPABASE_DB_URL"
