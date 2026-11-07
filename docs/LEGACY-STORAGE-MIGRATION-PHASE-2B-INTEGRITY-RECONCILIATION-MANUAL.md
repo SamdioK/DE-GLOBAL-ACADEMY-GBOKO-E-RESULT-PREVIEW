@@ -107,3 +107,24 @@ The trainer should verify that the trainee makes no database changes during this
 After review, the next phase is a legacy browser-data backup and export from the original device. The export must be preserved before any cutover. Then the legacy data can be compared against Supabase using stable identifiers and approved conflict rules.
 
 No student, enrolment, passport, staff, result or configuration records are migrated by this phase. Do not clear browser storage, remove the legacy CloudStorage code, or perform bulk writes until the backup, reconciliation and acceptance checks are complete.
+
+
+## 11. Results received from the school (2026-11-07)
+
+The nine SQL result sets were returned and reviewed.
+
+- Result 1 confirmed the expected school UUID and name, with 743 students, 743 enrolments, 743 active enrolments and 8 passport metadata rows.
+- Results 2 through 6 returned no rows: no active student without an active enrolment, no missing/cross-school active enrolment reference, no duplicate active student/session enrolment, no duplicate normalised active admission number, and no passport metadata inconsistency was reported.
+- Result 7 returned 742 student IDs with `profile_id = NULL` and `no_profile_link`.
+- Result 8 reported zero active enrolments missing register numbers and zero missing SIDs.
+- Result 9 listed 16 class/session groups. Their active enrolment counts sum to 743; every group reported zero missing students, classes and sessions.
+
+### Interpretation and outstanding review
+
+The student/enrolment relationship checks are clean for the audited conditions. The 742 missing profile links are not classified as data corruption: student academic records may exist without student portal accounts.
+
+However, the inspected application code shows that the student admission login flow requires an active `profiles` record with role `student` and a matching `students.profile_id` link. The administrator interface provisions accounts separately through the `provision-student-account` Edge Function. Therefore, unlinked students cannot complete that login flow until an authorised account-provisioning operation is completed.
+
+Do not automatically create 742 accounts. First establish which students are intended to have portal access, then use the controlled administrator provisioning workflow. The Edge Function's server-side implementation and live configuration remain a verification item.
+
+**Phase 2B outcome:** The supplied core integrity checks passed, with 742 missing profile links recorded as an account-readiness follow-up rather than an enrolment integrity failure. The audit does not prove that legacy browser data has been backed up or migrated.
