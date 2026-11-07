@@ -44,8 +44,8 @@ jobs:
         shell: bash
         run: |
           projects="$(supabase projects list)"
-          printf '%s\\n' "$projects"
-          if ! printf '%s\\n' "$projects" | grep -Fq "$EXPECTED_PROJECT_REF"; then
+          printf '%s\n' "$projects"
+          if ! printf '%s\n' "$projects" | grep -Fq "$EXPECTED_PROJECT_REF"; then
             echo "Expected project was not listed. Check token permissions and project access."
             exit 1
           fi
