@@ -18,13 +18,20 @@
 
 BEGIN;
 
--- Anonymous clients do not need direct access to the private school row.
+-- Remove table-level AND column-level grants. PostgreSQL keeps
+-- column grants separate from table grants, so table-level REVOKE alone
+-- does not clear the column privileges identified in the Phase 5B audit.
 REVOKE ALL PRIVILEGES ON TABLE public.schools FROM anon;
+REVOKE ALL PRIVILEGES (id, name, address, phone, email, logo_url, motto, created_at, updated_at)
+ON TABLE public.schools FROM anon;
 
--- Retain authenticated reading, but remove broad write and administrative
--- privileges before granting the small approved UPDATE column list.
 REVOKE INSERT, UPDATE, DELETE, TRUNCATE, REFERENCES, TRIGGER
 ON TABLE public.schools FROM authenticated;
+REVOKE ALL PRIVILEGES (id, name, address, phone, email, logo_url, motto, created_at, updated_at)
+ON TABLE public.schools FROM authenticated;
+
+-- Re-establish only the intended authenticated access.
+GRANT SELECT ON TABLE public.schools TO authenticated;
 
 GRANT SELECT ON TABLE public.schools TO authenticated;
 
