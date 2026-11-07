@@ -3,125 +3,167 @@
 **Project:** DE-GLOBAL ACADEMY GBOKO E-Result Portal  
 **Repository:** `SamdioK/DE-GLOBAL-ACADEMY-GBOKO-E-RESULT-PREVIEW`  
 **Branch:** `main`  
-**Audit date:** 6 November 2026  
-**Scope:** Read-only source-code review and previously supplied Supabase schema/RLS evidence  
-**Production data:** No records changed during this audit
+**Audit updated:** 7 November 2026  
+**Scope:** Supabase schema, grants, RLS policies, public RPC and frontend read path  
+**Production records modified:** None during the security verification
 
 ## 1. Executive result
 
-The Staff Database has several sound controls: the administrator screen checks the application role, persistence methods require an authenticated user and active school profile, reads and writes are scoped to that profile's school, and the database has school-scoped administrator RLS policies.
+The staff directory contains 15 records for DE-GLOBAL ACADEMY GBOKO. All 15 are linked to existing active profiles in the same school. No school mismatches were found. All 15 staff records are Active, but none is approved for public display.
 
-The review also identified a privacy concern in the default public staff-profile field selection. The default included phone, email, photograph and date employed. This has now been changed in the preview repository so new/default selections include only name, designation, department, qualification, specialisation and biography. Contact details, photographs and employment dates require separate administrator selection.
+The public directory is now connected in `index.html` to the dedicated Supabase RPC function `public.get_public_school_staff_directory()`. The public page no longer builds staff cards from legacy browser-storage staff records or legacy per-field selections.
 
-This source-code change does not rewrite any saved portal selection or existing staff record. Existing saved selections should be reviewed by the administrator before public display.
+The anonymous access tests passed:
+- The RPC, executed as role `anon`, returned zero staff rows, as expected while no record is approved for publication.
+- A direct anonymous SELECT from `public.school_staff_directory` failed with PostgreSQL error `42501: permission denied`.
 
-## 2. Controls verified in source
+No broad anonymous SELECT grant was added to the staff table.
 
-### Administrator screen
-- `renderStaffDatabase()` returns without rendering unless `currentUser.type === 'admin'`.
-- The Staff Database tab is not granted to sub-administrators through the current `showTab` permission map.
-- The portal content management screen also checks for the administrator role.
-- The persistence functions independently require an authenticated Supabase user and active school profile.
+## 2. Database facts verified
 
-### School scoping
-- `getStaffDirectory()` filters by the active profile's `school_id`.
-- `createStaffDirectoryRecord()` derives `school_id` from the authenticated active profile and sets `created_by` from the authenticated user. It does not accept a browser-supplied school ID.
-- `updateStaffDirectoryRecord()` filters by both staff row ID and the active profile's school ID.
-- The update payload is allow-listed. It does not allow a browser edit to replace `school_id`, `profile_id` or `created_by`.
+### School and staff counts
 
-### Input and data integrity
-- Full Name is required and trimmed.
-- Status is restricted in the persistence layer to Active, Inactive or Suspended.
-- Blank Staff ID and email values are normalised to null.
-- Qualification selection is limited to eight in the administrator form.
-- Department “Others” requires a description.
-- Public visibility is blocked by the form until the required profile fields are supplied.
-- No staff-delete action is exposed.
-- New photo uploads remain blocked pending Storage policy verification.
+| Check | Result |
+|---|---:|
+| School | DE-GLOBAL ACADEMY GBOKO |
+| School UUID | `b135a823-0a04-4b4b-86dd-2b20ea5e9fac` |
+| Staff records | 15 |
+| Linked profiles found | 15 |
+| Same-school profile links | 15 |
+| School mismatches | 0 |
+| Linked active profiles | 15 |
+| Recognised staff account roles | 15 |
+| Active staff records | 15 |
+| Inactive / Suspended records | 0 / 0 |
+| Approved for public display | 0 |
+| Staff records with staff ID | 0 |
+| Staff records with photographs | 0 |
 
-## 3. Database/RLS evidence
+### Relevant schema
 
-The previously supplied schema and policy review reported:
-- RLS enabled on the supplied public tables.
-- Staff-directory SELECT, INSERT and UPDATE policies restricted to an active administrator profile in the same school.
-- No staff-directory DELETE policy supplied.
-- School-scoped uniqueness for non-empty Staff IDs and email addresses.
-- A profile may be linked to only one staff-directory row per school.
+`school_staff_directory` contains private fields including `school_id`, `profile_id`, `staff_id`, `phone`, `email`, `date_employed`, `biography`, `created_by`, status and publication metadata. Its status constraint accepts exactly `Active`, `Inactive` and `Suspended`.
 
-The code review does not replace a live negative test. A non-administrator account and a second-school account should be used to confirm denied access against the current deployed database policies.
+RLS is enabled on `school_staff_directory`, `profiles` and `profile_roles`. The supplied policies restrict staff-directory insert, select and update to active administrators in the same school. No staff-directory DELETE policy was supplied.
 
-## 4. Public profile privacy improvement
+Anonymous direct table privileges were revoked. Authenticated DELETE was revoked from `profiles` and `school_staff_directory`. Do not re-grant broad anonymous table access.
 
-The original default public-field selection included:
-- photograph;
-- name;
-- designation;
-- department;
-- qualification;
-- specialisation;
-- phone;
-- email;
-- date employed; and
-- biography.
+## 3. Public RPC design
 
-That was broader than a privacy-first default. The default has now been changed to:
-- Name;
-- Designation;
-- Department;
-- Qualification;
-- Specialisation / Subject; and
-- Biography.
+The deployed function is:
 
-Phone, email, photograph and date employed are no longer selected by default. An administrator must deliberately select any of these fields for publication.
+```sql
+CREATE OR REPLACE FUNCTION public.get_public_school_staff_directory()
+RETURNS TABLE (
+    id uuid,
+    full_name text,
+    photo_url text,
+    designation text,
+    department text,
+    qualification text,
+    specialisation text
+)
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path = ''
+SET row_security = off
+AS $function$
+    SELECT
+        d.id,
+        d.full_name,
+        d.photo_url,
+        d.designation,
+        d.department,
+        d.qualification,
+        d.specialisation
+    FROM public.school_staff_directory AS d
+    WHERE d.school_id = 'b135a823-0a04-4b4b-86dd-2b20ea5e9fac'::uuid
+      AND d.status = 'Active'
+      AND d.show_on_portal IS TRUE
+    ORDER BY d.full_name ASC;
+$function$;
 
-**Important:** Existing saved `portalStaffSelections` are not automatically rewritten. The administrator must inspect each saved selection and deselect any field that should not be public. A staff record should remain unpublished unless the staff member's details have been reviewed and publication is authorised.
+REVOKE ALL PRIVILEGES ON FUNCTION
+    public.get_public_school_staff_directory()
+FROM PUBLIC;
 
-The public staff list currently applies the record-level checks `status === 'Active'` and `showOnPortal === true`, and then applies the saved per-field selection. This is an application-level display control, not a substitute for database RLS or consent/approval procedures.
+GRANT EXECUTE ON FUNCTION
+    public.get_public_school_staff_directory()
+TO anon, authenticated;
+```
 
-## 5. Important architecture boundary
+The function is deliberately scoped to the school's fixed UUID and returns only the seven listed columns. It filters to Active records with `show_on_portal = true`. It does not return phone, email, staff ID, profile ID, employment date, biography, creator information or school metadata.
 
-The Supabase Staff Database read/write path is school-scoped and authenticated. The public portal display path currently reads its staff directory and field selections from the legacy browser-storage layer. This means:
-- Supabase is authoritative for administrator edits made through the Staff Database screen;
-- the legacy portal display copy and the Supabase directory are not yet a fully unified live read path;
-- a future integration must fetch only approved public fields through a deliberately designed, safe public read mechanism; and
-- public access must never be granted by weakening the private staff-directory RLS policy.
+**Security note:** This function uses `SECURITY DEFINER` and `row_security = off`. Its safety depends on its fixed school scope, fixed output allow-list, publication filters and restricted function execution. Keep its owner tightly controlled. Do not add caller-controlled school IDs, dynamic SQL, or additional columns without a fresh security review.
 
-Do not expose the full staff table through an anonymous query or add a broad public SELECT policy to `school_staff_directory`. A future public directory should use a narrowly scoped view or server-side endpoint that returns only approved fields for records that are Active and explicitly published.
+## 4. Frontend integration verified
 
-## 6. Tests completed and tests still required
+In `index.html`, `showPublicPortal()` calls:
 
-### Completed in this review
-- Read-only inspection of the administrator screen role guard.
-- Read-only inspection of the persistence layer's authenticated-user and active-profile requirements.
-- Read-only inspection of school scoping and update payload allow-list.
-- Read-only inspection of public display filtering by active status and record-level publication flag.
-- Changed default public-field selections to exclude contact details, photographs and employment dates.
-- No staff records, profile links, RLS policies or database schema changed.
+```javascript
+supabaseClient.rpc('get_public_school_staff_directory')
+```
 
-### Required live acceptance tests
-These require authorised test accounts and should be performed without changing real staff data:
+The public Staff List renders only the RPC response fields:
+- `full_name`
+- `photo_url`
+- `designation`
+- `department`
+- `qualification`
+- `specialisation`
 
-1. **Administrator read:** sign in as the school administrator and confirm the 15 existing rows load.
-2. **Administrator update:** use a school-approved test record or a harmless reversible edit authorised by the administrator; confirm read-back.
-3. **Sub-administrator denial:** sign in as a sub-administrator and confirm the Staff Database screen is not available and direct persistence calls are denied by RLS.
-4. **Form Master denial:** confirm a Form Master cannot read or write the staff directory through the client.
-5. **Student/public denial:** confirm a student session cannot query the private staff table.
-6. **Cross-school denial:** use an account belonging to another school and confirm it cannot read or update this school's staff rows.
-7. **Publication gate:** confirm incomplete records cannot be published.
-8. **Field minimisation:** confirm new/default public selections exclude phone, email, photo and date employed.
-9. **Existing selections:** inspect previously saved selections for personal contact information and remove fields that are not approved for public display.
-10. **No deletion:** confirm no staff-delete control or client-side deletion workflow exists.
+The stable row `id` is returned by the function but is not rendered as a public profile detail.
 
-Do not use service-role credentials in the browser to perform these tests. Do not relax RLS to make a test pass.
+If the RPC fails or Supabase is unavailable, the portal displays a temporary-unavailable message. It does not fall back to the legacy staff database or expose private browser-storage values.
 
-## 7. Outstanding risks and next work
+The default legacy portal field selection is privacy-first, but the public staff list no longer relies on those browser-stored selections. The database publication flag is the authoritative record-level gate.
 
-1. Unify the public directory with a narrowly scoped published-profile read endpoint or view.
-2. Review existing saved portal field selections before enabling any staff profiles publicly.
-3. Verify Supabase Storage policies before enabling staff photo uploads.
-4. Perform the live role and cross-school negative tests listed above.
-5. Consider a separate audit trail for staff profile edits and publication changes, with append-only server-side recording.
+## 5. Tests performed and outcomes
 
-## 8. Audit conclusion
+| Test | Observed result | Outcome |
+|---|---|---|
+| Staff-to-profile linkage aggregate | 15 found; 15 same-school; 0 mismatches | Pass |
+| Active staff and publication counts | 15 Active; 0 approved | Pass |
+| Anonymous RPC execution using `SET LOCAL ROLE anon` | 0 rows | Pass |
+| Anonymous direct SELECT from staff table | Permission denied, SQLSTATE 42501 | Pass |
+| Public frontend source inspection | RPC call and fixed public-field rendering present | Pass |
 
-**Source review: satisfactory with follow-up controls.** The administrator CRUD path demonstrates authentication and school scoping in its client helper, and the supplied RLS review supports the intended database boundary. The privacy-first default field change has been committed to the preview repository. However, live negative tests and the future public-directory read-path integration remain outstanding. This audit must not be interpreted as independent penetration testing or proof that all production permissions have been exercised.
+The anonymous RPC result of zero is correct because no staff record is currently approved for public publication. Do not enable publication merely to obtain a non-zero test result.
+
+## 6. Operational publication workflow
+
+1. An authorised administrator opens Staff Database.
+2. The administrator verifies a staff member's details against school records.
+3. The administrator confirms that publication is authorised.
+4. The administrator changes that individual record's `show_on_portal` flag to true while its status remains Active.
+5. The public directory returns the record on its next load, limited to the RPC's fixed columns.
+6. To withdraw a profile, set `show_on_portal` to false or change the status from Active.
+
+Do not publish phone numbers, email addresses, employment dates or biographies through this RPC. If additional public fields are required, design a separate approval and allow-list process first.
+
+## 7. Remaining acceptance checks
+
+- Verify a single authorised test record can be published and then withdrawn, with the public RPC returning one row and then zero rows. Use an approved test record or obtain explicit school authorisation; do not publish a real staff member merely for testing.
+- Verify the deployed hosting environment is serving the current `main` branch version of `index.html`.
+- Verify the browser console shows no RPC errors and the public portal displays the expected empty-state message while the publication count is zero.
+- Recheck function ownership and grants after any database migration.
+
+## 8. Rollback
+
+If an unintended record or field is exposed:
+1. Remove the public directory section from the portal deployment or temporarily disable its RPC call.
+2. Set affected records' `show_on_portal` flags to false.
+3. Revoke EXECUTE on the RPC from `anon` and `authenticated` if required.
+4. Review function definition, owner, grants and audit logs before restoring service.
+
+Never respond to a permission error by granting anonymous SELECT on the underlying staff table.
+
+## 9. Training exercise
+
+Using a non-production or explicitly authorised test record:
+1. Confirm the record is Active and unpublished.
+2. Execute the RPC as `anon` and confirm the row is absent.
+3. Approve publication through the administrator workflow.
+4. Execute the RPC as `anon` and confirm only the approved public columns are returned.
+5. Withdraw publication and confirm the row disappears again.
+6. Attempt direct anonymous table SELECT and confirm it remains denied.
