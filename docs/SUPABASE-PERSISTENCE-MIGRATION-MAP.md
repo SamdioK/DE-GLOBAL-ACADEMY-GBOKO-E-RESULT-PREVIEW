@@ -357,3 +357,25 @@ The next read-only comparison has been prepared for the captured legacy configur
 The SQL is SELECT-only. It contains no insert, update, delete, DDL, RPC or Storage operation. It does not migrate records and does not authorise a write. The user must run it in Supabase SQL Editor and return the seven labelled result sets. If any SQL error occurs, stop and return the exact error instead of modifying the query by guesswork.
 
 **Current status:** Phase 3 classification is complete. Phase 3B reconciliation is prepared and awaiting the user's seven read-only result sets. The original browser data and all Supabase records remain unchanged.
+
+
+## Phase 3B read-only reconciliation — results reviewed (2026-11-07)
+
+All seven Phase 3B result sets were returned and reviewed, followed by a read-only teacher profile/directory lookup.
+
+- School identity confirmed: DE-GLOBAL ACADEMY GBOKO, UUID `b135a823-0a04-4b4b-86dd-2b20ea5e9fac`.
+- All 30 legacy class names have exactly one matching school-scoped Supabase class. The normalised duplicate check found no duplicate class names.
+- Assessment reconciliation initially returned NULL because legacy class levels use names such as `BASIC7` and `SS1`, while Supabase stores `BASIC 7` and `SS 1`. A separate SELECT-only inspection confirmed all six existing active configurations for 2026/2027 First Term. Each has CA1=10, CA2=10, CA3=10, examination=70 and total=100. The six configurations match the legacy maxima; no insert or update is needed.
+- One existing BASIC7A Mathematics teacher assignment exists for 2026/2027. The assignment is inactive. A follow-up lookup confirmed the teacher UUID belongs to an active same-school `subject_teacher` profile and a matching active staff-directory record. The legacy teacher ID was blank. Do not activate the assignment solely on this identity match; obtain the authorised administrator's decision and use the existing assignment workflow.
+- Staff directory: 15 rows, all 15 linked to profiles, all 15 have email addresses, and none has a staff ID. Staff IDs remain manually entered by the administrator; no automatic ID generation or bulk staff import is authorised.
+- The existing `school_staff_directory` schema has the fields needed for later field-level reconciliation. Do not create a duplicate staff table.
+
+### Phase 3B outcome
+
+**Phase 3B read-only reconciliation: complete.** All supplied result sets and the teacher identity follow-up have been reviewed. The only unresolved operational decision is whether the inactive BASIC7A Mathematics assignment should remain inactive or be activated by an authorised administrator. This is separate from the teacher's active profile and staff-directory status.
+
+No database records, schema, RLS policies, Storage objects or browser-local records were changed during Phase 3B. The original backup must remain preserved. No bulk migration is authorised by completion of this audit.
+
+### Next gate
+
+Proceed to a category-specific migration design and validation plan only after identifying the next legacy data category and its authorised destination/workflow. Preserve existing classes and assessment configurations; do not recreate them. Resolve the Mathematics assignment status through the normal administrator workflow if required. Keep staff IDs manual. Every future migration must include a dry run, conflict handling, read-back reconciliation, role-based tests and its own operational/training manual.
