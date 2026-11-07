@@ -70,3 +70,52 @@ The script contains SELECT statements only. It does not provision accounts, upda
 Phase 2C is complete after all four result sets have been reviewed and the school has documented whether student portal accounts are required for all active students or only selected groups.
 
 Only after this decision and verification of the server-side provisioning function should any account creation campaign be planned. Account provisioning is a separate controlled operation from legacy data migration.
+
+
+## 8. School account policy and actual audit results (2026-11-07)
+
+The school confirmed the operating policy: **student login accounts are created by the administrator, and the login details are given to the respective students.** The audit must not be interpreted as an instruction to create accounts for every student automatically.
+
+The four result sets returned the following:
+
+| Audit measure | Result |
+|---|---:|
+| Active students | 743 |
+| Active students with login status `created` and a linked profile | 1 |
+| Active students with login status `not_created` and no profile link | 742 |
+| Active students with a nonblank admission number | 743 |
+| Linked profiles with role `student` | 1 |
+| Linked profiles active | 1 |
+| Linked profiles with `must_change_password = true` | 0 |
+| Profiles linked to multiple student rows | 0 |
+
+The duplicate-profile query returned **Success — no rows returned**. This means no profile was found linked to multiple student records.
+
+### Interpretation
+
+- The 742 active students without profile links are awaiting administrator-created accounts. They are not automatically data-integrity failures.
+- All 743 active students have nonblank admission numbers in this audit.
+- The single existing linked profile has the expected `student` role and is active.
+- The existing linked profile currently has `must_change_password = false`; this is an observed state, not a reason to alter the account during this audit.
+- No account creation, password reset, profile linking or student-record update was performed.
+
+### Administrator account-creation procedure
+
+When a student is authorised to receive portal access:
+
+1. The administrator locates the correct active student record.
+2. The administrator confirms the admission number and official enrolment.
+3. The administrator uses the application's existing **Create Login** action.
+4. The server-side `provision-student-account` workflow creates and links the account.
+5. The administrator verifies the resulting login status before communicating credentials.
+6. Login details are handed to the student privately. Temporary credentials must not be posted publicly or stored in spreadsheets.
+7. Where the account is configured to require a password change, the student changes the temporary password at first login.
+8. If provisioning has an uncertain outcome, the administrator checks the account status before attempting another creation.
+
+Do not insert profiles directly, manually set `students.profile_id`, or provision all 742 students as a migration shortcut. The server-side Edge Function implementation and live configuration still require review before any wider account-creation exercise.
+
+### Phase 2C completion status
+
+**Audit execution and result review: complete.** The school policy is documented. Account provisioning remains an administrator-controlled operational activity and is separate from legacy data migration. Phase 2C made no database changes.
+
+The next migration activity is to prepare a protected backup/export of legacy browser data from the original device. Do not clear browser storage or begin bulk migration until the export is preserved and its contents are reviewed.
