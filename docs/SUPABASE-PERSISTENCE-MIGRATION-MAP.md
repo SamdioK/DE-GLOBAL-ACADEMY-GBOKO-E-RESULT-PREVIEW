@@ -420,3 +420,28 @@ The four SQL result sections are SELECT-only. They inspect identity/role policie
 
 ### Completion gate
 Phase 4B is prepared and awaiting all four result sets. Do not create an UPDATE policy, deploy an Edge Function, alter frontend save behaviour or execute write SQL until the results are reviewed. The final design must restrict the update to approved school profile fields, the caller's own school, and an active administrator role, with server/database enforcement and negative tests for non-administrator and cross-school access.
+
+
+## Phase 4B — Administrator authorisation audit results reviewed (2026-11-07)
+
+The four Phase 4B result sets were supplied and reviewed.
+
+- Existing `schools`, `academic_sessions` and `terms` policies show authenticated SELECT only; no school UPDATE policy is present.
+- The role schema includes `profile_roles.is_active`; the role/permission tables do not establish a separate active flag on `permissions` or `role_permissions`.
+- The existing `public.has_role(required_role)` SECURITY DEFINER helper checks an active caller profile and either the active primary profile role or an active matching `profile_roles` row. Its body schema-qualifies the referenced objects and `auth.uid()`; its configured search_path is `public`.
+- `public.has_permission(required_permission)` similarly checks active profiles and active secondary role assignments against role-permission mappings.
+- `public.current_user_role()` returns only the primary `profiles.role`; it does not represent all active secondary roles. A future policy that intends to recognise secondary roles should use the reviewed `has_role` helper rather than relying only on `current_user_role`.
+- The final trigger query returned no rows for `schools`, `academic_sessions` and `terms`.
+
+The role helper is not a complete school-profile authorisation policy by itself. Any update must additionally require that the target `schools.id` equals the active caller profile's `school_id`, and must restrict the update to an approved list of columns. No write policy, grant, function, record or frontend save path was changed during Phase 4B.
+
+### Phase 4B outcome
+
+**Administrator role model identified; write path remains unauthorised.** The next inspection must establish table-level and column-level privileges, RLS enabled/forced state, helper function execute grants and school constraints before selecting a narrow direct-RLS design or a server-side function.
+
+### Phase 4C files
+
+- [Phase 4C School Privilege Audit SQL](LEGACY-STORAGE-MIGRATION-PHASE-4C-SCHOOL-PRIVILEGE-AUDIT.sql)
+- [Phase 4C Operational and Training Manual](LEGACY-STORAGE-MIGRATION-PHASE-4C-SCHOOL-PRIVILEGE-AUDIT-MANUAL.md)
+
+Phase 4C is SELECT-only and awaits six result sets. Do not execute grants, revokes, policies or data updates until the privilege and RLS design is reviewed.
