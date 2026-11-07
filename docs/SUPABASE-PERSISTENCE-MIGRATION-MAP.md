@@ -308,3 +308,31 @@ The administrator must use the existing **Create Login** interface and the serve
 - [Phase 2C Student Login Readiness Operational and Training Manual](LEGACY-STORAGE-MIGRATION-PHASE-2C-STUDENT-LOGIN-READINESS-MANUAL.md)
 
 **Phase 2C audit: complete.** The account policy and actual aggregate results are recorded in the manual. Account creation remains a separate administrator-controlled activity. The next migration gate is a protected export/backup of legacy data from the original browser/device. Do not clear local browser storage or begin bulk migration until the export is preserved, inspected and reconciled against Supabase.
+
+
+## Legacy storage migration — Phase 3 classification completed (2026-11-07)
+
+The original-browser backup was received and inspected as a read-only snapshot. It contains 43 localStorage keys and 16 IndexedDB records. All 16 IndexedDB records have matching school-UUID-prefixed localStorage keys and identical values, so they are duplicate copies rather than additional records. The optional `window.storage` interface was unavailable and returned no records; dynamic key families could not be enumerated. The backup is therefore useful but not exhaustive.
+
+### Main classification findings
+
+- The 30 legacy class-arm names are a candidate for comparison with the 30 Supabase classes. All captured class arms are inactive, their Form Master fields are blank, and their student-name/sex slots are empty. The arrays must not be treated as student records.
+- The legacy assessment configuration contains 30 class-name entries with CA1 10, CA2 10, CA3 10 and examination 70. Supabase currently has six assessment-configuration rows. Exact session/term/class-level reconciliation is required; no bulk insert or replacement is authorised.
+- One legacy Mathematics assignment for BASIC7A has a blank teacher ID. It must be resolved against the authenticated teacher profile and current assignment before comparison with the one existing Supabase teacher assignment.
+- Four school-UUID-prefixed legacy staff entries are candidates for comparison with the 15 existing Supabase staff-directory rows. No bulk staff import is authorised.
+- The captured student metadata reports zero batches and zero students, and no student batch key or populated class student-name array was captured. Existing Supabase student/enrolment records remain unchanged.
+- Seven activity-log entries, one portal-news entry, portal and ID-card settings, a subject signature and a school-stamp image were found. Their destinations, authenticity, publication/permission rules or private Storage handling are not sufficiently established for migration.
+- Legacy class password fields were found in the browser snapshot. They are not to be migrated; review whether any remain active and replace them through approved workflows if needed.
+- Developer profile data, UI themes, SDP menu state and CodeForge workspace data are excluded from school migration.
+- The MAIN namespace is a legacy browser key namespace, not the confirmed school UUID. Do not treat MAIN as a separate school or use it as a Supabase school_id.
+
+### Phase 3 files
+
+- [Phase 3 Legacy Browser Data Classification](LEGACY-STORAGE-MIGRATION-PHASE-3-DATA-CLASSIFICATION.md)
+- [Phase 3 Operational and Training Manual](LEGACY-STORAGE-MIGRATION-PHASE-3-DATA-CLASSIFICATION-MANUAL.md)
+
+### Current gate
+
+**Phase 3 classification is complete; no data migration was performed.** The original backup and browser data remain preserved, and Supabase records/schema/RLS/Storage remain unchanged.
+
+Next: Phase 3B read-only reconciliation of school identity, classes, assessment configurations, teacher assignment and staff directory against current Supabase rows. Count matches alone do not prove record identity. Any SQL must be run by the authorised user in Supabase SQL Editor. No production write is authorised by this classification.
