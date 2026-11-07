@@ -75,6 +75,57 @@
       return result.data;
     }
 
+    function normaliseSchoolProfilePatch(patch) {
+      if (!patch || typeof patch !== 'object' || Array.isArray(patch)) {
+        throw new Error('School profile changes are required.');
+      }
+      const allowed = ['name', 'address', 'phone', 'email', 'motto', 'logo_url'];
+      const payload = {};
+      Object.keys(patch).forEach(function(key) {
+        if (!allowed.includes(key)) throw new Error('This school profile field cannot be changed here: ' + key);
+        const value = patch[key];
+        if (value !== null && typeof value !== 'string') throw new Error('Invalid value for school profile field: ' + key);
+        const cleaned = value == null ? null : value.trim();
+        if (cleaned != null && cleaned.length > (key === 'address' ? 500 : key === 'motto' ? 300 : 255)) {
+          throw new Error('The value for ' + key + ' is too long.');
+        }
+        payload[key] = cleaned === '' ? null : cleaned;
+      });
+      if (!Object.keys(payload).length) throw new Error('No school profile changes were supplied.');
+      if (Object.prototype.hasOwnProperty.call(payload, 'name') && !payload.name) {
+        throw new Error('School name is required.');
+      }
+      if (payload.email && !/^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(payload.email)) {
+        throw new Error('Enter a valid school email address.');
+      }
+      return payload;
+    }
+
+    async function getSchoolProfile() {
+      const user = await requireAuthenticatedUser();
+      const profile = await getActiveSchoolProfile(user);
+      const { data, error } = await client.from('schools')
+        .select('id,name,address,phone,email,logo_url,motto,updated_at')
+        .eq('id', profile.school_id).maybeSingle();
+      if (error) throw error;
+      if (!data) throw new Error('The school profile could not be read for this account.');
+      return data;
+    }
+
+    async function updateSchoolProfile(patch) {
+      const user = await requireAuthenticatedUser();
+      const profile = await getActiveSchoolProfile(user);
+      const payload = normaliseSchoolProfilePatch(patch);
+      payload.updated_at = new Date().toISOString();
+      const { data, error } = await client.from('schools').update(payload)
+        .eq('id', profile.school_id)
+        .select('id,name,address,phone,email,logo_url,motto,updated_at')
+        .maybeSingle();
+      if (error) throw error;
+      if (!data) throw new Error('No school profile was updated. Confirm that this account is an active school administrator, then refresh and try again.');
+      return data;
+    }
+
     async function auditSchoolAndClasses() {
       const user = await requireAuthenticatedUser();
       const profile = await getActiveSchoolProfile(user);
@@ -385,7 +436,7 @@
       return data;
     }
 
-    return Object.freeze({ select, insert, update, upsert, remove, auditSchoolAndClasses, auditClassConfigurationReconciliation, auditSchoolDataCounts, auditStudentEnrolmentIntegrity, auditAssignmentIntegrity, auditStaffAndAcademicConfiguration, getStaffDirectory, createStaffDirectoryRecord, updateStaffDirectoryRecord });
+    return Object.freeze({ select, insert, update, upsert, remove, getSchoolProfile, updateSchoolProfile, auditSchoolAndClasses, auditClassConfigurationReconciliation, auditSchoolDataCounts, auditStudentEnrolmentIntegrity, auditAssignmentIntegrity, auditStaffAndAcademicConfiguration, getStaffDirectory, createStaffDirectoryRecord, updateStaffDirectoryRecord });
   }
   global.SupabasePersistence = Object.freeze({ create });
 })(window);
