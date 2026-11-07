@@ -62,3 +62,35 @@ Return the seven result sets or clear screenshots of them. For staff privacy, Re
 - [ ] No database or browser data was changed.
 
 Phase 3B is complete only after all result sets are reviewed. Any later write migration requires a separate approved plan, explicit conflict rules, existing RLS/Edge Function controls, dry-run validation and read-back reconciliation.
+
+
+## Actual Phase 3B results and interpretation (2026-11-07)
+
+All seven result sets and the follow-up teacher profile lookup were returned and reviewed.
+
+### Confirmed results
+
+1. **School identity:** Confirmed as DE-GLOBAL ACADEMY GBOKO, school UUID `b135a823-0a04-4b4b-86dd-2b20ea5e9fac`.
+2. **Class matching:** All 30 legacy class names have exactly one school-scoped Supabase match. No class creation or replacement is required.
+3. **Duplicate class names:** The normalised-name audit returned one row per class name, with no duplicate class names.
+4. **Assessment configuration:** The first join returned NULL because legacy levels omit a space (`BASIC7`, `SS1`) while Supabase stores a space (`BASIC 7`, `SS 1`). A separate read-only inspection confirmed six existing active configurations for session 2026/2027, First Term. All six have CA1=10, CA2=10, CA3=10, examination=70 and total=100. The values match the legacy configuration. This was a comparison-query naming mismatch, not missing configuration data. No configuration write is required.
+5. **Teacher assignment:** One existing BASIC7A Mathematics assignment was returned for session 2026/2027. Its assignment status is inactive. A follow-up profile/directory lookup confirmed the teacher UUID links to an active same-school `subject_teacher` profile and matching active staff-directory entry for Hyande Dio Samuel, designation Subject Teacher. The legacy teacher ID was blank, so this confirms the existing Supabase identity but does not prove the assignment should be activated. Keep the assignment inactive until the authorised school administrator confirms the intended operational status and uses the normal assignment workflow.
+6. **Staff directory aggregate:** 15 rows; all 15 linked to profiles; 0 have staff IDs; all 15 have email addresses. Staff IDs remain manually administered and must not be auto-generated for this migration.
+7. **Staff directory schema:** The existing `school_staff_directory` contains the 21 returned columns, including profile link, staff identity, employment, contact, publication and audit metadata. Do not create a duplicate staff table.
+
+### Completion checklist
+
+- [x] Result 1 confirms the school identity.
+- [x] Result 2 confirms one match for all 30 legacy class names.
+- [x] Result 3 confirms no duplicate normalised class names.
+- [x] Result 4 reconciles all six levels, session, term, maxima and active state after correcting for the naming convention.
+- [x] Result 5 reviewed; teacher identity/profile is confirmed.
+- [x] Results 6–7 establish staff aggregate and schema.
+- [x] Conflicts and unresolved decisions documented.
+- [x] No database or browser data changed.
+
+### Outstanding decision
+
+The only operational decision from this reconciliation is whether the existing BASIC7A Mathematics assignment should remain inactive or be activated. The teacher profile and staff record are active, but this does not automatically authorise activating the assignment. Obtain administrator confirmation and use the existing assignment workflow if a change is required.
+
+**Phase 3B read-only reconciliation is complete.** This completion records review of the audit only. It is not a data migration, does not authorise bulk import, and does not authorise any database write. Preserve the original browser backup and legacy storage.
