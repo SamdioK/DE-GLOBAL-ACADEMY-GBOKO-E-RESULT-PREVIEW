@@ -1,0 +1,135 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#173b32">
+<title>DE-GLOBAL ACADEMY — Legacy Backup</title>
+<style>
+*{box-sizing:border-box}body{margin:0;padding:20px;background:#f2f5f3;color:#1e2b27;font:16px Arial,sans-serif}.wrap{max-width:760px;margin:24px auto;background:#fff;padding:24px;border-radius:14px;box-shadow:0 5px 24px #173b3218}h1{font-size:22px;color:#174c3c}p,li{line-height:1.55}.notice{padding:13px;border-radius:8px;background:#fff4d7;color:#694d00;margin:16px 0}.status{padding:12px;background:#eef4f1;border-radius:8px;white-space:pre-wrap;overflow-wrap:anywhere;min-height:70px}.btn{border:0;border-radius:8px;background:#17634c;color:#fff;font-size:16px;font-weight:700;padding:14px 18px;width:100%;margin:12px 0}.btn:disabled{opacity:.55}.small{font-size:13px;color:#596761}code{overflow-wrap:anywhere}
+</style>
+</head>
+<body>
+<main class="wrap">
+<h1>DE-GLOBAL ACADEMY GBOKO</h1>
+<h2>Legacy Browser Data Backup</h2>
+<p>This page creates a local, read-only export of the academy application's browser storage for this website origin.</p>
+<div class="notice"><strong>Important:</strong> This export may contain student, staff and other confidential school information. Keep the downloaded file private. Do not send it through a public link or group chat. This tool does not upload the backup anywhere and does not delete or change stored records.</div>
+<ul>
+<li>Reads this website's localStorage.</li>
+<li>Reads the IndexedDB database <code>EResultDB</code>, object store <code>data</code>.</li>
+<li>If the application's optional <code>window.storage</code> interface is available, attempts to read the known legacy keys.</li>
+<li>Does not export Chrome cookies or Supabase authentication tokens.</li>
+</ul>
+<button class="btn" id="backupBtn">Create and download backup</button>
+<div class="status" id="status" role="status">Ready. No data has been read yet.</div>
+<p class="small">The export runs on this phone in Chrome. Keep this page open until the download completes. The backup file is a snapshot, not a migration or restore operation.</p>
+</main>
+<script>
+(function(){
+'use strict';
+var knownKeys=[
+'activationResetV3','activityLog','classArms','dutyRoster','formMasters',
+'managementStaff','portal:developer','portalNews','portalSettings','portalStaffSelections',
+'prefects','school:main','schoolIdCardSettings','schoolInfo','schoolStaff',
+'subAdministrators','subjectAssignments','signature_subjects','students_meta','staffDatabase'
+];
+var status=document.getElementById('status');
+var button=document.getElementById('backupBtn');
+function say(s){status.textContent=s;}
+function isAuthKey(k){return /(^sb-.*-auth-token$|supabase.*auth|auth-token|access_token|refresh_token)/i.test(k);}
+function readLocalStorage(){
+ var out={},omitted=[];
+ try{
+  for(var i=0;i<localStorage.length;i++){
+   var k=localStorage.key(i); if(k===null)continue;
+   if(isAuthKey(k)){omitted.push(k);continue;}
+   var raw=localStorage.getItem(k);
+   try{out[k]={encoding:'json',value:JSON.parse(raw)};}
+   catch(e){out[k]={encoding:'text',value:raw};}
+  }
+ }catch(e){return {data:out,error:String(e),omitted_auth_keys:omitted};}
+ return {data:out,error:null,omitted_auth_keys:omitted};
+}
+function readIndexedDB(){
+ return new Promise(function(resolve){
+  if(!window.indexedDB){resolve({available:false,records:[],error:'IndexedDB unavailable'});return;}
+  var req;
+  try{req=indexedDB.open('EResultDB');}catch(e){resolve({available:false,records:[],error:String(e)});return;}
+  req.onerror=function(){resolve({available:false,records:[],error:req.error?String(req.error):'Could not open EResultDB'});};
+  req.onupgradeneeded=function(){try{req.transaction.abort();}catch(e){} resolve({available:false,records:[],error:'Database did not exist; no database was created'});};
+  req.onsuccess=function(){
+   var db=req.result;
+   if(!db.objectStoreNames.contains('data')){db.close();resolve({available:true,records:[],error:'EResultDB exists but has no data object store'});return;}
+   try{
+    var tx=db.transaction(['data'],'readonly');
+    var store=tx.objectStore('data');
+    var all=store.getAll();
+    all.onsuccess=function(){var records=all.result||[];db.close();resolve({available:true,records:records,error:null});};
+    all.onerror=function(){var err=all.error?String(all.error):'IndexedDB read failed';db.close();resolve({available:true,records:[],error:err});};
+    tx.onerror=function(){db.close();resolve({available:true,records:[],error:tx.error?String(tx.error):'IndexedDB transaction failed'});};
+   }catch(e){db.close();resolve({available:true,records:[],error:String(e)});}
+  };
+ });
+}
+async function readWindowStorage(){
+ var result={available:typeof window.storage!=='undefined',records:[],errors:[]};
+ if(!result.available)return result;
+ var candidates=[];
+ knownKeys.forEach(function(k){candidates.push(k);candidates.push('MAIN:'+k);});
+ ['students_batch_','keyboardStyle:','scoreEntryDirection:','sig_'].forEach(function(prefix){
+  // Prefix families cannot be enumerated by the documented get-only interface.
+  result.errors.push('Could not enumerate dynamic key family: '+prefix);
+ });
+ for(var i=0;i<candidates.length;i++){
+  var key=candidates[i];
+  try{
+   var value=await window.storage.get(key,true);
+   if(value!==null&&value!==undefined)result.records.push({key:key,value:value});
+  }catch(e){result.errors.push(key+': '+String(e));}
+ }
+ return result;
+}
+button.addEventListener('click',async function(){
+ button.disabled=true;say('Reading browser storage in read-only mode…');
+ try{
+  var local=readLocalStorage();
+  var idb=await readIndexedDB();
+  var win=await readWindowStorage();
+  var payload={
+   backup_type:'DE-GLOBAL ACADEMY GBOKO legacy browser storage snapshot',
+   format_version:1,
+   created_at:new Date().toISOString(),
+   source_origin:location.origin,
+   source_page:location.href,
+   read_only:true,
+   localStorage:local,
+   indexedDB:{database:'EResultDB',object_store:'data',...idb},
+   windowStorage:win,
+   limitations:[
+    'Chrome cookies are not exported.',
+    'Supabase authentication tokens are intentionally excluded from localStorage export.',
+    'Dynamic window.storage key families may not be enumerable through its get-only interface.',
+    'This is a browser-storage snapshot only; it is not a Supabase database backup.'
+   ]
+  };
+  var json=JSON.stringify(payload,null,2);
+  var blob=new Blob([json],{type:'application/json'});
+  var url=URL.createObjectURL(blob);
+  var a=document.createElement('a');
+  a.href=url;a.download='DE-GLOBAL-LEGACY-BROWSER-BACKUP-'+new Date().toISOString().replace(/[:.]/g,'-')+'.json';
+  document.body.appendChild(a);a.click();a.remove();
+  setTimeout(function(){URL.revokeObjectURL(url);},60000);
+  say('Backup download requested.\nlocalStorage keys exported: '+Object.keys(local.data).length+
+   '\nIndexedDB records exported: '+idb.records.length+
+   '\nwindow.storage available: '+win.available+
+   '\nwindow.storage records read: '+win.records.length+
+   '\nAuthentication keys excluded: '+local.omitted_auth_keys.length+
+   '\n\nCheck Chrome Downloads for the JSON backup. If any error or warning is shown in the downloaded file, do not assume the backup is complete.');
+ }catch(e){say('Backup failed: '+String(e)+'. No stored data was intentionally changed.');}
+ finally{button.disabled=false;}
+});
+})();
+</script>
+</body>
+</html>
