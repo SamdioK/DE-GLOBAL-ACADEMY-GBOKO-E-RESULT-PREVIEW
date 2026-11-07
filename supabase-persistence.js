@@ -112,6 +112,28 @@
       return data;
     }
 
+    async function getClasses() {
+      const user = await requireAuthenticatedUser();
+      const profile = await getActiveSchoolProfile(user);
+      const { data, error } = await client.from('classes')
+        .select('id,school_id,level,arm,class_name,created_at')
+        .eq('school_id', profile.school_id)
+        .order('level', { ascending: true })
+        .order('arm', { ascending: true });
+      if (error) throw error;
+      return (data || []).map(function(row) {
+        return {
+          id: row.id,
+          school_id: row.school_id,
+          level: row.level,
+          arm: row.arm,
+          name: row.class_name,
+          class_name: row.class_name,
+          created_at: row.created_at
+        };
+      });
+    }
+
     async function updateSchoolProfile(patch) {
       const user = await requireAuthenticatedUser();
       const profile = await getActiveSchoolProfile(user);
@@ -436,7 +458,7 @@
       return data;
     }
 
-    return Object.freeze({ select, insert, update, upsert, remove, getSchoolProfile, updateSchoolProfile, auditSchoolAndClasses, auditClassConfigurationReconciliation, auditSchoolDataCounts, auditStudentEnrolmentIntegrity, auditAssignmentIntegrity, auditStaffAndAcademicConfiguration, getStaffDirectory, createStaffDirectoryRecord, updateStaffDirectoryRecord });
+    return Object.freeze({ select, insert, update, upsert, remove, getSchoolProfile, updateSchoolProfile, getClasses, auditSchoolAndClasses, auditClassConfigurationReconciliation, auditSchoolDataCounts, auditStudentEnrolmentIntegrity, auditAssignmentIntegrity, auditStaffAndAcademicConfiguration, getStaffDirectory, createStaffDirectoryRecord, updateStaffDirectoryRecord });
   }
   global.SupabasePersistence = Object.freeze({ create });
 })(window);
