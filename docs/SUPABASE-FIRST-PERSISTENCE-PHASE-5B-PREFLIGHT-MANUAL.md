@@ -77,3 +77,10 @@ Only after review may a separate implementation step add a narrowly scoped Supab
 ## 8. Training exercise
 
 Have the trainee identify the Phase 4D migration version, distinguish a missing history table from an unapplied migration, locate the school UPDATE policy, and map the session and principal fields to their correct data domains. The trainee must explain why no write or deployment is permitted during this pre-flight.
+
+
+## Updated finding after operator supplied audit results
+
+The live audit returned no table-level grants for anon/authenticated, but it did return column-level INSERT, REFERENCES, SELECT and UPDATE privileges across the school columns for both roles. The only listed RLS policy is authenticated SELECT; RLS is enabled and not forced. The school identity row matches the expected school UUID. The remote migration history listing shows version `20261107120000` blank, while the standard `supabase_migrations.schema_migrations` lookup returned NULL. This does not prove that no SQL was manually applied; however, the live policy and privilege output does not show the intended Phase 4D update policy or intended restricted column grants.
+
+The original Phase 4D draft revoked table-level grants but omitted explicit column-level revocations. A corrected draft now explicitly revokes table-level and column-level privileges for `anon` and `authenticated` before regranting authenticated SELECT and UPDATE on the seven approved fields. **Do not run the earlier draft.** The corrected SQL remains pending review and explicit approval. No database writes have been performed by this audit.
