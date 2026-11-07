@@ -1,1 +1,4 @@
 project_id = "de-global-academy-gboko"
+
+[functions.student-admission-login]
+verify_jwt = false
