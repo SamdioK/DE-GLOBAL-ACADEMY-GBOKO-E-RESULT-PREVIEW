@@ -34,4 +34,4 @@ jobs:
         shell: bash
         run: |
           echo "This command lists migration history only. It does not apply migrations."
-          supabase migration list --linked
+          supabase migration list --remote
