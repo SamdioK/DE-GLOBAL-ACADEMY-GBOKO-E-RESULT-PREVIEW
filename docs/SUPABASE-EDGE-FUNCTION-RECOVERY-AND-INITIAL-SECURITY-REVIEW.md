@@ -126,3 +126,18 @@ The project administrator inspected the Supabase Dashboard setting **Verify JWT 
 No gateway setting was changed. This confirmation records the administrator's dashboard inspection; it is not an independent API export of function configuration.
 
 The custom secret name `STUDENT_RESET_ENCRYPTION_KEY_V1` was also confirmed visible in Supabase Edge Function Secrets. Its value and cryptographic validity have not been inspected and must remain confidential.
+
+## 8. Corrected student admission login source prepared — not deployed
+
+A reviewed source correction has been committed at `supabase/functions/student-admission-login/index.ts` (commit `cfc52005b531d3c13f3664ef96da06dd6f46032f`). The Supabase CLI config explicitly preserves `verify_jwt = false` for this pre-authentication credential-entry endpoint (commit `0333123b3bf59c34f15b2e9406f61fc03870b41c`).
+
+The corrected source:
+- selects and requires `students.login_status = 'created'`;
+- selects `profiles.must_change_password`;
+- returns the actual profile flag instead of always returning true;
+- requires a successful Auth session before returning tokens;
+- retains generic credential failure responses.
+
+This is a source-only change. It has not been deployed or runtime-tested. The function uses a service-role client to look up the student/profile and a public client to authenticate the password. The admission-number lookup is still not explicitly constrained by a caller-supplied school identifier, and function-level throttling has not yet been implemented. These remain open review items.
+
+**Do not deploy Edge Functions yet.** Only the student admission login source has been added to the repository so far; the other nine recovered source files and their deployment configuration have not yet been committed. A deployment run at this stage would not constitute a complete source-controlled baseline.
