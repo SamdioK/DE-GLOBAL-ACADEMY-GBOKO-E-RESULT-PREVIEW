@@ -506,3 +506,10 @@ The prepared Phase 4D migration is present in the repository, but its execution 
 The SQL checks migration-history table/version status, table and column grants, RLS policies and state, actual school columns, and the known school row. It performs no writes. A missing migration-history table is explicitly treated as UNKNOWN, not proof that Phase 4D is unapplied. Reconcile with the linked CLI migration list; do not run `db push` or the Phase 4D migration during this audit.
 
 **Current status:** pre-flight package prepared. No Supabase database, Storage, browser data or application behaviour changed. Await all SQL results and the linked CLI migration-list output before designing the narrow school-profile update integration.
+
+
+### Phase 5B audit results received — corrected Phase 4D required
+
+The operator supplied live audit output. The school row exists and matches the expected UUID. RLS is enabled (not forced); the only listed policy is authenticated SELECT. Table-level grants query returned no rows for anon/authenticated, but column-level grants show INSERT, REFERENCES, SELECT and UPDATE for both roles across the school columns. The CLI migration list shows local version `20261107120000` with no remote version; the standard migration-history table lookup returned NULL. This is not proof that the migration was never manually executed.
+
+The original Phase 4D SQL only revoked table-level privileges and therefore did not explicitly clear the existing column-level grants. A corrected script has been prepared to revoke table and column grants before regranting authenticated SELECT and UPDATE on the approved seven profile fields. Do not execute the earlier draft. Corrected SQL remains pending operator review and explicit approval. No database changes have been made.
