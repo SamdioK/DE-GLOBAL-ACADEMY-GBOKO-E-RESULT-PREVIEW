@@ -29,7 +29,7 @@ on:
         default: "no"
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   connection-check:
@@ -84,6 +84,27 @@ jobs:
 
       - name: Download deployed Edge Function source
         run: supabase functions download --project-ref "$SUPABASE_PROJECT_REF" --use-api
+
+      - name: Commit recovered function sources to a review branch
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Keep the corrected source-controlled login handler; do not replace it
+          # with the older deployed copy recovered from the project.
+          rm -rf supabase/functions/student-admission-login
+          test -f supabase/functions/provision-student-account/index.ts
+          branch="recovered-edge-functions-20261107"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git checkout -b "$branch"
+          git add supabase/functions/
+          if git diff --cached --quiet; then
+            echo "No new recovered source files to commit."
+          else
+            git commit -m "Recover deployed Edge Function sources for review"
+            git push origin "$branch"
+            echo "Recovered sources pushed to branch $branch for review; main was not changed."
+          fi
 
       - name: Upload private source archive for review
         uses: actions/upload-artifact@v4
