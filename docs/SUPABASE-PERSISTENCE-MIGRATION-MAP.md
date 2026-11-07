@@ -404,3 +404,19 @@ Source inspection confirms that the current frontend still loads `schoolInfo` fr
 The SQL is SELECT-only and returns five labelled result sets: current school row, academic sessions, terms, schema column inventory, and RLS state/policies for `schools`, `academic_sessions`, and `terms`. It performs no insert, update, delete, DDL, RPC or Storage operation.
 
 **Current status:** Phase 4A validation package prepared and committed. Await the user's five result sets and school administrator decisions on the official address/contact values and current session/term. No write migration or frontend persistence change is authorised yet.
+
+
+## Phase 4B — Administrator authorisation audit prepared (2026-11-07)
+
+Source review of the current frontend and persistence helper confirms that the login flow recognises the `administrator` role through the authenticated profile role and `profile_roles` records. The persistence foundation validates that a user is authenticated and can resolve an active school-linked profile, but its generic update helper is not a sufficient school-profile authorisation boundary. The previously reviewed RLS output shows authenticated SELECT policies only for `schools`, `academic_sessions` and `terms`; no school UPDATE permission is established.
+
+The repository root contains no Supabase Edge Function source or deployment configuration for a school-profile update function. The deployed backend implementation must not be assumed. Before choosing an update mechanism, inspect existing policies, role/permission table columns, database helper-function definitions/settings and triggers.
+
+### Phase 4B files
+- [Phase 4B Administrator Authorisation Audit SQL](LEGACY-STORAGE-MIGRATION-PHASE-4B-ADMIN-AUTHORIZATION-AUDIT.sql)
+- [Phase 4B Operational and Training Manual](LEGACY-STORAGE-MIGRATION-PHASE-4B-ADMIN-AUTHORIZATION-AUDIT-MANUAL.md)
+
+The four SQL result sections are SELECT-only. They inspect identity/role policies, role/permission schema, relevant public helper functions and school/academic triggers. No records, schema, policies, functions or Storage objects are changed.
+
+### Completion gate
+Phase 4B is prepared and awaiting all four result sets. Do not create an UPDATE policy, deploy an Edge Function, alter frontend save behaviour or execute write SQL until the results are reviewed. The final design must restrict the update to approved school profile fields, the caller's own school, and an active administrator role, with server/database enforcement and negative tests for non-administrator and cross-school access.
