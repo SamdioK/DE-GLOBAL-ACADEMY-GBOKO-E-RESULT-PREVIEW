@@ -7,7 +7,7 @@
 
 ## 1. Objective and scope
 
-This phase removes unnecessary direct anonymous access and broad authenticated write privileges on `public.schools`. It retains authenticated reading and permits an active administrator to update only the approved school profile fields for the school linked to that administrator's active profile.
+This phase removes unnecessary direct anonymous access and broad authenticated write privileges on `public.schools`. The Phase 5B audit found existing column-level privileges as well as table-level privileges. PostgreSQL treats these separately, so the corrected migration explicitly revokes both before regranting the approved access. It retains authenticated reading and permits an active administrator to update only approved school profile fields for the school linked to that administrator's active profile.
 
 Approved fields:
 - `name`
@@ -33,9 +33,10 @@ The migration does not use a service-role key, does not disable RLS, and does no
 ## 3. Before running
 
 1. Confirm you are in the Supabase project for DE-GLOBAL ACADEMY GBOKO.
-2. Open Supabase SQL Editor using an authorised database administrator account.
-3. Review the complete Phase 4D SQL file.
-4. Run the entire script once. The transaction applies the grants and policy together; verification SELECT statements then return four result sets.
+2. Confirm the corrected Phase 4D SQL explicitly revokes both table-level and column-level grants for `anon` and `authenticated`.
+3. Open Supabase SQL Editor using an authorised database administrator account.
+4. Review the complete corrected Phase 4D SQL file.
+5. Run the entire script once, but only after explicit approval to apply it. The transaction applies the grants and policy together; verification SELECT statements then return four result sets.
 5. If any error occurs, stop and send the exact error. Do not manually run only selected write statements.
 
 ## 4. Expected verification
@@ -49,6 +50,8 @@ The migration does not use a service-role key, does not disable RLS, and does no
 - Authenticated SELECT may appear for the table's columns.
 - Authenticated UPDATE should appear only for the seven approved fields listed above.
 - No anonymous column privileges should remain.
+- Authenticated UPDATE must exist only for `name`, `address`, `phone`, `email`, `logo_url`, `motto` and `updated_at`.
+- Authenticated must not retain column-level INSERT or REFERENCES privileges.
 
 ### Verify 3 — policies
 - Existing authenticated SELECT policy/policies should remain.
@@ -104,4 +107,4 @@ Phase 4D is complete only after:
 - The school profile form reads and writes Supabase only.
 - The application reports database failures without local fallback.
 
-**Important:** This phase secures the school profile write path. It does not complete the overall legacy browser-storage migration. Other data categories remain scheduled for separate mapping, integration, reconciliation and testing.
+**Important:** The earlier Phase 4D SQL draft did not explicitly revoke column-level grants. Do not use an earlier downloaded copy. Use the corrected SQL in the repository. This phase secures the school profile write path. It does not complete the overall legacy browser-storage migration. Other data categories remain scheduled for separate mapping, integration, reconciliation and testing.
