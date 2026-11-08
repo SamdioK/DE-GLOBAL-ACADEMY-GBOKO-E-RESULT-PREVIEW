@@ -1254,8 +1254,25 @@ async function handleSupabaseLogin(userType, errorDiv) {
     }
     if (appType === 'student') currentUser.admission = document.getElementById('studentAdmission').value.trim();
     if (appType === 'subadmin') {
-      var subadmin = subAdministrators.find(function(item) { return item.username === document.getElementById('subadminUsername').value.trim(); });
-      currentUser.permissions = subadmin && subadmin.permissions || {};
+      var permissionResult = await supabaseClient.functions.invoke('manage-profile-permissions', {
+        body: { action: 'my_permissions' }
+      });
+      if (permissionResult.error) throw permissionResult.error;
+      if (!permissionResult.data || permissionResult.data.success !== true) {
+        throw new Error(permissionResult.data && permissionResult.data.error || 'Your individual permissions could not be verified.');
+      }
+      var permissionMap = {
+        view_results: 'viewResults', enter_results: 'enterResults', edit_results: 'editResults',
+        submit_results: 'submitResults', view_reports: 'generateSheets',
+        manage_students: 'manageStudents', manage_teachers: 'manageTeachers',
+        manage_classes: 'manageClasses', manage_subjects: 'manageSubjects',
+        manage_comments: 'manageComments', manage_fees: 'manageFees'
+      };
+      currentUser.permissions = {};
+      (permissionResult.data.permissions || []).forEach(function(permission) {
+        var legacyKey = permissionMap[permission.permission_key];
+        if (legacyKey) currentUser.permissions[legacyKey] = true;
+      });
     }
     startStudentCorrectionRealtime();
     showApp();
@@ -3047,74 +3064,153 @@ function showTab(tabName) {
 
 // ===================== SUB-ADMINISTRATOR + RESULTS ACCESS =====================
 function renderUserManagement() {
-  if (currentUser.type !== 'admin' && !hasSubAdminPermission('createAdmins')) return;
-  var editingId = null;
-  var html = '<div class="card"><h2>Sub-Administrator / User Management</h2><p style="color:#666; margin:8px 0 18px;">Only Active accounts can sign in. Assign each permission individually; changes take effect on the next login.</p><div class="grid grid-2">' +
-    '<div class="input-group"><label>Full Name *</label><input id="subFullName"></div><div class="input-group"><label>Username *</label><input id="subUsername"></div>' +
-    '<div class="input-group"><label>Email</label><input id="subEmail" type="email"></div><div class="input-group"><label>Phone Number</label><input id="subPhone"></div>' +
-    '<div class="input-group"><label>Password * (enter a new password to reset)</label><input id="subPassword" type="password"></div><div class="input-group"><label>Profile Photo</label><input id="subPhoto" type="file" accept="image/*"></div>' +
-    '<div class="input-group"><label>Staff ID</label><input id="subStaffId"></div><div class="input-group"><label>Designation</label><input id="subDesignation"></div>' +
-    '<div class="input-group"><label>Assigned Responsibilities</label><textarea id="subResponsibilities" rows="2"></textarea></div><div class="input-group"><label>Account Status</label><select id="subStatus"><option>Active</option><option>Inactive</option><option>Suspended</option></select></div></div>' +
-    '<h3 style="margin:12px 0;">Individual Permissions</h3><div class="grid grid-2">' + subAdminPermissions.map(function(p) { return '<label style="display:flex; gap:8px; align-items:center; padding:8px; border:1px solid #eee; border-radius:5px;"><input type="checkbox" class="sub-permission" value="' + p[0] + '"> ' + p[1] + '</label>'; }).join('') + '</div>' +
-    '<div style="margin-top:15px;"><button class="btn btn-success" id="saveSubAdminBtn">Add Sub-Administrator</button> <button class="btn" id="cancelSubEditBtn" style="background:#eee;">Clear / Cancel</button></div></div>' +
-    '<div class="card"><h3>Accounts (' + subAdministrators.length + ')</h3><div style="overflow-x:auto;"><table><thead><tr><th>Name</th><th>Username</th><th>Designation</th><th>Status</th><th>Actions</th></tr></thead><tbody>';
-  subAdministrators.forEach(function(a) { html += '<tr><td>' + escapeManagementText(a.fullName) + '</td><td>' + escapeManagementText(a.username) + '</td><td>' + escapeManagementText(a.designation) + '</td><td>' + escapeManagementText(a.status) + '</td><td><button class="btn btn-primary sub-edit" data-id="' + a.id + '">Edit / Reset</button> <button class="btn btn-danger sub-remove" data-id="' + a.id + '">Delete</button></td></tr>'; });
-  html += '</tbody></table></div><h3 style="margin-top:20px;">Activity Log</h3><div style="max-height:260px; overflow:auto;"><table><thead><tr><th>User</th><th>Action</th><th>Date &amp; Time</th><th>Affected Record</th></tr></thead><tbody>';
-  activityLog.slice().reverse().forEach(function(entry) { html += '<tr><td>' + escapeManagementText(entry.user) + '</td><td>' + escapeManagementText(entry.action) + '</td><td>' + escapeManagementText(new Date(entry.timestamp).toLocaleString()) + '</td><td>' + escapeManagementText(entry.affectedRecord) + '</td></tr>'; });
-  html += '</tbody></table></div></div>';
-  document.getElementById('userManagementTab').innerHTML = html;
-  if (currentUser.type === 'subadmin') document.querySelectorAll('.sub-permission').forEach(function(input) { if (!hasSubAdminPermission(input.value)) input.disabled = true; });
+  if (!currentUser || currentUser.type !== 'admin') return;
+  var root = document.getElementById('userManagementTab');
+  if (!root) return;
+  var permissionOptions = [
+    ['view_results','View Results'], ['enter_results','Enter Student Results'],
+    ['edit_results','Edit Results'], ['submit_results','Submit Results'],
+    ['view_reports','Generate/View Reports'], ['manage_students','Manage Students'],
+    ['manage_teachers','Manage Teachers'], ['manage_classes','Manage Classes'],
+    ['manage_subjects','Manage Subjects'], ['manage_comments','Manage Result Comments'],
+    ['manage_fees','Manage Fees']
+  ];
+  var selectedId = '';
+  var accounts = [];
+  var activeGrants = {};
+  var notice = '';
 
-  function clearForm() {
-    editingId = null;
-    ['subFullName','subUsername','subEmail','subPhone','subPassword','subStaffId','subDesignation','subResponsibilities'].forEach(function(id) { document.getElementById(id).value = ''; });
-    document.getElementById('subStatus').value = 'Active';
-    document.querySelectorAll('.sub-permission').forEach(function(input) { input.checked = false; });
-    document.getElementById('subPhoto').value = '';
-    document.getElementById('saveSubAdminBtn').textContent = 'Add Sub-Administrator';
+  function esc(value) { return escapeManagementText(value == null ? '' : String(value)); }
+  function render() {
+    var html = '<div class="card"><h2>Sub-Administrator Management</h2>' +
+      '<p style="color:#64748b">Accounts and individual permissions are now managed through Supabase. Passwords are generated securely on the server. Accounts are deactivated rather than deleted.</p>' +
+      '<h3>Create Sub-Administrator</h3><div class="grid grid-2">' +
+      '<div class="input-group"><label>Full Name *</label><input id="saFullName" autocomplete="name"></div>' +
+      '<div class="input-group"><label>Username *</label><input id="saUsername" autocomplete="username"></div>' +
+      '<div class="input-group"><label>Email *</label><input id="saEmail" type="email" autocomplete="email"></div>' +
+      '<div class="input-group"><label>Phone</label><input id="saPhone"></div>' +
+      '<div class="input-group"><label>Staff ID</label><input id="saStaffId"></div>' +
+      '<div class="input-group"><label>Designation</label><input id="saDesignation"></div>' +
+      '<div class="input-group" style="grid-column:1/-1"><label>Responsibilities</label><textarea id="saResponsibilities" rows="2"></textarea></div></div>' +
+      '<button class="btn btn-success" id="saCreateBtn">Create Account</button></div>' +
+      '<div class="card"><h3>Existing Accounts (' + accounts.length + ')</h3>';
+    if (!accounts.length) html += '<p class="alert alert-info">No Sub-Administrator accounts have been created in Supabase yet.</p>';
+    else {
+      html += '<div style="overflow-x:auto"><table><thead><tr><th>Name</th><th>Username</th><th>Designation</th><th>Status</th><th>Actions</th></tr></thead><tbody>';
+      accounts.forEach(function(a) {
+        html += '<tr><td>' + esc(a.full_name) + '</td><td>' + esc(a.username) + '</td><td>' + esc(a.details && a.details.designation) +
+          '</td><td>' + (a.is_active ? 'Active' : 'Inactive') + '</td><td>' +
+          '<button class="btn btn-primary sa-select" data-id="' + esc(a.id) + '">Permissions</button> ' +
+          '<button class="btn sa-status" data-id="' + esc(a.id) + '" data-active="' + (!a.is_active) + '">' + (a.is_active ? 'Deactivate' : 'Activate') + '</button> ' +
+          '<button class="btn sa-reset" data-id="' + esc(a.id) + '">Reset Password</button></td></tr>';
+      });
+      html += '</tbody></table></div>';
+    }
+    html += '</div>';
+    if (selectedId) {
+      var selected = accounts.find(function(a) { return a.id === selectedId; });
+      html += '<div class="card"><h3>Individual Permissions' + (selected ? ' — ' + esc(selected.full_name) : '') + '</h3>' +
+        '<p style="color:#64748b">Only the permissions selected here are granted. Result approval and publication, user administration, deletion and school-wide settings are deliberately excluded from individual delegation.</p>' +
+        '<div class="grid grid-2">' + permissionOptions.map(function(p) {
+          return '<label style="display:flex;gap:9px;align-items:center;padding:10px;border:1px solid #e2e8f0;border-radius:8px"><input type="checkbox" class="sa-permission" value="' + p[0] + '"' + (activeGrants[p[0]] ? ' checked' : '') + '> ' + p[1] + '</label>';
+        }).join('') + '</div><button class="btn btn-success" id="saSavePermissions" style="margin-top:14px">Save Permissions</button></div>';
+    }
+    if (notice) html += '<div class="card"><p class="alert alert-info" style="white-space:pre-wrap">' + esc(notice) + '</p><button class="btn" id="saClearNotice">Dismiss</button></div>';
+    root.innerHTML = html;
+    var createBtn = document.getElementById('saCreateBtn');
+    if (createBtn) createBtn.addEventListener('click', createAccount);
+    root.querySelectorAll('.sa-select').forEach(function(btn) { btn.addEventListener('click', function() { loadGrants(btn.dataset.id); }); });
+    root.querySelectorAll('.sa-status').forEach(function(btn) { btn.addEventListener('click', function() { setStatus(btn.dataset.id, btn.dataset.active === 'true'); }); });
+    root.querySelectorAll('.sa-reset').forEach(function(btn) { btn.addEventListener('click', function() { resetPassword(btn.dataset.id); }); });
+    var saveBtn = document.getElementById('saSavePermissions');
+    if (saveBtn) saveBtn.addEventListener('click', savePermissions);
+    var clearBtn = document.getElementById('saClearNotice');
+    if (clearBtn) clearBtn.addEventListener('click', function() { notice = ''; render(); });
   }
-  document.getElementById('cancelSubEditBtn').addEventListener('click', clearForm);
-  document.getElementById('saveSubAdminBtn').addEventListener('click', async function() {
-    var fullName = document.getElementById('subFullName').value.trim();
-    var username = document.getElementById('subUsername').value.trim();
-    var password = document.getElementById('subPassword').value;
-    if (!fullName || !username || (!editingId && !password)) { showToast('Full name, username and password are required', 'error'); return; }
-    if (subAdministrators.some(function(a) { return a.username.toLowerCase() === username.toLowerCase() && a.id !== editingId; })) { showToast('That username is already in use', 'error'); return; }
-    var saveProfile = async function(photo) {
-      var permissions = {};
-      document.querySelectorAll('.sub-permission').forEach(function(input) { permissions[input.value] = input.checked && (currentUser.type === 'admin' || hasSubAdminPermission(input.value)); });
-      var existing = subAdministrators.find(function(a) { return a.id === editingId; });
-      var record = existing || { id: Date.now(), password: '' };
-      record.fullName = fullName; record.username = username; record.email = document.getElementById('subEmail').value.trim();
-      record.phone = document.getElementById('subPhone').value.trim(); record.staffId = document.getElementById('subStaffId').value.trim();
-      record.designation = document.getElementById('subDesignation').value.trim(); record.responsibilities = document.getElementById('subResponsibilities').value.trim();
-      record.status = document.getElementById('subStatus').value; record.permissions = permissions;
-      if (password) record.password = password;
-      if (photo) record.photo = photo;
-      if (!existing) subAdministrators.push(record);
-      await saveAllData();
-      logActivity(existing ? 'Updated sub-administrator / reset permissions or password' : 'Added sub-administrator', record.fullName);
-      showToast(existing ? 'Sub-administrator updated' : 'Sub-administrator added', 'success');
-      renderUserManagement();
+  async function loadAccounts() {
+    root.innerHTML = '<div class="card">Loading Sub-Administrator accounts from Supabase…</div>';
+    var result = await supabaseClient.functions.invoke('manage-sub-administrator', { body: { action: 'list' } });
+    if (result.error) throw result.error;
+    if (!result.data || result.data.success !== true) throw new Error(result.data && result.data.error || 'Could not load Sub-Administrator accounts.');
+    accounts = result.data.accounts || [];
+    render();
+  }
+  async function createAccount() {
+    var button = document.getElementById('saCreateBtn');
+    var payload = {
+      action: 'create',
+      full_name: document.getElementById('saFullName').value.trim(),
+      username: document.getElementById('saUsername').value.trim(),
+      email: document.getElementById('saEmail').value.trim(),
+      phone: document.getElementById('saPhone').value.trim(),
+      staff_id: document.getElementById('saStaffId').value.trim(),
+      designation: document.getElementById('saDesignation').value.trim(),
+      responsibilities: document.getElementById('saResponsibilities').value.trim()
     };
-    var file = document.getElementById('subPhoto').files[0];
-    if (file) { if (file.type.indexOf('image/') !== 0) { showToast('Choose a valid image', 'error'); return; } var reader = new FileReader(); reader.onload = function(e) { saveProfile(e.target.result); }; reader.onerror = function() { showToast('Could not read profile photo', 'error'); }; reader.readAsDataURL(file); }
-    else saveProfile(null);
+    if (!payload.full_name || !payload.username || !payload.email) { showToast('Full name, username and email are required.', 'error'); return; }
+    button.disabled = true; button.textContent = 'Creating…';
+    try {
+      var result = await supabaseClient.functions.invoke('manage-sub-administrator', { body: payload });
+      if (result.error) throw result.error;
+      if (!result.data || result.data.success !== true) throw new Error(result.data && result.data.error || 'Account creation failed.');
+      notice = 'Account created successfully. Give this temporary password to the staff member securely. They must change it at first login.\n\nUsername: ' + payload.username + '\nEmail: ' + payload.email + '\nTemporary password: ' + result.data.temporary_password;
+      showToast('Sub-Administrator account created.', 'success');
+      await loadAccounts();
+    } catch (error) { showToast(error.message || 'Account creation failed.', 'error'); button.disabled = false; button.textContent = 'Create Account'; }
+  }
+  async function loadGrants(profileId) {
+    selectedId = profileId; activeGrants = {};
+    try {
+      var result = await supabaseClient.functions.invoke('manage-profile-permissions', { body: { action: 'list', profile_id: profileId } });
+      if (result.error) throw result.error;
+      if (!result.data || result.data.success !== true) throw new Error(result.data && result.data.error || 'Could not load permissions.');
+      (result.data.grants || []).forEach(function(g) {
+        if (g.is_active && g.permission) activeGrants[g.permission.permission_key] = true;
+      });
+      render();
+    } catch (error) { showToast(error.message || 'Could not load permissions.', 'error'); }
+  }
+  async function savePermissions() {
+    var checks = Array.from(root.querySelectorAll('.sa-permission'));
+    var button = document.getElementById('saSavePermissions');
+    button.disabled = true; button.textContent = 'Saving…';
+    try {
+      for (var i = 0; i < checks.length; i++) {
+        var key = checks[i].value;
+        var shouldGrant = checks[i].checked;
+        if (!!activeGrants[key] === shouldGrant) continue;
+        var result = await supabaseClient.functions.invoke('manage-profile-permissions', {
+          body: { action: shouldGrant ? 'grant' : 'revoke', profile_id: selectedId, permission_key: key }
+        });
+        if (result.error) throw result.error;
+        if (!result.data || result.data.success !== true) throw new Error(result.data && result.data.error || 'A permission change failed.');
+      }
+      showToast('Individual permissions saved to Supabase.', 'success');
+      await loadGrants(selectedId);
+    } catch (error) { showToast(error.message || 'Could not save permissions.', 'error'); button.disabled = false; button.textContent = 'Save Permissions'; }
+  }
+  async function setStatus(profileId, isActive) {
+    try {
+      var result = await supabaseClient.functions.invoke('manage-sub-administrator', { body: { action: 'set_active', profile_id: profileId, is_active: isActive } });
+      if (result.error) throw result.error;
+      if (!result.data || result.data.success !== true) throw new Error(result.data && result.data.error || 'Status update failed.');
+      if (!isActive && selectedId === profileId) { selectedId = ''; activeGrants = {}; }
+      showToast(isActive ? 'Account activated.' : 'Account deactivated.', 'success');
+      await loadAccounts();
+    } catch (error) { showToast(error.message || 'Could not update account status.', 'error'); }
+  }
+  async function resetPassword(profileId) {
+    try {
+      var result = await supabaseClient.functions.invoke('manage-sub-administrator', { body: { action: 'reset_password', profile_id: profileId } });
+      if (result.error) throw result.error;
+      if (!result.data || result.data.success !== true) throw new Error(result.data && result.data.error || 'Password reset failed.');
+      notice = 'A new temporary password has been generated. Give it to the staff member securely. They must change it at first login.\n\nTemporary password: ' + result.data.temporary_password;
+      render();
+    } catch (error) { showToast(error.message || 'Password reset failed.', 'error'); }
+  }
+  loadAccounts().catch(function(error) {
+    root.innerHTML = '<div class="card"><p class="alert alert-error">' + escapeManagementText(error.message || 'Unable to load Sub-Administrator management.') + '</p></div>';
   });
-  document.querySelectorAll('.sub-edit').forEach(function(button) { button.addEventListener('click', function() {
-    var a = subAdministrators.find(function(item) { return String(item.id) === button.getAttribute('data-id'); }); if (!a) return; editingId = a.id;
-    document.getElementById('subFullName').value = a.fullName || ''; document.getElementById('subUsername').value = a.username || '';
-    document.getElementById('subEmail').value = a.email || ''; document.getElementById('subPhone').value = a.phone || '';
-    document.getElementById('subStaffId').value = a.staffId || ''; document.getElementById('subDesignation').value = a.designation || '';
-    document.getElementById('subResponsibilities').value = a.responsibilities || ''; document.getElementById('subStatus').value = a.status || 'Inactive'; document.getElementById('subPassword').value = '';
-    document.querySelectorAll('.sub-permission').forEach(function(input) { input.checked = a.permissions && a.permissions[input.value] === true; });
-    document.getElementById('saveSubAdminBtn').textContent = 'Save Changes'; document.getElementById('userManagementTab').scrollIntoView({ behavior: 'smooth' });
-  }); });
-  document.querySelectorAll('.sub-remove').forEach(function(button) { button.addEventListener('click', async function() {
-    var target = subAdministrators.find(function(a) { return String(a.id) === button.getAttribute('data-id'); });
-    subAdministrators = subAdministrators.filter(function(a) { return String(a.id) !== button.getAttribute('data-id'); });
-    await saveAllData(); logActivity('Deleted sub-administrator account', target ? target.fullName : button.getAttribute('data-id')); showToast('Account deleted', 'info'); renderUserManagement();
-  }); });
 }
 
 function getStudentReleaseStage(student) {
