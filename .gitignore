@@ -1,0 +1,26 @@
+# Local environment and secrets
+.env
+.env.*
+!.env.example
+!.env.*.example
+*.pem
+*.key
+*.p12
+*.pfx
+
+# Local database exports and private backups
+/backups/
+/backup/
+/database-backups/
+*.dump
+*.sqlite
+*.sqlite3
+*.db
+*backup*.json
+*BACKUP*.json
+DE-GLOBAL-LEGACY-BROWSER-BACKUP-*.json
+
+# Local development artefacts
+node_modules/
+.DS_Store
+Thumbs.db
