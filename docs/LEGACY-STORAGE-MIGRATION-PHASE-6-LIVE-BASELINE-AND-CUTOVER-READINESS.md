@@ -523,3 +523,8 @@ Deployed and recorded the source for `manage-sub-administrator` (version 1), `ma
 Live verification confirmed the permission-check helper is not executable by `anon`, is executable by `authenticated`, and the old unrestricted Sub Administrator result policy is replaced. The school still has zero Sub Administrator profiles, so no account was created during this maintenance pass and no real authenticated Sub Administrator grant/login/result transaction could yet be tested. The interface and server routes are deployed but require administrator acceptance testing with an authorised account before this workstream is marked fully accepted.
 
 No legacy browser records, existing school staff profiles, students, enrolments or result rows were deleted or imported. The older aggregate administrator `saveStudent()` flow and progressive result-release workflow remain to be migrated; the new RLS policies do not by themselves complete that frontend cutover.
+
+
+### 22.6 Legacy browser Sub Administrator persistence retired from the active code path
+
+The frontend no longer loads `subAdministrators` from `cloudStorage`, writes that array through `saveAllData()`, or imports it into the public portal/staff-directory display. The administrator account screen and login permission source now use the Supabase profile and grant endpoints exclusively. The old browser backup is preserved as a rollback/evidence artefact; no browser key or backup file was deleted. Existing legacy Sub Administrator credentials and permission objects are not trusted or imported. Any required legacy account must be verified and provisioned through the new administrator workflow.
