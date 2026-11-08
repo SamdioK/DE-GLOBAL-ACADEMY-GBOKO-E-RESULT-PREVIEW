@@ -9701,7 +9701,7 @@ function updatePrintUI() {
   }
 }
 
-window.printArmResultsHandler = function(action) {
+window.printArmResultsHandler = async function(action) {
   var armSelect = document.getElementById('printArmSelect');
   var termSelect = document.getElementById('printTerm');
   var sessionSelect = document.getElementById('printSession');
@@ -9711,11 +9711,11 @@ window.printArmResultsHandler = function(action) {
   var session = sessionSelect.value;
   var list = students.filter(function(s) { return s.className === armName && String(s.term) === term && getLegacyResultSession(s) === session; });
   var label = armName + ' - ' + session + ' - Term ' + term;
-  if (action === 'print') openPrintWindow(list.map(buildStudentSheetHTML).join(''), label + ' Results');
+  if (action === 'print') { await prepareRegisteredPassportsForResults(list); openPrintWindow(list.map(buildStudentSheetHTML).join(''), label + ' Results'); }
   else printMultipleResults(list, label);
 };
 
-window.printLevelResultsHandler = function(action) {
+window.printLevelResultsHandler = async function(action) {
   var levelSelect = document.getElementById('printLevelSelect');
   var termSelect = document.getElementById('printTerm');
   var sessionSelect = document.getElementById('printSession');
@@ -9726,13 +9726,14 @@ window.printLevelResultsHandler = function(action) {
   var armsInLevel = classArms.filter(function(a) { return a.name.indexOf(level) === 0; }).map(function(a) { return a.name; });
   var list = students.filter(function(s) { return armsInLevel.indexOf(s.className) !== -1 && String(s.term) === term && getLegacyResultSession(s) === session; });
   var label = level + ' (All Arms) - ' + session + ' - Term ' + term;
-  if (action === 'print') openPrintWindow(list.map(buildStudentSheetHTML).join(''), label + ' Results');
+  if (action === 'print') { await prepareRegisteredPassportsForResults(list); openPrintWindow(list.map(buildStudentSheetHTML).join(''), label + ' Results'); }
   else printMultipleResults(list, label);
 };
 
-window.printStudentResult = function(studentId, action) {
+window.printStudentResult = async function(studentId, action) {
   var student = students.find(function(s) { return String(s.id) === String(studentId); });
   if (!student) { showToast('Student not found', 'error'); return; }
+  await attachRegisteredSupabasePassport(student);
   var filename = (student.studentName || 'Student').replace(/[^a-zA-Z0-9]/g, '_') + '_Result';
   if (action === 'print') openPrintWindow(buildStudentSheetHTML(student), filename);
   else generatePDF([student], filename);
@@ -9816,9 +9817,60 @@ function generatePrincipalComment(student) {
   return student.studentName + ' ' + academic + ' and ' + behavior + ', with ' + skill + '. ' + overall;
 }
 
+// Resolve the registered passport directly from Supabase Storage before rendering a result.
+// This deliberately ignores any legacy/local passport value so the result uses the current official object.
+async function attachRegisteredSupabasePassport(student) {
+  if (!student || !supabaseClient || !authenticatedProfile || !authenticatedProfile.school_id) return student;
+  var admissionNumber = String(student.admNo || student.admissionNumber || '').trim();
+  if (!admissionNumber) return student;
+  try {
+    var studentLookup = await supabaseClient.from('students')
+      .select('id')
+      .eq('school_id', authenticatedProfile.school_id)
+      .eq('admission_number', admissionNumber)
+      .maybeSingle();
+    if (studentLookup.error) throw studentLookup.error;
+    if (!studentLookup.data || !studentLookup.data.id) {
+      student.passport = null;
+      student.passportLoadStatus = 'student_not_found_in_supabase';
+      return student;
+    }
+    var passportLookup = await supabaseClient.from('student_passports')
+      .select('storage_path')
+      .eq('school_id', authenticatedProfile.school_id)
+      .eq('student_id', studentLookup.data.id)
+      .maybeSingle();
+    if (passportLookup.error) throw passportLookup.error;
+    if (!passportLookup.data || !passportLookup.data.storage_path) {
+      student.passport = null;
+      student.passportLoadStatus = 'passport_not_registered';
+      return student;
+    }
+    var signedImage = await supabaseClient.storage.from('student-passports')
+      .createSignedUrl(passportLookup.data.storage_path, 600);
+    if (signedImage.error) throw signedImage.error;
+    student.passport = signedImage.data.signedUrl;
+    student.passportLoadStatus = 'loaded_from_supabase_storage';
+  } catch (error) {
+    console.error('Registered Supabase passport could not be attached to result:', error);
+    student.passport = null;
+    student.passportLoadStatus = 'storage_retrieval_failed';
+  }
+  return student;
+}
+
+async function prepareRegisteredPassportsForResults(list) {
+  var items = Array.isArray(list) ? list : [];
+  for (var i = 0; i < items.length; i++) {
+    await attachRegisteredSupabasePassport(items[i]);
+  }
+  return items;
+}
+
 // ===================== PDF GENERATION =====================
 async function generatePDF(list, filenameBase, shareOptions) {
   if (!list || list.length === 0) { showToast('No students found to print', 'error'); return; }
+  await prepareRegisteredPassportsForResults(list);
   if (typeof html2canvas === 'undefined' || typeof window.jspdf === 'undefined') {
     showToast('PDF library not loaded. Check your connection.', 'error');
     return;
