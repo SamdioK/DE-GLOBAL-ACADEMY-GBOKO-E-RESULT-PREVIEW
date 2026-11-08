@@ -10824,7 +10824,7 @@ async function renderSubjectTeacherInput() {
         var verifyAssignment = await supabaseClient.from('teacher_assignments').select('id')
           .eq('school_id', schoolId).eq('teacher_id', teacherId)
           .eq('class_id', classId).eq('subject_id', subjectId)
-          .eq('academic_session_id', sessionId).maybeSingle();
+          .eq('academic_session_id', sessionId).eq('is_active', true).maybeSingle();
         if (verifyAssignment.error) throw verifyAssignment.error;
         if (!verifyAssignment.data) throw new Error('Your subject assignment is no longer active.');
 
