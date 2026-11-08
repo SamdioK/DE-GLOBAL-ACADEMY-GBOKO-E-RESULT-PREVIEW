@@ -24,7 +24,7 @@ The main application still embeds several image files as base64 data URLs in leg
 2. The new helper is a foundation; Administrator Profile logo, Staff Database photos and management profile photos are integrated on the feature branch. Portal news images, portal staff and prefect photos, student photos and signatures remain to be migrated and verified before browser persistence is retired.
 3. The Administrator Profile logo now stores a public URL in `schools.logo_url`. Existing staff photo fields use URLs; each staff workflow must be migrated and public portal rendering verified before cutover.
 4. Teacher signatures require a database metadata table keyed by school and subject before moving them out of legacy browser storage. That schema is intentionally not invented in this first Storage bucket migration.
-5. Existing browser data and all 14 passport objects (including six unmatched objects) must be preserved until reconciliation and successful cutover.
+5. Existing browser data and all valid passport objects must be preserved until reconciliation and successful cutover. The six confirmed test objects were subsequently deleted by the administrator and their absence was verified with a read-only SQL query.
 6. Never put Supabase service-role keys in frontend code. All operations use the authenticated Supabase client and Storage RLS.
 
 ## Validation checklist
@@ -143,7 +143,7 @@ The Student Passport Registration module now includes **View orphaned photos**. 
 
 ### Current reconciliation case
 
-The six previously identified orphaned objects remain untouched. This viewer discovers orphaned files dynamically under the current administrator's school prefix; it does not hard-code those six paths. The administrator must inspect the images before taking any separate removal action.
+The six previously identified test objects were viewed by the administrator, then deleted manually from Supabase Storage after the administrator confirmed they were disposable test uploads. A verification query returned no rows for those six paths. The viewer remains dynamic and can be used to inspect any future orphaned files; it does not hard-code those paths.
 
 ### Validation before production
 
@@ -154,3 +154,8 @@ This change is on `feature/supabase-storage-assets` only. Test with an active ad
 - non-administrator accounts cannot access the module;
 - the private bucket remains private and signed URLs expire.
 
+
+
+## Passport test-object cleanup confirmation
+
+On 2026-11-08, the administrator confirmed that six unmatched passport objects were test uploads no longer required. The six exact objects were deleted manually from the private `student-passports` bucket. A verification query against `storage.objects`, scoped to the school's bucket prefix and the six folder IDs, returned no rows. No student records or valid passport metadata were deleted. The eight valid passport records and their files were preserved. This was an administrator-directed cleanup, not an automated cleanup feature.
