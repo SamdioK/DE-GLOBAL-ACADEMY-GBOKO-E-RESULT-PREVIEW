@@ -1484,6 +1484,7 @@ async function loadSchoolData() {
   currentSchool.phone = authoritativeSchoolProfile.phone || '';
   currentSchool.logo = authoritativeSchoolProfile.logo_url || currentSchool.logo || schoolInfo.logo || '';
   await loadSchoolBrandingAssets();
+  await loadTeacherSignaturesFromSupabase();
 
   var migrated = migrateOldClassNames() || removedLegacyFormMasterPasswords || removedLegacySubjectAssignmentPasswords;
   if (syncStaffDatabaseFromExistingRecords()) migrated = true;
@@ -8516,6 +8517,27 @@ async function loadSchoolBrandingAssets() {
   };
 }
 
+async function loadTeacherSignaturesFromSupabase() {
+  if (!supabaseClient || !authenticatedProfile || !authenticatedProfile.school_id) return;
+  var result = await supabaseClient.from('school_teacher_signatures')
+    .select('subject_name, storage_path')
+    .eq('school_id', authenticatedProfile.school_id);
+  if (result.error) throw result.error;
+  var refreshed = {};
+  for (var i = 0; i < (result.data || []).length; i++) {
+    var item = result.data[i];
+    if (!item.storage_path || !item.subject_name) continue;
+    var signed = await supabaseClient.storage.from('school-private-assets')
+      .createSignedUrl(item.storage_path, 3600);
+    if (signed.error) {
+      console.warn('Could not load signature for ' + item.subject_name, signed.error);
+      continue;
+    }
+    refreshed[item.subject_name] = signed.data.signedUrl;
+  }
+  teacherSignatures = Object.assign({}, teacherSignatures || {}, refreshed);
+}
+
 async function uploadSchoolBrandingAsset(kind, file) {
   if (!supabaseClient || !authenticatedProfile || !authenticatedProfile.school_id) {
     throw new Error('Please sign in again before uploading school branding assets.');
@@ -9967,6 +9989,7 @@ async function prepareRegisteredPassportsForResults(list) {
 async function generatePDF(list, filenameBase, shareOptions) {
   if (!list || list.length === 0) { showToast('No students found to print', 'error'); return; }
   try { await loadSchoolBrandingAssets(); } catch (brandingError) { console.error('Could not refresh school branding assets:', brandingError); }
+  try { await loadTeacherSignaturesFromSupabase(); } catch (signatureError) { console.error('Could not refresh teacher signatures:', signatureError); }
   await prepareRegisteredPassportsForResults(list);
   if (typeof html2canvas === 'undefined' || typeof window.jspdf === 'undefined') {
     showToast('PDF library not loaded. Check your connection.', 'error');
