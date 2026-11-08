@@ -690,22 +690,10 @@ async function handleUserTypeChange(e) {
 }
 
 async function loadArmDropdown() {
+  // Form Master assignments are private. They are fetched from Supabase
+  // after the user authenticates, never from device-local browser storage.
   var select = document.getElementById('selectedArm');
-  select.innerHTML = '<option value="">Loading...</option>';
-  var arms = await cloudStorage.load('classArms');
-  if (!arms) arms = [];
-  var activated = arms.filter(function(a) { return a.formMaster && a.activated; });
-  if (activated.length === 0) {
-    select.innerHTML = '<option value="">No activated classes available</option>';
-  } else {
-    select.innerHTML = '<option value="">Select Class Arm</option>';
-    activated.forEach(function(a) {
-      var opt = document.createElement('option');
-      opt.value = a.name.replace(/^JSS1/, 'BASIC7').replace(/^JSS2/, 'BASIC8').replace(/^JSS3/, 'BASIC9').replace(/^BASIC1/, 'BASIC7').replace(/^BASIC2/, 'BASIC8').replace(/^BASIC3/, 'BASIC9');
-      opt.textContent = opt.value + ' - ' + a.formMaster;
-      select.appendChild(opt);
-    });
-  }
+  if (select) select.innerHTML = '<option value="">Assigned classes load after sign in</option>';
 }
 
 async function resolveSupabaseClass(className) {
@@ -1098,11 +1086,30 @@ async function handleSupabaseLogin(userType, errorDiv) {
         .eq('school_id', profile.school_id).in('id', formMasterClassIds);
       if (formMasterClassesResult.error) throw formMasterClassesResult.error;
       var assignedClasses = formMasterClassesResult.data || [];
-      var requestedArm = document.getElementById('selectedArm').value;
+      var selectedArmInput = document.getElementById('selectedArm');
+      var requestedArm = selectedArmInput ? selectedArmInput.value : '';
       var assignedClass = assignedClasses.find(function(item) { return item.class_name === requestedArm; });
-      if (!assignedClass && formMasterAssignmentRows.length === 1) assignedClass = assignedClasses[0];
+      if (!assignedClass && formMasterAssignmentRows.length === 1) {
+        assignedClass = assignedClasses.find(function(item) { return String(item.id) === String(formMasterAssignmentRows[0].class_id); });
+      }
       if (!assignedClass || !formMasterAssignmentRows.some(function(item) { return String(item.class_id) === String(assignedClass.id); })) {
-        throw new Error('Select a class assigned to your Form Master account for the active academic session.');
+        if (selectedArmInput) {
+          selectedArmInput.innerHTML = '<option value="">Select your assigned class</option>';
+          assignedClasses.forEach(function(item) {
+            if (!formMasterAssignmentRows.some(function(assignment) { return String(assignment.class_id) === String(item.id); })) return;
+            var option = document.createElement('option');
+            option.value = item.class_name;
+            option.textContent = item.class_name;
+            selectedArmInput.appendChild(option);
+          });
+        }
+        currentUser = null;
+        authenticatedProfile = null;
+        await supabaseClient.auth.signOut();
+        errorDiv.textContent = 'Your assigned classes are now available. Select your class and tap Login again.';
+        errorDiv.classList.remove('hidden');
+        if (selectedArmInput) selectedArmInput.focus();
+        return;
       }
       currentUser.arm = assignedClass.class_name;
       currentUser.classId = assignedClass.id;
