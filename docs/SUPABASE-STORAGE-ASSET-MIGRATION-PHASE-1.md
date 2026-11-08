@@ -12,7 +12,9 @@ The main application still embeds several image files as base64 data URLs in leg
 - Administrator Profile logo upload is wired to `school-assets.js` on the feature branch. It uploads to `school-public-assets` and writes the resulting public URL to `schools.logo_url`; the UI also updates its in-memory school logo fields.
 - Staff Database photo upload now uses `school-assets.js`, stores the public URL in `school_staff_directory.photo_url`, and preserves an existing photo when no replacement is selected.
 - Management profile photos now upload to `school-public-assets`; the profile stores the resulting public URL rather than a base64 data URL.
-- These three integrated upload handlers no longer use `FileReader` to encode new logo/staff/management images.
+- Portal news attachments now upload individually to `school-public-assets`; each news record stores public URLs rather than base64 data URLs.
+- Prefect photos now upload to `school-public-assets` and the prefect record stores the public URL. This is for photos deliberately published on the public school portal; confirm appropriate school/parent consent before publication.
+- The migrated logo, staff, management, news and prefect upload handlers no longer use `FileReader` to encode new images.
 - Upload allowlists and limits: JPG, PNG and WebP images up to 5 MB; PDF documents up to 10 MB.
 - All object paths begin with the authenticated school UUID.
 - Passports and signatures are explicitly prohibited from the public upload helper.
