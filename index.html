@@ -1461,7 +1461,6 @@ async function loadSchoolData() {
   var loadedAssignments = await cloudStorage.load('subjectAssignments');
   var loadedSchoolInfo = await cloudStorage.load('schoolInfo');
   var loadedManagementStaff = await cloudStorage.load('managementStaff');
-  var loadedSubAdministrators = await cloudStorage.load('subAdministrators');
   var loadedPortalNews = await cloudStorage.load('portalNews');
   var loadedStaff = await cloudStorage.load('schoolStaff');
   var loadedStaffDatabase = await cloudStorage.load('staffDatabase');
@@ -1477,7 +1476,6 @@ async function loadSchoolData() {
   var removedLegacySubjectAssignmentPasswords = removeSubjectAssignmentPasswords(subjectAssignments);
   assessmentConfig = {};
   managementStaff = Array.isArray(loadedManagementStaff) ? loadedManagementStaff : [];
-  subAdministrators = Array.isArray(loadedSubAdministrators) ? loadedSubAdministrators : [];
   activityLog = [];
   portalNews = Array.isArray(loadedPortalNews) ? loadedPortalNews : [];
   schoolStaff = Array.isArray(loadedStaff) ? loadedStaff : [];
@@ -2242,7 +2240,6 @@ async function saveAllData() {
     promises.push(cloudStorage.save('subjectAssignments', subjectAssignments));
     promises.push(cloudStorage.save('schoolInfo', schoolInfo));
     promises.push(cloudStorage.save('managementStaff', managementStaff));
-    promises.push(cloudStorage.save('subAdministrators', subAdministrators));
     promises.push(cloudStorage.save('portalNews', portalNews));
     promises.push(cloudStorage.save('schoolStaff', schoolStaff));
     // Staff Database records are persisted directly to Supabase, not browser storage.
@@ -6450,7 +6447,6 @@ function syncStaffDatabaseFromExistingRecords() {
   if (currentSchool) addIfMissing('admin', { fullName: currentSchool.adminName || '', designation: 'School Administrator', email: currentSchool.email || '', phone: currentSchool.phone || '', status: 'Active' });
   formMasters.forEach(function(item) { addIfMissing('formmaster-' + item.id, { fullName: item.name || '', designation: 'Form Master', department: 'Teaching', email: item.email || '', status: 'Active' }); });
   subjectAssignments.forEach(function(item) { addIfMissing('subjectteacher-' + item.id, { fullName: item.teacherName || '', designation: 'Subject Teacher', department: 'Teaching', specialisation: item.subject || '', email: item.teacherEmail || '', status: 'Active' }); });
-  subAdministrators.forEach(function(item) { addIfMissing('subadmin-' + item.id, { fullName: item.fullName || '', designation: item.designation || 'Sub-Administrator', email: item.email || '', phone: item.phone || '', photo: item.photo || '', status: item.status === 'Active' ? 'Active' : (item.status || 'Inactive') }); });
   managementStaff.forEach(function(item) { addIfMissing('management-' + item.id, { fullName: item.name || '', designation: item.office || 'Management', email: item.email || '', photo: item.photo || '', biography: item.bio || '', status: item.active === false ? 'Inactive' : 'Active', showOnPortal: item.published === true }); });
   schoolStaff.forEach(function(item) { addIfMissing('legacy-' + item.id, { fullName: item.name || '', designation: item.staffType || '', department: item.office || '', specialisation: item.subject || '', photo: item.photo || '', status: 'Active', showOnPortal: true }); });
   return changed;
@@ -6918,7 +6914,6 @@ function getPortalStaffDirectory() {
   subjectAssignments.forEach(function(assignment) { add({ name: assignment.teacherName, staffType: 'Teaching', subject: assignment.subject }); });
   schoolStaff.forEach(function(person) { add({ name: person.name, staffType: person.staffType || 'Teaching', subject: person.subject, office: person.office, photo: person.photo, managedId: person.id }); });
   managementStaff.forEach(function(profile) { if (profile.active !== false) add({ name: profile.name, staffType: 'Management', office: profile.office, photo: profile.photo }); });
-  subAdministrators.forEach(function(admin) { if (admin.status === 'Active') add({ name: admin.fullName, staffType: admin.designation || 'Administrator', office: admin.designation }); });
   directory.forEach(function(person) { person.subject = person.subjects.join(', '); });
   return directory.sort(function(a, b) { return a.name.localeCompare(b.name); });
 }
@@ -6973,7 +6968,7 @@ async function showPublicPortal() {
   var modal = document.getElementById('publicPortalModal');
   if (!modal) return;
   cloudStorage.setSchoolId('MAIN');
-  var publicData = await Promise.all([cloudStorage.load('portalNews'), cloudStorage.load('schoolStaff'), cloudStorage.load('prefects'), cloudStorage.load('dutyRoster'), cloudStorage.load('portalSettings'), cloudStorage.load('classArms'), cloudStorage.load('formMasters'), cloudStorage.load('subjectAssignments'), cloudStorage.load('managementStaff'), cloudStorage.load('subAdministrators'), cloudStorage.load('students_meta'), cloudStorage.load('staffDatabase'), cloudStorage.load('portalStaffSelections')]);
+  var publicData = await Promise.all([cloudStorage.load('portalNews'), cloudStorage.load('schoolStaff'), cloudStorage.load('prefects'), cloudStorage.load('dutyRoster'), cloudStorage.load('portalSettings'), cloudStorage.load('classArms'), cloudStorage.load('formMasters'), cloudStorage.load('subjectAssignments'), cloudStorage.load('managementStaff'), cloudStorage.load('students_meta'), cloudStorage.load('staffDatabase'), cloudStorage.load('portalStaffSelections')]);
   portalNews = Array.isArray(publicData[0]) ? publicData[0] : portalNews;
   schoolStaff = Array.isArray(publicData[1]) ? publicData[1] : schoolStaff;
   prefects = Array.isArray(publicData[2]) ? publicData[2] : prefects;
@@ -6983,7 +6978,6 @@ async function showPublicPortal() {
   if (Array.isArray(publicData[6])) formMasters = publicData[6];
   if (Array.isArray(publicData[7])) subjectAssignments = publicData[7];
   if (Array.isArray(publicData[8])) managementStaff = publicData[8];
-  if (Array.isArray(publicData[9])) subAdministrators = publicData[9];
   if (Array.isArray(publicData[11])) staffDatabase = publicData[11];
   if (Array.isArray(publicData[12])) portalStaffSelections = publicData[12];
   syncStaffDatabaseFromExistingRecords();
