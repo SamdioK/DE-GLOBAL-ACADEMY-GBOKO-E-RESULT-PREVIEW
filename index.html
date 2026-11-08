@@ -8791,13 +8791,81 @@ function renderAssessment() {
 // ===================== TEACHER SIGNATURES =====================
 var activeSignatureLevel = 'BASIC';
 
+async function migrateLegacyTeacherSignaturesToSupabase() {
+  if (!authenticatedProfile || !authenticatedProfile.school_id ||
+      String(authenticatedProfile.role || '').toLowerCase() !== 'administrator' ||
+      authenticatedProfile.is_active !== true) {
+    throw new Error('An active school administrator account is required.');
+  }
+  var entries = Object.keys(teacherSignatures || {}).filter(function(subject) {
+    return typeof teacherSignatures[subject] === 'string' &&
+      teacherSignatures[subject].indexOf('data:image/') === 0;
+  });
+  if (!entries.length) {
+    showToast('No browser-stored legacy signatures were found in this browser session.', 'info');
+    return;
+  }
+
+  var existing = await supabaseClient.from('school_teacher_signatures')
+    .select('subject_name,storage_path')
+    .eq('school_id', authenticatedProfile.school_id);
+  if (existing.error) throw existing.error;
+  var existingSubjects = new Set((existing.data || []).map(function(row) { return row.subject_name; }));
+  var migrated = 0, skipped = 0, failed = [];
+
+  for (var i = 0; i < entries.length; i++) {
+    var subject = entries[i];
+    if (existingSubjects.has(subject)) { skipped++; continue; }
+    try {
+      var dataUrl = teacherSignatures[subject];
+      var match = /^data:(image\\/(?:jpeg|png|webp));base64,([A-Za-z0-9+/=]+)$/.exec(dataUrl);
+      if (!match) throw new Error('Unsupported or invalid legacy image format.');
+      var binary = atob(match[2]);
+      var bytes = new Uint8Array(binary.length);
+      for (var j = 0; j < binary.length; j++) bytes[j] = binary.charCodeAt(j);
+      var mime = match[1];
+      var blob = new Blob([bytes], { type: mime });
+      if (!blob.size || blob.size > 5 * 1024 * 1024) throw new Error('Image exceeds the 5 MB limit.');
+      var ext = mime === 'image/jpeg' ? 'jpg' : mime === 'image/png' ? 'png' : 'webp';
+      var path = authenticatedProfile.school_id + '/signatures/' +
+        (window.crypto && crypto.randomUUID ? crypto.randomUUID() : String(Date.now()) + '-' + i) + '.' + ext;
+      var uploaded = await supabaseClient.storage.from('school-private-assets').upload(path, blob, {
+        cacheControl: '3600', contentType: mime, upsert: false
+      });
+      if (uploaded.error) throw uploaded.error;
+      var saved = await supabaseClient.from('school_teacher_signatures').insert({
+        school_id: authenticatedProfile.school_id,
+        subject_name: subject,
+        storage_path: path,
+        created_by: authenticatedProfile.id,
+        updated_at: new Date().toISOString()
+      });
+      if (saved.error) {
+        await supabaseClient.storage.from('school-private-assets').remove([path]);
+        throw saved.error;
+      }
+      migrated++;
+      existingSubjects.add(subject);
+    } catch (error) {
+      failed.push(subject + ': ' + (error && error.message || 'Unknown error'));
+    }
+  }
+
+  await loadTeacherSignaturesFromSupabase();
+  showToast('Legacy signature migration: ' + migrated + ' uploaded, ' + skipped +
+    ' already in Supabase, ' + failed.length + ' failed. Original browser copies were preserved.', 
+    failed.length ? 'warning' : 'success');
+  if (failed.length) console.warn('Legacy signature migration errors:', failed);
+  renderTeacherSignatures();
+}
+
 function renderTeacherSignatures() {
   if (!currentUser || currentUser.type !== 'admin') return;
   var subjects = activeSignatureLevel === 'SS'
     ? seniorCoreSubjects.concat(tradeSubjects)
     : basicCoreSubjects.concat(tradeSubjects);
   var html = '<div class="card"><h2>Teachers\' Signature</h2><p style="color:#666; margin:8px 0 16px;">Upload a signature image for each subject. It will appear in the Sign column of that subject on printed result sheets.</p>' +
-    '<div style="display:flex; gap:8px; margin-bottom:18px;"><button class="btn ' + (activeSignatureLevel === 'BASIC' ? 'btn-primary' : '') + ' signature-level-btn" data-level="BASIC" style="' + (activeSignatureLevel !== 'BASIC' ? 'background:#eee;' : '') + '">BASIC Classes</button><button class="btn ' + (activeSignatureLevel === 'SS' ? 'btn-primary' : '') + ' signature-level-btn" data-level="SS" style="' + (activeSignatureLevel !== 'SS' ? 'background:#eee;' : '') + '">SS Classes</button></div>' +
+    '<div style="display:flex; gap:8px; flex-wrap:wrap; margin-bottom:18px;"><button class="btn ' + (activeSignatureLevel === 'BASIC' ? 'btn-primary' : '') + ' signature-level-btn" data-level="BASIC" style="' + (activeSignatureLevel !== 'BASIC' ? 'background:#eee;' : '') + '">BASIC Classes</button><button class="btn ' + (activeSignatureLevel === 'SS' ? 'btn-primary' : '') + ' signature-level-btn" data-level="SS" style="' + (activeSignatureLevel !== 'SS' ? 'background:#eee;' : '') + '">SS Classes</button><button class="btn btn-primary" id="migrate-legacy-signatures">Migrate Existing Browser Signatures to Supabase</button></div>' +
     '<div style="overflow-x:auto;"><table><thead><tr><th>Subject</th><th>Uploaded Signature</th><th>Upload / Replace</th><th>Action</th></tr></thead><tbody>';
   subjects.forEach(function(subject) {
     var signature = teacherSignatures[subject];
@@ -8805,6 +8873,19 @@ function renderTeacherSignatures() {
   });
   html += '</tbody></table></div></div>';
   document.getElementById('teacherSignaturesTab').innerHTML = html;
+
+  var migrateButton = document.getElementById('migrate-legacy-signatures');
+  if (migrateButton) migrateButton.addEventListener('click', async function() {
+    if (!confirm('Upload all legacy signature images found in this browser to private Supabase Storage? Existing Supabase signatures will not be overwritten, and browser copies will not be deleted.')) return;
+    migrateButton.disabled = true;
+    migrateButton.textContent = 'Migrating signatures...';
+    try { await migrateLegacyTeacherSignaturesToSupabase(); }
+    catch (error) { showToast('Signature migration failed: ' + (error.message || 'Unknown error'), 'error'); }
+    finally {
+      var currentButton = document.getElementById('migrate-legacy-signatures');
+      if (currentButton) { currentButton.disabled = false; currentButton.textContent = 'Migrate Existing Browser Signatures to Supabase'; }
+    }
+  });
 
   document.querySelectorAll('.signature-level-btn').forEach(function(button) {
     button.addEventListener('click', function() {
