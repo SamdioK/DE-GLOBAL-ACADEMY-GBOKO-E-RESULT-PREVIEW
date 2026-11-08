@@ -10,10 +10,32 @@ values
    array['image/jpeg','image/png','image/webp']),
   ('school-private-assets', 'school-private-assets', false, 10485760,
    array['image/jpeg','image/png','image/webp','application/pdf'])
-on conflict (id) do update
-set public = excluded.public,
-    file_size_limit = excluded.file_size_limit,
-    allowed_mime_types = excluded.allowed_mime_types;
+on conflict (id) do nothing;
+
+-- Never silently change an existing bucket's visibility or upload restrictions.
+do $
+begin
+  if not exists (
+    select 1 from storage.buckets
+    where id = 'school-public-assets'
+      and public is true
+      and file_size_limit = 5242880
+      and allowed_mime_types = array['image/jpeg','image/png','image/webp']::text[]
+  ) then
+    raise exception 'school-public-assets already exists with unexpected settings; review it manually.';
+  end if;
+
+  if not exists (
+    select 1 from storage.buckets
+    where id = 'school-private-assets'
+      and public is false
+      and file_size_limit = 10485760
+      and allowed_mime_types = array['image/jpeg','image/png','image/webp','application/pdf']::text[]
+  ) then
+    raise exception 'school-private-assets already exists with unexpected settings; review it manually.';
+  end if;
+end
+$;
 
 drop policy if exists school_public_assets_admin_insert on storage.objects;
 create policy school_public_assets_admin_insert
