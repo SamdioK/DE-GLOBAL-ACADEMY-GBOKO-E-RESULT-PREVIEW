@@ -8553,64 +8553,48 @@ async function renderMasters() {
   });
 }
 
-window.toggleClassActivationMasters = async function(className) {
-  var arm = classArms.find(function(a) { return a.name === className; });
-  if (!arm || !arm.formMaster) return;
-  arm.activated = !arm.activated;
-  await saveAllData();
-  showToast(className + ' ' + (arm.activated ? 'activated' : 'deactivated'), arm.activated ? 'success' : 'info');
-  renderMasters();
-};
-
-window.removeFormMaster = async function(fmId) {
-  if (currentUser.type !== 'admin' && !hasSubAdminPermission('manageTeachers')) { showToast('You do not have permission to manage teachers', 'error'); return; }
-  var fm = formMasters.find(function(f) { return f.id === fmId; });
-  formMasters = formMasters.filter(function(f) { return f.id !== fmId; });
-  if (fm) {
-    classArms.forEach(function(a) {
-      if (a.formMaster === fm.name) { a.formMaster = ''; a.formMasterEmail = ''; a.activated = false; }
-    });
-  }
-  await saveAllData();
-  showToast('Form Master removed', 'info');
-  renderMasters();
-};
-
-window.clearAllMasters = async function() {
-  if (currentUser.type !== 'admin' && !hasSubAdminPermission('manageTeachers')) { showToast('You do not have permission to manage teachers', 'error'); return; }
-  formMasters = [];
-  classArms.forEach(function(a) { a.formMaster = ''; a.formMasterEmail = ''; a.activated = false; });
-  await saveAllData();
-  showToast('All form masters cleared', 'info');
-  renderMasters();
-};
-
 window.toggleAssignmentActivation = async function(id) {
-  if (currentUser.type !== 'admin' && !hasSubAdminPermission('manageTeachers')) { showToast('You do not have permission to manage teachers', 'error'); return; }
-  var a = subjectAssignments.find(function(x) { return x.id === id; });
-  if (a) {
-    a.activated = !a.activated;
-    await saveAllData();
-    showToast((a.className + ' - ' + a.subject) + ' ' + (a.activated ? 'activated' : 'deactivated'), a.activated ? 'success' : 'info');
-    renderMasters();
+  if (!currentUser || currentUser.type !== 'admin' || !authenticatedProfile ||
+      authenticatedProfile.role !== 'administrator' || authenticatedProfile.is_active !== true) {
+    showToast('Only an active School Administrator can change Subject Teacher assignments.', 'error');
+    return;
   }
+  var assignment = subjectAssignments.find(function(item) { return String(item.id) === String(id); });
+  if (!assignment) { showToast('The Supabase assignment could not be found. Refresh the assignment list.', 'error'); return; }
+  try {
+    var result = await supabaseClient.functions.invoke('manage-subject-teacher', {
+      body: { action: 'set_active', assignment_id: String(id), is_active: !assignment.activated }
+    });
+    if (result.error || !result.data || result.data.success !== true) throw new Error(result.data && result.data.error || result.error && result.error.message || 'Assignment update was not confirmed.');
+    logActivity(!assignment.activated ? 'Activated subject teacher assignment' : 'Deactivated subject teacher assignment', assignment.className + ' / ' + assignment.subject);
+    await renderMasters();
+  } catch (error) { showToast(error.message || 'Could not update the assignment.', 'error'); }
 };
 
 window.removeAssignment = async function(id) {
-  if (currentUser.type !== 'admin' && !hasSubAdminPermission('manageTeachers')) { showToast('You do not have permission to manage teachers', 'error'); return; }
-  subjectAssignments = subjectAssignments.filter(function(a) { return a.id !== id; });
-  await saveAllData();
-  showToast('Subject teacher removed', 'info');
-  renderMasters();
+  if (!currentUser || currentUser.type !== 'admin' || !authenticatedProfile ||
+      authenticatedProfile.role !== 'administrator' || authenticatedProfile.is_active !== true) {
+    showToast('Only an active School Administrator can remove Subject Teacher assignments.', 'error');
+    return;
+  }
+  var assignment = subjectAssignments.find(function(item) { return String(item.id) === String(id); });
+  if (!assignment) { showToast('The Supabase assignment could not be found. Refresh the assignment list.', 'error'); return; }
+  if (!window.confirm('Remove ' + assignment.className + ' / ' + assignment.subject + ' / ' + assignment.teacherName + '? Only this assignment will be removed. The staff account, other assignments, roles and results will remain.')) return;
+  try {
+    var result = await supabaseClient.functions.invoke('manage-subject-teacher', {
+      body: { action: 'remove_assignment', assignment_id: String(id) }
+    });
+    if (result.error || !result.data || result.data.success !== true) throw new Error(result.data && result.data.error || result.error && result.error.message || 'Assignment removal was not confirmed.');
+    logActivity('Removed subject teacher assignment', assignment.className + ' / ' + assignment.subject + ' / ' + assignment.teacherName);
+    await renderMasters();
+  } catch (error) { showToast(error.message || 'Could not remove the assignment.', 'error'); }
 };
 
-window.clearAllAssignments = async function() {
-  if (currentUser.type !== 'admin' && !hasSubAdminPermission('manageTeachers')) { showToast('You do not have permission to manage teachers', 'error'); return; }
-  subjectAssignments = [];
-  await saveAllData();
-  showToast('All subject teachers cleared', 'info');
-  renderMasters();
+// Bulk deletion is intentionally disabled. Remove individual assignment slots only.
+window.clearAllAssignments = function() {
+  showToast('Bulk removal is disabled. Remove individual assignments after reviewing each one.', 'info');
 };
+
 
 // ===================== SCHOOL INFO =====================
 
@@ -10703,7 +10687,7 @@ async function renderSubjectTeacherInput() {
       .select('id,class_id,subject_id,academic_session_id')
       .eq('school_id', schoolId).eq('teacher_id', teacherId)
       .eq('class_id', classId).eq('subject_id', subjectId)
-      .eq('academic_session_id', sessionId).maybeSingle();
+      .eq('academic_session_id', sessionId).eq('is_active', true).maybeSingle();
     if (assignmentResult.error) throw assignmentResult.error;
     if (!assignmentResult.data) throw new Error('Your class and subject assignment could not be verified for this session.');
 
