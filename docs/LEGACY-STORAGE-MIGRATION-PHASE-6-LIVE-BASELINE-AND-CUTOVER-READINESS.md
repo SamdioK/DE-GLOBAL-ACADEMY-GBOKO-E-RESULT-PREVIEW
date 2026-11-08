@@ -419,3 +419,32 @@ The current active academic session still has one inactive Subject Teacher assig
 The newer Subject Teacher score sheet already reads official enrolments and existing results from Supabase and upserts score rows into `public.results`. Its upsert conflict target matches the existing unique key `(student_id, subject_id, academic_session_id, term_id)`. The legacy administrator/sub-administrator `saveStudent()` path still builds aggregate student result objects and calls `saveAllData()`, which writes the `students_batch_*` browser keys. That legacy path has not been cut over. Administrator/sub-administrator write permissions, grade-scale consistency, result release semantics, report-card assembly, student portal reads and private media references must be reconciled before moving that path.
 
 No student data, results, class rows, enrolments, or browser backups were changed or deleted during this policy correction. Browser result storage remains intact.
+
+
+## 19. Result release and administrator-entry dependency audit — 9 November 2026
+
+### 19.1 Legacy release workflow is a separate data concern
+
+The existing administrator Release Results screen still reads and changes `students` objects in memory. It stores `releaseStage` (0–4), `published`, and a student password on those legacy aggregate objects. Release stages are progressive: first CA, second CA, third CA, and final. The student results screen uses that stage to decide which score columns and related statistics to show. Bulk release advances matching browser objects and calls `saveAllData()`.
+
+The current Supabase `results.status` workflow is different: subject-teacher records are draft, then submitted, then administrator-approved and published. A single `published` status cannot by itself express the legacy per-student progressive stage. The migration must preserve both the approval workflow and the intended staged visibility, without storing student passwords in result rows or browser data.
+
+### 19.2 Administrator and sub-administrator entry path
+
+The legacy administrator/sub-administrator `saveStudent()` creates one aggregate student result object containing demographic copies, all selected subject scores, Form Master information, attendance, fees, learner ratings, passport/signature data, and release metadata. It then calls `saveAllData()`. The appropriate database mapping is not a direct one-table replacement: official identity/enrolment remains in `students` and `student_enrolments`; each subject score maps to a `results` row; and Form Master-only assessment values map to `form_master_student_assessments`. Images must be stored as private Storage objects with authorised references, not base64 in result JSON.
+
+### 19.3 Permission model dependency
+
+The frontend's sub-administrator `publishResults`, `enterResults` and `editResults` checks currently use `currentUser.permissions`, which is loaded by the legacy account workflow. The live database has `profiles`, `profile_roles`, `permissions` and `role_permissions`, but there is no dedicated sub-administrator account table among the public tables inspected. The `permissions` table was previously identified by the security audit as RLS-enabled without policies. Therefore, no database write or release policy should trust a browser-provided permission object. Before enabling sub-administrator result writes or publication, establish the authoritative permission assignment and verify it server-side (preferably in a JWT-verified Edge Function or a narrowly scoped database function).
+
+### 19.4 Student-facing identity and release design
+
+The current student portal's result lookup still loads legacy `students_batch_*` objects and filters by admission number. The new authenticated student model links a `students.profile_id` to an Auth profile, and the existing `results` RLS policy permits a student to view only their own rows whose status is `published`. The new portal must use the authenticated student profile link, not admission-number-only filtering or a browser-stored password.
+
+A separate school-, student-, session- and term-scoped release-stage record (or equivalent carefully constrained design) is required to represent the legacy progressive release stages. Its policy must allow only authorised school administrators and verified server-side sub-administrator permissions to advance a stage, while students can read only their own stage. The visibility query must expose only fields allowed by that stage. This design is not yet deployed.
+
+### 19.5 Current implementation decision
+
+Do not yet cut over `saveStudent()`, `renderReleaseResults()`, `renderStudentResults()` or `loadStudentPortalData()`. First design the release-stage schema and trusted permission checks, then implement the administrator result writer and student read adapter against official UUIDs. Keep subject-teacher draft/submission/approval workflow distinct from the staged release workflow. Acceptance tests must include all roles, class/session/term boundaries, inactive assignment denial, partial-stage visibility, final publication, and refresh on a second device.
+
+No release-stage table, permissions table, result row or student record was changed or created in this audit. The only live database changes in this stage are the Subject Teacher result RLS policy hardening recorded in Section 18. Legacy browser data remains preserved.
