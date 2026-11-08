@@ -8695,6 +8695,7 @@ function renderSchool() {
         .eq('id', schoolId).select('id').maybeSingle();
       if (dateUpdate.error) throw dateUpdate.error;
       if (!dateUpdate.data) throw new Error('Stamp settings were not saved. Confirm administrator access.');
+      var stampDatabaseCommitted = true;
       if (oldPaths.length) await bucket.remove(oldPaths);
       schoolInfo.stampDate = dateValue;
       selectedResultDate = dateValue;
@@ -8704,7 +8705,7 @@ function renderSchool() {
       renderSchool();
     } catch (error) {
       console.error('School stamp settings save failed:', error);
-      if (typeof uploadedPaths !== 'undefined' && uploadedPaths.length) {
+      if (typeof stampDatabaseCommitted === 'undefined' && typeof uploadedPaths !== 'undefined' && uploadedPaths.length) {
         await supabaseClient.storage.from('school-private-assets').remove(uploadedPaths);
       }
       showToast(error.message || 'Could not save stamp settings.', 'error');
