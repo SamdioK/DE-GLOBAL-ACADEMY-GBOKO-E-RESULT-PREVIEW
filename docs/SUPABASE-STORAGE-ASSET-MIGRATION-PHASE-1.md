@@ -173,3 +173,18 @@ The bucket migration was hardened before it is offered for application:
 - No changes are made to the existing `student-passports` bucket or its policies.
 
 This remains an unapplied migration on the feature branch. Review and apply it in Supabase only when the matching frontend release is ready. After application, inspect bucket settings and policies, then run the documented same-school/cross-school access tests.
+
+## Legacy teacher signature migration control (2026-11-08)
+
+The administrator Teacher Signatures screen now includes a controlled **Migrate Existing Browser Signatures to Supabase** action on the feature branch.
+
+- It reads only legacy signature data URLs already loaded into the current browser session from the existing `signature_subjects` and `sig_*` browser keys.
+- It uploads supported JPG, PNG and WebP images to the authenticated school's private `school-private-assets/<school_id>/signatures/` folder.
+- It creates a `school_teacher_signatures` metadata row for each migrated subject.
+- Existing Supabase subject records are skipped; they are never overwritten by this migration action.
+- Failed metadata inserts trigger cleanup of the newly uploaded object.
+- The administrator must confirm before migration begins.
+- Original browser signature data is not deleted or overwritten. Legacy fallback remains enabled.
+- This action can migrate only signatures present in the browser where it is run. Run it in the original Chrome browser where the legacy signatures are visible; Firefox cannot read Chrome's local IndexedDB/localStorage.
+
+After deployment, run the action from Chrome as the active school administrator, verify the subject rows and Storage objects, then sign in from Firefox and test signature rendering. Do not clear Chrome data or remove the fallback until all signatures are verified in Supabase and in result previews/PDFs.
