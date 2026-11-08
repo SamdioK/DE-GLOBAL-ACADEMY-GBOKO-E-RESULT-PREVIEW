@@ -488,3 +488,38 @@ The initial delegation allowlist is limited to operational permissions: `view_re
 ### 21.4 Next gate
 
 Create or verify an authorised Sub Administrator account through the existing administrator provisioning workflow, then integrate the administrator UI with this Edge Function. Next, implement a server-side permission check in every Sub Administrator result mutation/read route; do not rely on the legacy `currentUser.permissions` object. Only after that should the separate progressive result-release-stage table and administrator result writer be implemented. Browser result storage remains preserved for rollback.
+
+
+## 22. Sub Administrator account, permission UI and result-policy integration — 9 November 2026
+
+### 22.1 Account administration moved to Supabase
+
+Replaced the legacy browser-backed Sub Administrator editor with a database-backed administrator interface. The screen now lists profiles with role `sub_administrator`, creates accounts through the JWT-protected `manage-sub-administrator` Edge Function, stores staff ID/designation/responsibilities in `sub_administrator_details`, supports activation/deactivation and password reset, and does not delete Auth users or profiles. Temporary passwords are generated server-side and shown to the administrator only after successful account creation/reset.
+
+The details table has RLS enabled and no direct `anon` or `authenticated` table privileges. The Edge Function independently verifies an active School Administrator and derives the school scope from that administrator's profile.
+
+### 22.2 Individual permissions now drive login
+
+The `manage-profile-permissions` function is now version 3. It adds the `my_permissions` action for a signed-in Sub Administrator and returns only that profile's active grants. The frontend no longer reads `currentUser.permissions` from the legacy `subAdministrators` browser array. It obtains the active grants from the verified Edge Function and uses them to construct the visible feature permissions.
+
+The administrator interface offers only the approved delegable permission catalogue entries: view results, enter results, edit results, submit results, view reports, manage students, teachers, classes, subjects, comments and fees. Approval/publication, user administration, deletion and school-wide settings are not offered as individual grants.
+
+### 22.3 First-login password change
+
+New Sub Administrator accounts and administrator-issued password resets set `profiles.must_change_password = true`. The login flow now routes those accounts to the existing secure password-change screen before granting application access. A new JWT-protected `change-sub-administrator-password` function validates a strong password, updates the authenticated user's Auth password and clears the profile's must-change flag. The new account's temporary password is not stored in browser persistence or the profile table.
+
+### 22.4 Result access policies tightened
+
+Removed the previous broad Sub Administrator result SELECT policy. The replacement policy requires an active Sub Administrator profile in the same school and at least one active individual grant for `view_results`, `enter_results`, `edit_results`, `submit_results` or `view_reports`.
+
+Added the narrowly scoped `public.has_profile_permission(text)` SECURITY DEFINER helper. It uses the caller's `auth.uid()`, checks the caller's active Sub Administrator profile and active school-scoped grant, has a fixed search path, is not executable by `anon`, and is executable by `authenticated` users only for checking their own effective permission.
+
+Also added database policies for Sub Administrator result INSERT (draft only, `entered_by` must be the caller, permission `enter_results`, and student/class/subject/session/term must all belong to the same school with a matching non-archived enrolment), UPDATE of the caller's own draft rows (`edit_results`), and draft-to-submitted transition (`submit_results`). Sub Administrators still cannot approve or publish results; those remain administrator-only workflow steps. No result rows were inserted or changed.
+
+### 22.5 Deployment and verification boundary
+
+Deployed and recorded the source for `manage-sub-administrator` (version 1), `manage-profile-permissions` (version 3) and `change-sub-administrator-password` (version 1). Updated the frontend and added a migration source file at `supabase/migrations/202611090001_subadministrator_permissions.sql`.
+
+Live verification confirmed the permission-check helper is not executable by `anon`, is executable by `authenticated`, and the old unrestricted Sub Administrator result policy is replaced. The school still has zero Sub Administrator profiles, so no account was created during this maintenance pass and no real authenticated Sub Administrator grant/login/result transaction could yet be tested. The interface and server routes are deployed but require administrator acceptance testing with an authorised account before this workstream is marked fully accepted.
+
+No legacy browser records, existing school staff profiles, students, enrolments or result rows were deleted or imported. The older aggregate administrator `saveStudent()` flow and progressive result-release workflow remain to be migrated; the new RLS policies do not by themselves complete that frontend cutover.
