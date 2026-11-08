@@ -394,3 +394,28 @@ Before writing code, inspect the remaining result UI and the current Supabase pe
 ### 17.5 Verification boundary
 
 This was a read-only schema, policy and row-count audit. No RLS policies, grants, table definitions or records were changed. The browser result store has not been retired.
+
+
+## 18. Subject Teacher result access tightened to active assignments — 9 November 2026
+
+### 18.1 Issue identified
+
+The frontend already checked `teacher_assignments.is_active = true` when loading a Subject Teacher score sheet and immediately before saving. The database `results` RLS policies did not consistently enforce that same condition. In particular, the previous INSERT, UPDATE and SELECT policy expressions could authorise a teacher based on an assignment row even after it had been deactivated. A second legacy UPDATE policy named `Subject teachers can submit draft results` also remained in place; PostgreSQL combines permissive policies with OR semantics, so leaving that older policy would have bypassed a newly tightened policy.
+
+### 18.2 Live policy correction
+
+Applied a Supabase migration named `enforce_active_subject_teacher_assignments_for_results` to require `teacher_assignments.is_active = true` in the Subject Teacher INSERT, draft UPDATE, draft-to-submitted UPDATE and SELECT policies on `public.results`. The conditions also continue to require the authenticated active profile, correct Subject Teacher role, same school, teacher, class, subject and academic session, and the permitted result status/author.
+
+Removed the obsolete permissive policy `Subject teachers can submit draft results` with a separate migration named `remove_legacy_unrestricted_subject_result_submission_policy`. This removal was necessary because an older permissive policy would otherwise continue granting access despite the stricter replacement.
+
+### 18.3 Verification and limitations
+
+A fresh `pg_policies` query confirmed the remaining Subject Teacher result policies are the intended four policies (INSERT, SELECT, draft UPDATE and submit UPDATE), and every assignment predicate includes `ta.is_active = true`. The old permissive submission policy no longer appears. No result rows were present to alter, and no teacher assignment was activated or deactivated as part of this change.
+
+The current active academic session still has one inactive Subject Teacher assignment and zero active assignments. Consequently, an end-to-end authenticated Subject Teacher save test cannot yet be performed without an authorised administrator activating a legitimate assignment. The policy correction is verified structurally, not by a live role-session transaction.
+
+### 18.4 Result persistence remains in progress
+
+The newer Subject Teacher score sheet already reads official enrolments and existing results from Supabase and upserts score rows into `public.results`. Its upsert conflict target matches the existing unique key `(student_id, subject_id, academic_session_id, term_id)`. The legacy administrator/sub-administrator `saveStudent()` path still builds aggregate student result objects and calls `saveAllData()`, which writes the `students_batch_*` browser keys. That legacy path has not been cut over. Administrator/sub-administrator write permissions, grade-scale consistency, result release semantics, report-card assembly, student portal reads and private media references must be reconciled before moving that path.
+
+No student data, results, class rows, enrolments, or browser backups were changed or deleted during this policy correction. Browser result storage remains intact.
