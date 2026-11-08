@@ -528,3 +528,8 @@ No legacy browser records, existing school staff profiles, students, enrolments 
 ### 22.6 Legacy browser Sub Administrator persistence retired from the active code path
 
 The frontend no longer loads `subAdministrators` from `cloudStorage`, writes that array through `saveAllData()`, or imports it into the public portal/staff-directory display. The administrator account screen and login permission source now use the Supabase profile and grant endpoints exclusively. The old browser backup is preserved as a rollback/evidence artefact; no browser key or backup file was deleted. Existing legacy Sub Administrator credentials and permission objects are not trusted or imported. Any required legacy account must be verified and provisioned through the new administrator workflow.
+
+
+### 22.7 Edge Function deployment correction
+
+After reviewing the deployed TypeScript sources, both list endpoints were adjusted to construct explicitly typed Maps rather than relying on tuple inference. The corrected functions are now deployed and ACTIVE: `manage-profile-permissions` version 4 and `manage-sub-administrator` version 2. Their matching GitHub source files were updated. JWT verification remains enabled on both functions. `change-sub-administrator-password` remains ACTIVE at version 1.
