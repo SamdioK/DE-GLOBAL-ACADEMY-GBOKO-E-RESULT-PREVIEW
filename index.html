@@ -9682,7 +9682,7 @@ function updatePrintUI() {
     targetContainer.innerHTML = '';
     var list = students.filter(function(s) { return String(s.term) === term && getLegacyResultSession(s) === session; });
     if (list.length === 0) {
-      actionArea.innerHTML = '<p style="color:#999; padding: 20px 0;">No students found for this session and term</p>';
+      actionArea.innerHTML = '<div style="margin:0 0 14px;padding:12px;border:1px dashed #b45309;border-radius:8px;background:#fffbeb;"><strong style="color:#92400e;">Testing tools</strong><p style="font-size:12px;color:#78350f;margin:5px 0 9px;">Temporary fictional scores for passport and PDF layout testing only. Not saved to the results database.</p><button type="button" class="btn" style="background:#b45309;color:#fff;" onclick="generateStudentResultTest()">Generate Test Result (PDF)</button></div><p style="color:#999; padding: 20px 0;">No students found for this session and term</p>';
     } else {
       var html = '<div style="overflow-x:auto;"><table><thead><tr><th>Name</th><th>Adm No</th><th>Class</th><th>Session</th><th>Avg</th><th>Action</th></tr></thead><tbody>';
       list.forEach(function(s) {
