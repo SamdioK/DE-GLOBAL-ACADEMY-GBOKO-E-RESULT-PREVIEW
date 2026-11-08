@@ -21,6 +21,7 @@ export default {
         return Response.json({ error: "An active school profile is required." }, { status: 403 });
 
       const body: Payload = await req.json();
+
       if (body.action === "my_permissions") {
         if (actor.role !== "sub_administrator")
           return Response.json({ error: "This action is only available to Sub Administrators." }, { status: 403 });
@@ -59,7 +60,8 @@ export default {
           ? await ctx.supabaseAdmin.from("permissions").select("id,permission_key,permission_name").in("id", ids)
           : { data: [], error: null };
         if (catalogueError) throw catalogueError;
-        const byId = new Map((catalogue || []).map((x: { id: string }) => [x.id, x]));
+        const byId = new Map<string, { id: string; permission_key: string; permission_name: string }>();
+        (catalogue || []).forEach((x: { id: string; permission_key: string; permission_name: string }) => byId.set(x.id, x));
         return Response.json({ success: true, grants: (data || []).map((g: { permission_id: string }) => ({ ...g, permission: byId.get(g.permission_id) || null })) });
       }
 
