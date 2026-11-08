@@ -61,3 +61,33 @@ The dedicated `passport-registration.js` workflow already uses the private `stud
 4. Confirm signatures display in result preview and print for each authorised school role.
 5. Reconcile legacy result-entry passport images against `student_passports`; preserve unmatched files and legacy values until reviewed.
 6. Remove operational dependence on browser storage only after every record family has a Supabase table or Storage path, RLS is verified, and round-trip tests pass.
+
+
+## Teacher signature frontend integration (2026-11-08)
+
+The feature branch now includes the first frontend integration for private teacher signatures.
+
+- The administrator upload handler validates JPG, PNG and WebP files and enforces a 5 MB limit.
+- New signature files upload to `school-private-assets` under `{school_id}/signatures/{generated-id}.{ext}`.
+- The `school_teacher_signatures` metadata row is upserted by school and subject. If metadata saving fails, the newly uploaded object is removed as a compensating action.
+- Existing object cleanup occurs only after the new metadata row is saved.
+- Signature metadata is loaded for the authenticated user's school and converted into one-hour signed URLs. These URLs are used by the existing result-sheet image rendering, avoiding permanent public links.
+- The loader merges returned database signatures with the legacy in-memory set. This preserves legacy signatures for subjects not yet migrated.
+- `saveAllData()` no longer writes signatures to browser storage. The legacy signature loader remains as a temporary read-only fallback during rollout.
+- The signature removal action deletes the same-school metadata row and then attempts private object cleanup. Cleanup failures are logged for administrator review.
+
+**Not yet verified in a live environment:** the metadata migration has not been applied to Supabase and the feature branch has not been deployed. Therefore upload, signed URL, RLS and printed-result behaviour still require testing after the migration and frontend release are applied. Legacy signature objects/data have not been bulk migrated or deleted.
+
+### Required test sequence after applying the reviewed SQL
+
+1. Confirm the private bucket and `school_teacher_signatures` table exist and RLS is enabled.
+2. Sign in as an active school administrator; upload a test signature for one subject.
+3. Confirm the metadata row contains the school ID, subject and Storage path only (no image data/public URL).
+4. Confirm the object exists under the school's `signatures` folder in the private bucket.
+5. Sign in as an authorised same-school Form Master and confirm result preview can load the signed image; confirm another school's user cannot read the metadata or object.
+6. Print a result sheet and verify the signature is visible.
+7. Replace the test signature and confirm the new image displays; verify old object cleanup.
+8. Remove the test signature and confirm metadata and object cleanup.
+9. Test a legacy-only subject and confirm its existing signature remains visible until individually migrated.
+
+Do not treat a successful code commit as proof of live Storage or RLS operation.
