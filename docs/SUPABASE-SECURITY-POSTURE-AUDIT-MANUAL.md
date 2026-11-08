@@ -36,7 +36,7 @@ An authorised project administrator with access to the correct Supabase Dashboar
 7. **Storage buckets:** record public/private visibility and upload limits. Do not change bucket visibility.
 8. **Storage policies:** verify object read/write paths are scoped by authenticated identity, school and intended role.
 9. **Default privileges:** check what permissions future objects inherit.
-10. **Migration history:** compare SQL history with the protected linked CLI migration listing. Missing SQL history does not prove that no migration was applied manually.
+10. **Migration history:** confirms whether the standard history table exists and its column structure. Compare actual remote versions with the protected linked CLI migration listing. Missing SQL history does not prove that no migration was applied manually.
 
 ## Stop conditions
 
