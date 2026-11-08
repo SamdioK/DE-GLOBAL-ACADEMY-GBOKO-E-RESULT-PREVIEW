@@ -327,3 +327,41 @@ Subject Teacher score-sheet loading and the final pre-save assignment check both
 - The live database currently has one teacher assignment in the active academic session: one inactive and zero active. The existing BASIC7A Mathematics assignment remains inactive. This maintenance pass did not activate, remove or otherwise modify that row.
 - The administrator browser acceptance test remains outstanding: activate an assignment, verify the database status and teacher login, deactivate it and verify that the teacher cannot open or save the score sheet, then remove a test assignment only if the administrator explicitly chooses one. No live assignment was changed as a test in this pass.
 - The Form Master management panel already reads and mutates its assignments through the existing `manage-form-master` Edge Function and Supabase classes table. The Form Master login dropdown now displays a placeholder before sign-in, then retrieves assigned classes from Supabase after authentication; when multiple classes exist, it prompts the user to select one and sign in again. The wider legacy class-arm cache is still used by older result-entry paths and remains scheduled for a separate migration stage; it has not been deleted or bulk-replaced here.
+
+
+## 16. Class and student-roster migration dependency audit — 8 November 2026
+
+### 16.1 Live authoritative class and enrolment baseline
+
+The live database was queried for the school's current academic session and class roster. The current session is **2026/2027** (`a75e1716-180c-495a-b986-32ad282500ee`). It contains **743 non-archived enrolments across 16 class arms**. The school has 30 class rows in total, covering BASIC 7–9 and SS 1–3, arms A–E. The other 14 class arms currently have no active enrolments. No class or enrolment rows were inserted, updated or deleted during this audit.
+
+The current enrolment distribution by class is:
+- BASIC7A 44; BASIC7B 43; BASIC7C 30.
+- BASIC8B 58; BASIC8C 50.
+- BASIC9A 68; BASIC9B 61; BASIC9C 29.
+- SS1B 80; SS1C 7.
+- SS2A 63; SS2B 80; SS2C 18.
+- SS3A 38; SS3B 60; SS3C 14.
+- The remaining class arms have zero non-archived enrolments.
+
+The legacy browser backup's 30 class-arm objects had empty student-name and gender slots. Their embedded password fields are exposed legacy credentials and must not be imported or reused. The class definitions already exist in Supabase, so no class-arm bulk import is required.
+
+### 16.2 Cutover dependency discovered in the frontend
+
+The current `loadSchoolData()` still reads `classArms`, `formMasters` and `subjectAssignments` from `cloudStorage`. `saveAllData()` still writes all three categories back to browser storage. The older class-arm screen also offers a legacy student-name editor and keeps class assignment display state in the `classArms` array.
+
+More importantly, the older `saveStudent()` workflow constructs a complete result record in the browser-side `students` array and persists it by calling `saveAllData()`. The same `students` array is consumed by result views and parts of the portal. Consequently, replacing the class roster loader or removing the student batch keys before migrating this result workflow would create a split source of truth and could break result entry, result retrieval or publication.
+
+### 16.3 Existing Supabase roster path
+
+The frontend already contains `loadStudentDatabase()` and `loadOfficialStudents(classId)`, which retrieve classes and official enrolments from Supabase for the authenticated school and active session. Form Master assessment also has a dedicated `loadFormMasterOfficialEnrolments()` path that verifies the Form Master assignment and reads non-archived enrolments ordered by register number. These are useful foundations, but they do not by themselves replace the legacy result-record lifecycle.
+
+### 16.4 Safe migration order and current decision
+
+The next implementation stage must first map and migrate the complete result-record lifecycle (score entry, per-term/session retrieval, publication/release stages, student portal, attendance/fees/Form Master comments, signatures/passports and report generation) to the appropriate school-scoped Supabase tables and Storage paths. The result schema and write permissions must be inspected before changing the write path.
+
+After that dependency is proven with authenticated role tests, the class-arm screen can be made a database-backed view of `classes` and `form_master_assignments`, and the roster can be read from `students` plus `student_enrolments`. Only then should `classArms`, `formMasters`, `subjectAssignments` and `students_batch_*` browser persistence be retired. The legacy browser data remains untouched as a rollback artefact.
+
+### 16.5 Verification boundary
+
+This was a read-only audit. No student, enrolment, class, result, assignment or browser record was changed or deleted. The 743 live enrolments and 30 class definitions remain authoritative. No cutover is claimed for the class roster or student results in this section.
