@@ -8614,6 +8614,12 @@ function renderAdminProfile() {
         }
         var profileUpdate = await supabaseClient.from('profiles').update({ full_name: newName, email: newEmail, phone: newPhone }).eq('id', authenticatedProfile.id);
         if (profileUpdate.error) throw profileUpdate.error;
+        if (uploadedLogoUrl) {
+          var schoolLogoUpdate = await supabaseClient.from('schools')
+            .update({ logo_url: uploadedLogoUrl })
+            .eq('id', authenticatedProfile.school_id);
+          if (schoolLogoUpdate.error) throw schoolLogoUpdate.error;
+        }
         authenticatedProfile.full_name = newName;
         authenticatedProfile.email = newEmail;
         authenticatedProfile.phone = newPhone;
