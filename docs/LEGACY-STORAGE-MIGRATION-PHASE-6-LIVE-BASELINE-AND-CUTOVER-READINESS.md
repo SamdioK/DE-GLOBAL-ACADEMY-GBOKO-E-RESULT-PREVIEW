@@ -291,3 +291,39 @@ The Subject Teacher login query now requires `teacher_assignments.is_active = tr
 - SQL verification confirmed seven rows and seven unique source event IDs, spanning 2 October to 6 November 2026. The application append path still requires a live authenticated browser-session acceptance test; the SQL historical import does not prove that browser RLS writes work end to end.
 - Browser localStorage, IndexedDB and legacy `window.storage` fallbacks have not been removed. The seven activity events are the only historical browser activity records imported in this stage. No legacy staff rows, portal content, class records, student data or branding assets were bulk-imported or deleted.
 - Next cutover work remains: migrate the class and assignment management screens to authoritative Supabase reads/writes; move school portal content/settings into school-scoped domain tables; import validated branding assets to private Storage; then verify cross-device persistence, RLS, idempotency, refresh behaviour and rollback before retiring browser persistence.
+
+
+## 15. Subject Teacher assignment management moved to Supabase — 8 November 2026
+
+### 15.1 Authoritative assignment list
+
+The administrator's Subject Teacher management screen now loads assignment rows from `public.teacher_assignments` for the authenticated school and active academic session. Class names, subject names and teacher details are resolved from the corresponding Supabase `classes`, `subjects` and `profiles` records.
+
+The screen no longer renders its Subject Teacher list from the browser's `subjectAssignments` snapshot. The new assignment form also loads class, subject and active staff options from Supabase. After the existing `create-subject-teacher` Edge Function confirms a new assignment, the screen reloads the database list; it does not push a synthetic assignment into browser storage or call `saveAllData()` for that assignment.
+
+Assignment status is displayed from the database `is_active` field. Account status is displayed separately from `profiles.is_active`.
+
+### 15.2 Secure activation and removal
+
+Created and deployed `manage-subject-teacher` (Edge Function version 1, JWT verification enabled). Its only supported operations are:
+- `set_active`: update the selected assignment's `is_active` value;
+- `remove_assignment`: remove one assignment row.
+
+The function obtains the caller from the verified JWT, then independently verifies that the caller's profile is an active School Administrator. It derives the school scope from that profile and refuses assignment IDs outside that school. The client cannot nominate another school or another actor.
+
+The existing `teacher_assignments` table has a school-scoped SELECT policy but no direct authenticated UPDATE or DELETE policy. The administrator-only Edge Function is therefore the controlled mutation route; no broad direct table mutation grants or RLS policies were added.
+
+Removing an assignment deliberately leaves the teacher's Auth account, `profiles` row, `profile_roles`, other assignments and results untouched. Bulk-clear assignment controls were removed from the interface and bulk deletion is disabled.
+
+### 15.3 Score-entry enforcement
+
+Subject Teacher score-sheet loading and the final pre-save assignment check both now require `teacher_assignments.is_active = true`. This closes the gap where a teacher with an already-open session might continue to access or save scores after an administrator deactivates the assignment.
+
+### 15.4 Live verification and remaining acceptance test
+
+- Confirmed that `manage-subject-teacher` is deployed and ACTIVE with JWT verification enabled.
+- Confirmed the latest frontend source fetch contains the Supabase assignment query, database-derived activation status, Edge Function actions, no local assignment push, and no bulk-clear button.
+- Confirmed both score-entry assignment checks require `is_active = true`.
+- The live database currently has one teacher assignment in the active academic session: one inactive and zero active. The existing BASIC7A Mathematics assignment remains inactive. This maintenance pass did not activate, remove or otherwise modify that row.
+- The administrator browser acceptance test remains outstanding: activate an assignment, verify the database status and teacher login, deactivate it and verify that the teacher cannot open or save the score sheet, then remove a test assignment only if the administrator explicitly chooses one. No live assignment was changed as a test in this pass.
+- The Form Master management panel already reads and mutates its assignments through the existing `manage-form-master` Edge Function and Supabase classes table. The remaining legacy Form Master login dropdown and class-arm cache are still scheduled for a separate migration stage; they have not been deleted or bulk-replaced here.
