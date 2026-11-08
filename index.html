@@ -8818,7 +8818,7 @@ async function migrateLegacyTeacherSignaturesToSupabase() {
     if (existingSubjects.has(subject)) { skipped++; continue; }
     try {
       var dataUrl = teacherSignatures[subject];
-      var match = /^data:(image\\/(?:jpeg|png|webp));base64,([A-Za-z0-9+/=]+)$/.exec(dataUrl);
+      var match = /^data:(image\/(?:jpeg|png|webp));base64,([A-Za-z0-9+/=]+)$/.exec(dataUrl);
       if (!match) throw new Error('Unsupported or invalid legacy image format.');
       var binary = atob(match[2]);
       var bytes = new Uint8Array(binary.length);
