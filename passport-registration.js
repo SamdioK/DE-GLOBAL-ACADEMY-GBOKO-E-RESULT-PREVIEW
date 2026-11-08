@@ -1783,9 +1783,16 @@
       if (folderResult.error) throw folderResult.error;
 
       var storageFiles = [];
+      var databaseStudentIds = {};
+      dbStudents.forEach(function (row) {
+        databaseStudentIds[String(row.id)] = true;
+      });
       var folders = (folderResult.data || []).filter(function (item) {
         return item && !item.id;
       });
+      var storageFoldersWithoutStudent = folders.filter(function (folder) {
+        return !databaseStudentIds[String(folder.name || '')];
+      }).length;
       for (var i = 0; i < folders.length; i++) {
         var folderName = String(folders[i].name || '');
         if (!folderName) continue;
@@ -1818,6 +1825,7 @@
           auditMetric('Legacy only (DB student)', legacyOnly) +
           auditMetric('Passport records', passportRows.length) +
           auditMetric('Storage files found', storageFiles.length) +
+          auditMetric('Storage folders without student', storageFoldersWithoutStudent) +
           auditMetric('Files without metadata', storageWithoutMetadata) +
           auditMetric('Metadata without file', metadataWithoutFile) +
           auditMetric('DB students without passport', databaseWithoutPassport) +
