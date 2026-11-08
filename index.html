@@ -1127,10 +1127,11 @@ async function handleSupabaseLogin(userType, errorDiv) {
       // Load assignments directly from Supabase for this authenticated teacher.
       var assignmentResult = await supabaseClient
         .from('teacher_assignments')
-        .select('id,school_id,teacher_id,class_id,subject_id,academic_session_id')
+        .select('id,school_id,teacher_id,class_id,subject_id,academic_session_id,is_active')
         .eq('school_id', profile.school_id)
         .eq('teacher_id', profile.id)
-        .eq('academic_session_id', activeAcademicSession.id);
+        .eq('academic_session_id', activeAcademicSession.id)
+        .eq('is_active', true);
 
       if (assignmentResult.error) throw assignmentResult.error;
 
