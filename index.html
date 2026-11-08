@@ -8606,7 +8606,7 @@ function renderSchool() {
     '#schoolTab .school-preview-box{min-height:104px;display:flex;align-items:center;justify-content:center;border:1px dashed #d9deeb;border-radius:9px;background:#fff;padding:10px;overflow:hidden}#schoolTab .school-brand-preview{max-width:100%;object-fit:contain;display:block}#schoolTab .school-logo-preview{max-height:100px}#schoolTab .school-signature-preview{max-height:68px}#schoolTab .school-brand-empty{font-size:12px;color:#8a91a3;text-align:center;line-height:1.5}#schoolTab .school-stamp-empty{min-height:130px;display:flex;align-items:center;justify-content:center}' +
     '#schoolTab .school-stamp-composite{position:relative;width:min(100%,260px);aspect-ratio:600/456;display:flex;align-items:center;justify-content:center;background:#fff;overflow:hidden}#schoolTab .school-stamp-artwork{position:absolute;inset:0;width:100%;height:100%;object-fit:contain}#schoolTab .school-stamp-signature-overlay{position:absolute;left:12%;top:24.5%;width:76%;height:28.5%;object-fit:contain}#schoolTab .school-stamp-date-overlay{position:absolute;left:5%;right:5%;top:56.5%;text-align:center;color:#2928b8;font:700 clamp(10px,3vw,17px) Arial,sans-serif;letter-spacing:.2px;white-space:nowrap}' +
     '#schoolTab .school-note{font-size:12px;line-height:1.6;color:#747d91;margin-top:12px}#schoolTab .school-actions{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-top:16px}#schoolTab #saveSchoolBtn{padding:11px 18px;border-radius:8px;font-size:13px}#schoolTab .school-stamp-settings-btn{width:100%;min-height:42px;border-radius:8px}' +
-    '#schoolStampModal .management-modal-content{max-width:620px;border-radius:16px;padding:22px}#schoolStampModal .stamp-modal-preview{min-height:220px;display:flex;align-items:center;justify-content:center;padding:14px;border:1px dashed #d9deeb;border-radius:12px;background:#f9faff;margin:10px 0 16px}#schoolStampModal .stamp-modal-preview .school-brand-empty{max-width:280px}#schoolStampModal .stamp-preview-composite{position:relative;width:min(100%,340px);aspect-ratio:600/456;background:#fff;overflow:hidden}#schoolStampModal .stamp-preview-artwork{position:absolute;inset:0;width:100%;height:100%;object-fit:contain}#schoolStampModal .stamp-preview-signature{position:absolute;left:12%;top:24.5%;width:76%;height:28.5%;object-fit:contain}#schoolStampModal .stamp-preview-date{position:absolute;left:5%;right:5%;top:56.5%;text-align:center;color:#2928b8;font:700 clamp(12px,3.5vw,20px) Arial,sans-serif;white-space:nowrap}' +
+    '#schoolStampModal .management-modal-content{max-width:620px;border-radius:16px;padding:22px}#schoolStampModal .stamp-modal-preview{min-height:220px;display:flex;align-items:center;justify-content:center;padding:14px;border:1px dashed #d9deeb;border-radius:12px;background:#f9faff;margin:10px 0 16px}#schoolStampModal .stamp-modal-preview .school-brand-empty{max-width:280px}#schoolStampModal .stamp-preview-composite{position:relative;width:min(100%,380px);height:230px;background:#fff;overflow:hidden;display:flex;align-items:center;justify-content:center}#schoolStampModal .stamp-preview-artwork{display:block;max-width:100%;max-height:100%;width:auto;height:auto;object-fit:contain;filter:none;image-rendering:auto}#schoolStampModal .stamp-preview-signature{position:absolute;left:28%;top:56%;width:44%;height:22%;object-fit:contain;object-position:center;mix-blend-mode:multiply}#schoolStampModal .stamp-preview-date{position:absolute;left:8%;right:8%;bottom:16%;text-align:center;color:#2928b8;font:700 clamp(11px,3.2vw,17px) Arial,sans-serif;white-space:nowrap;text-shadow:0 1px 0 rgba(255,255,255,.85)}' +
     '@media(max-width:600px){#schoolTab .school-hero{padding:20px}#schoolTab .school-panel{padding:15px}#schoolTab .school-fields,#schoolTab .school-assets-grid{grid-template-columns:1fr}#schoolStampModal .management-modal-content{padding:16px;max-height:88vh}}' +
     '</style>' +
     '<div class="school-hero"><h2>School Profile &amp; Result Branding</h2><p>Manage the official school identity and the images that appear on student result documents. Your saved branding is securely synchronised with the school database.</p></div>' +
@@ -8670,12 +8670,32 @@ function renderSchool() {
     if (!schoolInfo.schoolStamp && !stampFile) { showToast('Please choose the official school stamp artwork first.', 'error'); return; }
     button.disabled = true; button.textContent = 'Saving stamp settings…';
     try {
-      if (stampFile) await uploadSchoolBrandingAsset('school-stamp', stampFile);
-      if (signatureFile) await uploadSchoolBrandingAsset('stamp-signature', signatureFile);
-      var dateUpdate = await supabaseClient.from('schools').update({ stamp_date: dateValue })
-        .eq('id', authenticatedProfile.school_id).select('id').maybeSingle();
+      var schoolId = authenticatedProfile.school_id;
+      var bucket = supabaseClient.storage.from('school-private-assets');
+      var uploadedPaths = [];
+      var patch = { stamp_date: dateValue };
+      var oldPaths = [];
+      var currentPaths = schoolInfo._brandingPaths || {};
+      async function uploadStampPart(file, kind, column, oldPath) {
+        if (!file) return;
+        if (!/^image\/(png|jpeg|webp)$/i.test(file.type || '') || file.size > 5 * 1024 * 1024) {
+          throw new Error('Choose a PNG, JPG or WEBP image up to 5 MB.');
+        }
+        var ext = file.type === 'image/jpeg' ? 'jpg' : file.type === 'image/webp' ? 'webp' : 'png';
+        var path = schoolId + '/branding/' + kind + '-' + Date.now() + '-' + Math.random().toString(36).slice(2,8) + '.' + ext;
+        var result = await bucket.upload(path, file, { contentType:file.type, cacheControl:'3600', upsert:false });
+        if (result.error) throw result.error;
+        uploadedPaths.push(path);
+        patch[column] = path;
+        if (oldPath) oldPaths.push(oldPath);
+      }
+      await uploadStampPart(stampFile, 'school-stamp', 'school_stamp_path', currentPaths.schoolStamp);
+      await uploadStampPart(signatureFile, 'stamp-signature', 'stamp_signature_path', currentPaths.stampSignature);
+      var dateUpdate = await supabaseClient.from('schools').update(patch)
+        .eq('id', schoolId).select('id').maybeSingle();
       if (dateUpdate.error) throw dateUpdate.error;
-      if (!dateUpdate.data) throw new Error('Stamp date was not saved. Confirm administrator access.');
+      if (!dateUpdate.data) throw new Error('Stamp settings were not saved. Confirm administrator access.');
+      if (oldPaths.length) await bucket.remove(oldPaths);
       schoolInfo.stampDate = dateValue;
       selectedResultDate = dateValue;
       await loadSchoolBrandingAssets();
@@ -8684,6 +8704,9 @@ function renderSchool() {
       renderSchool();
     } catch (error) {
       console.error('School stamp settings save failed:', error);
+      if (typeof uploadedPaths !== 'undefined' && uploadedPaths.length) {
+        await supabaseClient.storage.from('school-private-assets').remove(uploadedPaths);
+      }
       showToast(error.message || 'Could not save stamp settings.', 'error');
     } finally { button.disabled = false; button.textContent = 'Save Stamp Settings'; }
   });
@@ -9805,16 +9828,11 @@ function formatResultDate(value) {
   return String(date.getDate()).padStart(2, '0') + ' ' + months[date.getMonth()] + ' ' + date.getFullYear();
 }
 
-function createDatedStampDataUrl(stampData, dateValue, signatureData) {
+function createDatedStampHtml(stampData, dateValue, signatureData) {
   if (!stampData) return '';
-  var dateText = escapeManagementText(formatResultDate(dateValue));
-  var signature = signatureData ? '<image href="' + escapeManagementText(signatureData) + '" x="72" y="112" width="456" height="130" preserveAspectRatio="xMidYMid meet"/>' : '';
-  var svg = '<svg xmlns="http://www.w3.org/2000/svg" width="600" height="456" viewBox="0 0 600 456">' +
-    '<image href="' + escapeManagementText(stampData) + '" x="0" y="0" width="600" height="456" preserveAspectRatio="xMidYMid meet"/>' +
-    signature +
-    '<text x="300" y="258" text-anchor="middle" dominant-baseline="middle" font-family="Arial, sans-serif" font-size="42" font-weight="bold" letter-spacing="0.6" fill="#2928b8">' + dateText + '</text>' +
-    '</svg>';
-  return 'data:image/svg+xml;charset=UTF-8,' + encodeURIComponent(svg);
+  return '<div class="school-stamp-wrap"><img class="school-stamp-image" src="' + escapeManagementText(stampData) + '" alt="Official school stamp">' +
+    (signatureData ? '<img class="school-stamp-signature" src="' + escapeManagementText(signatureData) + '" alt="Stamp signature">' : '') +
+    '<span class="school-stamp-date">' + escapeManagementText(formatResultDate(dateValue)) + '</span></div>';
 }
 
 function getApprovalQrDataUrl(student) {
@@ -10153,7 +10171,7 @@ function buildPrintStyles() {
     '.sheet > table { table-layout:fixed; font-size:9px; line-height:1.08; } .sheet > table th:nth-child(1), .sheet > table td:nth-child(1) { width:15%; } .sheet > table th:nth-child(2), .sheet > table td:nth-child(2), .sheet > table th:nth-child(3), .sheet > table td:nth-child(3), .sheet > table th:nth-child(4), .sheet > table td:nth-child(4), .sheet > table th:nth-child(5), .sheet > table td:nth-child(5), .sheet > table th:nth-child(6), .sheet > table td:nth-child(6) { width:5%; } .sheet > table th:nth-child(7), .sheet > table td:nth-child(7) { width:7%; } .sheet > table th:nth-child(8), .sheet > table td:nth-child(8) { width:8%; } .sheet > table th:nth-child(9), .sheet > table td:nth-child(9), .sheet > table th:nth-child(10), .sheet > table td:nth-child(10) { width:7%; } .sheet > table th:nth-child(11), .sheet > table td:nth-child(11) { width:5%; } .sheet > table th:nth-child(12), .sheet > table td:nth-child(12) { width:12%; } .sheet > table th:nth-child(13), .sheet > table td:nth-child(13) { width:8%; } .subject-signature { max-width:38px; max-height:18px; object-fit:contain; vertical-align:middle; } ' +
     '.summary { display:grid; grid-template-columns:repeat(4,1fr); gap:4px; margin-bottom:5px; } .summary div { text-align:center; background:#f0f0f0; padding:3px; border-radius:3px; } ' +
     '.domains { display:grid; grid-template-columns:1fr 1fr; gap:5px; margin-bottom:5px; } .domain-box { border:1px solid #333; padding:3px; border-radius:3px; } ' +
-    '.result-footer { display:flex; align-items:flex-end; justify-content:space-between; gap:6px; margin-top:auto; padding-top:4px; min-height:58px; } .result-document-date { font-size:9px; font-weight:700; align-self:flex-end; } .result-approval-assets { display:flex; align-items:flex-end; gap:4px; margin-left:auto; } .school-stamp-wrap { width:82px; height:62px; flex:none; } .school-stamp-image { width:100%; height:100%; object-fit:contain; } .approval-qr { width:48px; height:48px; object-fit:contain; flex:none; } ' +
+    '.result-footer { display:flex; align-items:flex-end; justify-content:space-between; gap:6px; margin-top:auto; padding-top:4px; min-height:58px; } .result-document-date { font-size:9px; font-weight:700; align-self:flex-end; } .result-approval-assets { display:flex; align-items:flex-end; gap:4px; margin-left:auto; } .school-stamp-wrap { position:relative;width:82px;height:62px;flex:none;display:flex;align-items:center;justify-content:center;overflow:hidden; } .school-stamp-image { display:block;max-width:100%;max-height:100%;width:auto;height:auto;object-fit:contain; } .school-stamp-date { position:absolute;left:2%;right:2%;bottom:13%;text-align:center;color:#2928b8;font-size:6px;font-weight:700;white-space:nowrap;text-shadow:0 0 1px #fff; } .school-stamp-signature { position:absolute;left:27%;top:52%;width:46%;height:24%;object-fit:contain;mix-blend-mode:multiply; } .approval-qr { width:48px; height:48px; object-fit:contain; flex:none; } ' +
     '.print-btn { position:fixed; top:15px; right:15px; padding:8px 16px; background:#667eea; color:white; border:none; border-radius:4px; cursor:pointer; z-index:999; } @media print { html,body { width:100%; margin:0; padding:0; } .sheet { margin:0 auto; } .print-btn { display:none; } .sheet:last-child { page-break-after:auto; break-after:auto; } }';
 }
 
@@ -10187,8 +10205,7 @@ function buildStudentSheetHTML(student) {
   var passportHtml = student.passport ? '<img class="result-student-photo" src="' + student.passport + '" alt="Student passport photo">' : '<div class="result-student-photo" style="display:flex; align-items:center; justify-content:center; text-align:center; color:#666; font-size:10px;">Passport<br>Photo</div>';
   var resultDateText = formatResultDate(selectedResultDate || getTodayDateInputValue());
   var stampData = schoolInfo.schoolStamp || schoolInfo.principalStamp || '';
-  var datedStampData = createDatedStampDataUrl(stampData, selectedResultDate || getTodayDateInputValue(), schoolInfo.stampSignature || schoolInfo.principalSignature || '');
-  var stampHtml = (!student.isTestResult && datedStampData) ? '<div class="school-stamp-wrap"><img class="school-stamp-image" src="' + datedStampData + '" alt="Official school stamp with selected date"></div>' : '';
+  var stampHtml = (!student.isTestResult && stampData) ? createDatedStampHtml(stampData, selectedResultDate || getTodayDateInputValue(), schoolInfo.stampSignature || '') : '';
   var qrData = student.isTestResult ? '' : getApprovalQrDataUrl(student);
   var qrHtml = qrData ? '<img class="approval-qr" src="' + qrData + '" alt="Approved result QR code">' : '';
 
