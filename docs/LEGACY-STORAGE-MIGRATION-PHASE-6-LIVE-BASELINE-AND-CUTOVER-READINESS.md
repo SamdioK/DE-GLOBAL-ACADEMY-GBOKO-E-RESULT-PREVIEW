@@ -164,3 +164,20 @@ No external provider or local device is to be declared empty merely because its 
 **Not completed:** No legacy records or files were written to Supabase in this phase. No application source code was cut over. This was intentional because the captured snapshot is incomplete/stale for current-device state, several records need identity/content approval, and binary Storage migration requires a verified upload workflow. No data was deleted or altered.
 
 **Next implementation gate:** Build and test a controlled migration intake and category-specific Supabase cutover workflow, starting with the already reconciled classes and assessment configuration reads. Preserve the original browser backup and retain the current legacy data until each category passes acceptance testing.
+
+
+## 12. Supabase security advisor findings (8 November 2026)
+
+A live Supabase security-advisor check returned the following findings:
+
+- Four tables have RLS enabled but no policies: `form_master_password_reset_operations`, `permissions`, `result_comments` and `student_password_reset_operations`. Confirm whether each is intentionally accessed only through trusted server-side functions. Do not add broad client policies simply to clear the warning.
+- The advisor reported 17 `SECURITY DEFINER` functions executable by `anon` and 23 executable by `authenticated`. This includes sensitive student change, class-list, enrolment, role/permission and assessment-related functions. Review each function's body, explicit identity/role checks, search_path, grants and intended caller before changing privileges. Do not mass-revoke or switch functions to `SECURITY INVOKER` without dependency testing.
+- Supabase Auth leaked-password protection is disabled. Enablement should be reviewed with the administrator because it changes password acceptance behaviour for users.
+
+These are security review findings, not proof that all listed functions are exploitable. They are a required security gate before widening any new migration write paths or creating new public read surfaces.
+
+Remediation references:
+- [RLS enabled without policies](https://supabase.com/docs/guides/database/database-linter?lint=0008_rls_enabled_no_policy)
+- [Public can execute SECURITY DEFINER function](https://supabase.com/docs/guides/database/database-linter?lint=0028_anon_security_definer_function_executable)
+- [Signed-in users can execute SECURITY DEFINER function](https://supabase.com/docs/guides/database/database-linter?lint=0029_authenticated_security_definer_function_executable)
+- [Leaked password protection](https://supabase.com/docs/guides/auth/password-security#password-strength-and-leaked-password-protection)
