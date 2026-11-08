@@ -580,17 +580,30 @@
             </div>
           </div>
 
-          <button type="button"
-            class="passport-action passport-primary"
-            id="passportRefreshBtn">
-            Refresh records
-          </button>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;">
+            <button type="button"
+              class="passport-action passport-primary"
+              id="passportAuditBtn">
+              Audit legacy photos
+            </button>
+            <button type="button"
+              class="passport-action passport-primary"
+              id="passportRefreshBtn">
+              Refresh records
+            </button>
+          </div>
         </div>
 
         <div id="passportNotice"
           class="passport-notice"
           role="status"
           aria-live="polite"></div>
+
+        <section class="passport-panel" id="passportAuditPanel" hidden>
+          <h3 style="margin:0 0 6px;font-size:16px;">Legacy photo reconciliation</h3>
+          <p class="passport-muted">Read-only audit. No photographs or records are changed.</p>
+          <div id="passportAuditResults" class="passport-muted">Run the audit to view counts.</div>
+        </section>
 
         <section class="passport-panel">
           <h3 style="margin:0 0 5px;font-size:16px;">
@@ -659,6 +672,10 @@
 
     document.getElementById('passportRefreshBtn').onclick = function () {
       loadPassportRegistration(true);
+    };
+
+    document.getElementById('passportAuditBtn').onclick = function () {
+      runLegacyPassportAudit();
     };
 
     document.getElementById('passportStudentSearch').oninput = function () {
@@ -1681,6 +1698,147 @@
     } finally {
       state.busy = false;
     }
+  }
+
+  // Read-only comparison of legacy Base64 result photos against authoritative
+  // student records, passport metadata and files in the private passport bucket.
+  async function runLegacyPassportAudit() {
+    var panel = document.getElementById('passportAuditPanel');
+    var output = document.getElementById('passportAuditResults');
+    var button = document.getElementById('passportAuditBtn');
+    if (!panel || !output || state.busy) return;
+
+    panel.hidden = false;
+    button.disabled = true;
+    output.textContent = 'Checking legacy records and Supabase Storage…';
+
+    try {
+      await verifyAdminSession();
+
+      var schoolId = String(authenticatedProfile.school_id);
+      var legacyRows = Array.isArray(window.students) ? window.students : [];
+      var legacyPhotos = legacyRows.filter(function (row) {
+        return !!(row && typeof row.passport === 'string' &&
+          row.passport.indexOf('data:image/') === 0);
+      });
+
+      var studentResult = await supabaseClient.from('students')
+        .select('id,admission_number')
+        .eq('school_id', schoolId);
+      if (studentResult.error) throw studentResult.error;
+
+      var passportResult = await supabaseClient.from('student_passports')
+        .select('student_id,storage_path')
+        .eq('school_id', schoolId);
+      if (passportResult.error) throw passportResult.error;
+
+      var dbStudents = studentResult.data || [];
+      var passportRows = passportResult.data || [];
+      var byAdmission = {};
+      dbStudents.forEach(function (row) {
+        var key = String(row.admission_number || '').trim().toLowerCase();
+        if (!key) return;
+        if (!byAdmission[key]) byAdmission[key] = [];
+        byAdmission[key].push(row);
+      });
+
+      var legacyWithAdmission = legacyPhotos.filter(function (row) {
+        return !!String(row.admNo || row.admissionNumber || '').trim();
+      });
+      var matchedLegacy = 0;
+      var unmatchedLegacy = 0;
+      var ambiguousLegacy = 0;
+      var legacyMatchedStudentIds = {};
+
+      legacyWithAdmission.forEach(function (row) {
+        var key = String(row.admNo || row.admissionNumber || '').trim().toLowerCase();
+        var matches = byAdmission[key] || [];
+        if (matches.length === 1) {
+          matchedLegacy++;
+          legacyMatchedStudentIds[String(matches[0].id)] = true;
+        } else if (matches.length > 1) {
+          ambiguousLegacy++;
+        } else {
+          unmatchedLegacy++;
+        }
+      });
+
+      var passportStudentIds = {};
+      var passportPaths = {};
+      passportRows.forEach(function (row) {
+        passportStudentIds[String(row.student_id)] = true;
+        passportPaths[String(row.storage_path)] = true;
+      });
+
+      var legacyOnly = Object.keys(legacyMatchedStudentIds).filter(function (id) {
+        return !passportStudentIds[id];
+      }).length;
+      var metadataWithoutLegacy = passportRows.filter(function (row) {
+        return !legacyMatchedStudentIds[String(row.student_id)];
+      }).length;
+
+      // List each student folder under this school's bucket prefix. Listing is read-only.
+      var folderResult = await supabaseClient.storage.from(BUCKET)
+        .list(schoolId, { limit: 1000 });
+      if (folderResult.error) throw folderResult.error;
+
+      var storageFiles = [];
+      var folders = (folderResult.data || []).filter(function (item) {
+        return item && !item.id;
+      });
+      for (var i = 0; i < folders.length; i++) {
+        var folderName = String(folders[i].name || '');
+        if (!folderName) continue;
+        var fileResult = await supabaseClient.storage.from(BUCKET)
+          .list(schoolId + '/' + folderName, { limit: 1000 });
+        if (fileResult.error) throw fileResult.error;
+        (fileResult.data || []).forEach(function (file) {
+          if (file && file.id) {
+            storageFiles.push(schoolId + '/' + folderName + '/' + file.name);
+          }
+        });
+      }
+
+      var storageWithoutMetadata = storageFiles.filter(function (path) {
+        return !passportPaths[path];
+      }).length;
+      var metadataWithoutFile = passportRows.filter(function (row) {
+        return storageFiles.indexOf(String(row.storage_path)) === -1;
+      }).length;
+      var databaseWithoutPassport = dbStudents.filter(function (row) {
+        return !passportStudentIds[String(row.id)];
+      }).length;
+
+      output.innerHTML =
+        '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(145px,1fr));gap:10px;margin-top:12px;">' +
+          auditMetric('Legacy photos found', legacyPhotos.length) +
+          auditMetric('Legacy photos matched', matchedLegacy) +
+          auditMetric('Legacy photos unmatched', unmatchedLegacy) +
+          auditMetric('Ambiguous admission matches', ambiguousLegacy) +
+          auditMetric('Legacy only (DB student)', legacyOnly) +
+          auditMetric('Passport records', passportRows.length) +
+          auditMetric('Storage files found', storageFiles.length) +
+          auditMetric('Files without metadata', storageWithoutMetadata) +
+          auditMetric('Metadata without file', metadataWithoutFile) +
+          auditMetric('DB students without passport', databaseWithoutPassport) +
+          auditMetric('Legacy photos missing admission no.', legacyPhotos.length - legacyWithAdmission.length) +
+          auditMetric('Metadata without legacy match', metadataWithoutLegacy) +
+        '</div>' +
+        '<p style="margin:12px 0 0;color:#855000;">This report is diagnostic only. Unmatched and ambiguous items require manual review before migration.</p>' +
+        '<p style="margin:6px 0 0;color:#667085;">Audit completed: ' +
+        escapeHtml(new Date().toLocaleString()) + '</p>';
+    } catch (error) {
+      output.textContent = error.message || 'The photo reconciliation audit could not be completed.';
+    } finally {
+      button.disabled = false;
+    }
+  }
+
+  function auditMetric(label, value) {
+    return '<div style="padding:12px;border:1px solid #e1e7f0;border-radius:9px;background:#f8faff;">' +
+      '<div style="font-size:22px;font-weight:700;color:#23324c;">' +
+      Number(value || 0).toLocaleString() + '</div>' +
+      '<div style="font-size:12px;color:#667085;">' + escapeHtml(label) + '</div></div>';
   }
 
   // Called by index.html when the administrator opens this tab.
