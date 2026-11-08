@@ -8580,33 +8580,101 @@ function renderSchool() {
   };
   var sessionName = activeAcademicSession && activeAcademicSession.name
     ? activeAcademicSession.name : (schoolInfo.session || '');
-  var logoPreview = schoolInfo.logo ? '<img src="' + escapeValue(schoolInfo.logo) + '" alt="School logo" style="max-width:110px;max-height:90px;object-fit:contain;">' : '<span style="color:#888">No logo uploaded</span>';
-  var principalPreview = schoolInfo.principalSignature ? '<img src="' + escapeValue(schoolInfo.principalSignature) + '" alt="Principal signature" style="max-width:180px;max-height:65px;object-fit:contain;">' : '<span style="color:#888">No principal signature uploaded</span>';
-  var stampPreview = schoolInfo.schoolStamp ? '<img src="' + escapeValue(schoolInfo.schoolStamp) + '" alt="Official school stamp" style="max-width:180px;max-height:120px;object-fit:contain;">' : '<span style="color:#888">No official stamp uploaded</span>';
-  var stampSigPreview = schoolInfo.stampSignature ? '<img src="' + escapeValue(schoolInfo.stampSignature) + '" alt="Small stamp signature" style="max-width:180px;max-height:65px;object-fit:contain;">' : '<span style="color:#888">No small stamp signature uploaded</span>';
+  var logoPreview = schoolInfo.logo ? '<img src="' + escapeValue(schoolInfo.logo) + '" alt="School logo" class="school-brand-preview school-logo-preview">' : '<div class="school-brand-empty">No school logo uploaded</div>';
+  var principalPreview = schoolInfo.principalSignature ? '<img src="' + escapeValue(schoolInfo.principalSignature) + '" alt="Principal signature" class="school-brand-preview school-signature-preview">' : '<div class="school-brand-empty">No principal signature uploaded</div>';
+  var stampBase = schoolInfo.schoolStamp || '';
+  var stampDate = schoolInfo.stampDate || getTodayDateInputValue();
+  var stampSignature = schoolInfo.stampSignature || '';
+  var stampPreview = stampBase
+    ? '<img id="schoolStampPreview" src="' + escapeValue(createDatedStampDataUrl(stampBase, stampDate, stampSignature)) + '" alt="Official school stamp preview with date and signature" class="school-stamp-preview">'
+    : '<div id="schoolStampPreviewEmpty" class="school-brand-empty school-stamp-empty">Upload the official stamp artwork to see the dated preview here.</div>';
+  var stampSigPreview = stampSignature ? '<img src="' + escapeValue(stampSignature) + '" alt="Small stamp signature" class="school-brand-preview school-signature-preview">' : '<div class="school-brand-empty">No small stamp signature uploaded</div>';
+
   document.getElementById('schoolTab').innerHTML =
-    '<div class="card"><h2>School Information</h2>' +
-    '<p style="color:#666;font-size:13px;margin:8px 0 16px">School identity and result-sheet branding are securely stored in Supabase. Private signatures and stamp artwork are served using authenticated, time-limited links.</p>' +
-    '<div class="grid grid-2" style="margin:20px 0">' +
+    '<style>' +
+    '#schoolTab .school-hero{position:relative;overflow:hidden;padding:24px;border-radius:16px;background:linear-gradient(130deg,#263b82 0%,#536bd8 58%,#7352a6 100%);color:#fff;margin-bottom:18px;box-shadow:0 8px 24px rgba(48,62,130,.18)}' +
+    '#schoolTab .school-hero:after{content:"";position:absolute;width:210px;height:210px;border:1px solid rgba(255,255,255,.16);border-radius:50%;right:-55px;top:-90px;box-shadow:0 0 0 24px rgba(255,255,255,.05),0 0 0 50px rgba(255,255,255,.035)}' +
+    '#schoolTab .school-hero h2{font-size:22px;margin-bottom:7px}#schoolTab .school-hero p{max-width:650px;color:rgba(255,255,255,.86);font-size:13px;line-height:1.6}' +
+    '#schoolTab .school-panel{background:#fff;border:1px solid #e7eaf3;border-radius:14px;padding:20px;margin-bottom:16px;box-shadow:0 3px 12px rgba(30,45,90,.045)}' +
+    '#schoolTab .school-panel-title{display:flex;align-items:center;gap:10px;margin-bottom:16px;color:#293968;font-size:16px;font-weight:700}#schoolTab .school-panel-title span{display:inline-flex;width:32px;height:32px;align-items:center;justify-content:center;border-radius:9px;background:#eef1ff;color:#536bd8;font-size:16px}' +
+    '#schoolTab .school-fields{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:0 16px}#schoolTab .input-group label{color:#39445e}#schoolTab .input-group input{min-height:43px;border:1px solid #dfe4ef;border-radius:8px;padding:10px 12px;font-size:14px}#schoolTab .input-group input:focus{outline:2px solid rgba(83,107,216,.18);border-color:#667eea}' +
+    '#schoolTab .school-readonly{background:#f5f6fa;color:#697386}#schoolTab .school-assets-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}' +
+    '#schoolTab .school-asset{border:1px solid #e6eaf3;border-radius:12px;padding:15px;background:linear-gradient(180deg,#fff,#fafbff);min-width:0}#schoolTab .school-asset h4{font-size:13px;color:#34436f;margin-bottom:10px}#schoolTab .school-asset input[type=file]{width:100%;max-width:100%;font-size:12px;margin-top:10px}' +
+    '#schoolTab .school-preview-box{min-height:104px;display:flex;align-items:center;justify-content:center;border:1px dashed #d9deeb;border-radius:9px;background:#fff;padding:10px;overflow:hidden}#schoolTab .school-brand-preview{max-width:100%;object-fit:contain;display:block}#schoolTab .school-logo-preview{max-height:100px}#schoolTab .school-signature-preview{max-height:68px}#schoolTab .school-brand-empty{font-size:12px;color:#8a91a3;text-align:center;line-height:1.5}#schoolTab .school-stamp-preview{display:block;max-width:100%;width:220px;height:170px;object-fit:contain}#schoolTab .school-stamp-empty{min-height:130px;display:flex;align-items:center;justify-content:center}' +
+    '#schoolTab .school-note{font-size:12px;line-height:1.6;color:#747d91;margin-top:12px}#schoolTab .school-actions{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-top:16px}#schoolTab #saveSchoolBtn{padding:11px 18px;border-radius:8px;font-size:13px}#schoolTab .school-stamp-settings-btn{width:100%;min-height:42px;border-radius:8px}' +
+    '#schoolStampModal .management-modal-content{max-width:620px;border-radius:16px;padding:22px}#schoolStampModal .stamp-modal-preview{min-height:205px;display:flex;align-items:center;justify-content:center;padding:14px;border:1px dashed #d9deeb;border-radius:12px;background:#f9faff;margin:10px 0 16px}#schoolStampModal .stamp-modal-preview img{max-width:100%;width:260px;height:185px;object-fit:contain}#schoolStampModal .stamp-modal-preview .school-brand-empty{max-width:280px}' +
+    '@media(max-width:600px){#schoolTab .school-hero{padding:20px}#schoolTab .school-panel{padding:15px}#schoolTab .school-fields,#schoolTab .school-assets-grid{grid-template-columns:1fr}#schoolStampModal .management-modal-content{padding:16px;max-height:88vh}}' +
+    '</style>' +
+    '<div class="school-hero"><h2>School Profile &amp; Result Branding</h2><p>Manage the official school identity and the images that appear on student result documents. Your saved branding is securely synchronised with the school database.</p></div>' +
+    '<section class="school-panel"><div class="school-panel-title"><span>▤</span>School details</div><div class="school-fields">' +
       '<div class="input-group"><label for="schoolName">School Name</label><input type="text" id="schoolName" maxlength="255" value="' + escapeValue(schoolInfo.name) + '" required></div>' +
-      '<div class="input-group"><label for="schoolEmail">Email</label><input type="email" id="schoolEmail" maxlength="255" value="' + escapeValue(schoolInfo.email) + '"></div>' +
-      '<div class="input-group"><label for="schoolPhone">Phone</label><input type="tel" id="schoolPhone" maxlength="255" value="' + escapeValue(schoolInfo.phone) + '"></div>' +
-      '<div class="input-group"><label for="schoolAddress">Address</label><input type="text" id="schoolAddress" maxlength="500" value="' + escapeValue(schoolInfo.address) + '"></div>' +
-      '<div class="input-group"><label for="schoolPrincipal">Principal Name</label><input type="text" id="schoolPrincipal" value="' + escapeValue(schoolInfo.principalName) + '" readonly aria-describedby="schoolPrincipalNote"></div>' +
-      '<div class="input-group"><label for="schoolSession">Current Academic Session</label><input type="text" id="schoolSession" value="' + escapeValue(sessionName) + '" readonly></div>' +
-    '</div>' +
-    '<p id="schoolPrincipalNote" style="color:#777;font-size:12px;margin-bottom:12px">The principal signature is shown on the result sheet. Principal name remains controlled by the school profile.</p>' +
-    '<h3 style="margin:20px 0 12px">Official Result Sheet Assets</h3>' +
-    '<div class="grid grid-2">' +
-      '<div class="input-group"><label>School Logo</label><div style="min-height:90px;margin:8px 0">' + logoPreview + '</div><input type="file" id="brandingLogoFile" accept="image/png,image/jpeg,image/webp"></div>' +
-      '<div class="input-group"><label>Principal Signature</label><div style="min-height:65px;margin:8px 0">' + principalPreview + '</div><input type="file" id="brandingPrincipalSignatureFile" accept="image/png,image/jpeg,image/webp"></div>' +
-      '<div class="input-group"><label>Official School Stamp Artwork</label><div style="min-height:120px;margin:8px 0">' + stampPreview + '</div><input type="file" id="brandingSchoolStampFile" accept="image/png,image/jpeg,image/webp"></div>' +
-      '<div class="input-group"><label>Small Stamp Signature</label><div style="min-height:65px;margin:8px 0">' + stampSigPreview + '</div><input type="file" id="brandingStampSignatureFile" accept="image/png,image/jpeg,image/webp"></div>' +
-      '<div class="input-group"><label for="brandingStampDate">Stamp / Result Document Date</label><input type="date" id="brandingStampDate" value="' + escapeValue(schoolInfo.stampDate || '') + '"></div>' +
-    '</div>' +
-    '<p style="font-size:12px;color:#666;margin:10px 0">PNG, JPG or WEBP only; maximum 5 MB per image. The school logo is public for display. Principal signature, stamp and small stamp signature remain in private Supabase Storage.</p>' +
-    '<button class="btn btn-primary" id="saveSchoolBtn" type="button">Save School Information and Stamp Date</button>' +
-    '<span id="schoolSaveStatus" role="status" style="margin-left:10px;font-size:12px;color:#666"></span></div>';
+      '<div class="input-group"><label for="schoolEmail">Email Address</label><input type="email" id="schoolEmail" maxlength="255" value="' + escapeValue(schoolInfo.email) + '"></div>' +
+      '<div class="input-group"><label for="schoolPhone">Phone Number</label><input type="tel" id="schoolPhone" maxlength="255" value="' + escapeValue(schoolInfo.phone) + '"></div>' +
+      '<div class="input-group"><label for="schoolAddress">School Address</label><input type="text" id="schoolAddress" maxlength="500" value="' + escapeValue(schoolInfo.address) + '"></div>' +
+      '<div class="input-group"><label for="schoolPrincipal">Principal Name</label><input class="school-readonly" type="text" id="schoolPrincipal" value="' + escapeValue(schoolInfo.principalName) + '" readonly></div>' +
+      '<div class="input-group"><label for="schoolSession">Current Academic Session</label><input class="school-readonly" type="text" id="schoolSession" value="' + escapeValue(sessionName) + '" readonly></div>' +
+    '</div><p class="school-note">Principal name and academic session are controlled by the relevant school and academic settings.</p></section>' +
+    '<section class="school-panel"><div class="school-panel-title"><span>✦</span>Result sheet identity</div><div class="school-assets-grid">' +
+      '<div class="school-asset"><h4>School Logo</h4><div class="school-preview-box">' + logoPreview + '</div><input type="file" id="brandingLogoFile" accept="image/png,image/jpeg,image/webp"></div>' +
+      '<div class="school-asset"><h4>Principal Signature</h4><div class="school-preview-box">' + principalPreview + '</div><input type="file" id="brandingPrincipalSignatureFile" accept="image/png,image/jpeg,image/webp"></div>' +
+      '<div class="school-asset"><h4>Official School Stamp</h4><div class="school-preview-box">' + (stampBase ? '<img src="' + escapeValue(createDatedStampDataUrl(stampBase, stampDate, stampSignature)) + '" alt="Dated school stamp" class="school-stamp-preview">' : '<div class="school-brand-empty school-stamp-empty">No official stamp uploaded yet</div>') + '</div><button type="button" class="btn btn-primary school-stamp-settings-btn" id="schoolStampSettingBtn">Open Stamp Settings &amp; Preview</button></div>' +
+      '<div class="school-asset"><h4>Small Stamp Signature</h4><div class="school-preview-box">' + stampSigPreview + '</div><input type="file" id="brandingStampSignatureFile" accept="image/png,image/jpeg,image/webp"></div>' +
+    '</div><p class="school-note">PNG, JPG or WEBP images only; maximum 5 MB per image. The school logo is public for display. Principal signature, official stamp and small stamp signature are kept in private Supabase Storage.</p></section>' +
+    '<div id="schoolStampModal" class="management-modal hidden" role="dialog" aria-modal="true" aria-labelledby="schoolStampModalTitle"><div class="management-modal-content">' +
+      '<div style="display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:8px"><h2 id="schoolStampModalTitle" style="color:#293968;font-size:19px">Official School Stamp Settings</h2><button type="button" class="btn btn-danger" id="closeSchoolStampModalBtn">Close</button></div>' +
+      '<p style="font-size:13px;color:#697386;line-height:1.6">Upload the original stamp artwork and preview how the date and small signature will appear on the result sheet, just as in the initial E-Result project.</p>' +
+      '<div class="input-group" style="margin-top:16px"><label for="brandingSchoolStampFile">Official Stamp Artwork</label><input type="file" id="brandingSchoolStampFile" accept="image/png,image/jpeg,image/webp"></div>' +
+      '<div class="stamp-modal-preview" id="schoolStampPreviewWrap">' + (stampBase ? '<img id="schoolStampPreview" src="' + escapeValue(createDatedStampDataUrl(stampBase, stampDate, stampSignature)) + '" alt="Stamp preview with date and signature">' : '<div id="schoolStampPreviewEmpty" class="school-brand-empty">Select a stamp image to preview the dated official stamp.</div>') + '</div>' +
+      '<div class="input-group"><label for="brandingStampDate">Stamp / Result Document Date</label><input type="date" id="brandingStampDate" value="' + escapeValue(stampDate) + '"></div>' +
+      '<div class="input-group"><label for="brandingStampSignatureFile">Small Stamp Signature (optional)</label><input type="file" id="brandingStampSignatureFile" accept="image/png,image/jpeg,image/webp"></div>' +
+      '<p class="school-note">The preview combines the stamp artwork, selected date and small signature. The original image files remain securely stored; the dated preview is generated for display and result printing.</p>' +
+      '<button type="button" class="btn btn-primary" id="saveSchoolStampBtn" style="margin-top:8px">Save Stamp Date</button></div></div>' +
+    '<section class="school-actions"><button class="btn btn-primary" id="saveSchoolBtn" type="button">Save School Information</button><span id="schoolSaveStatus" role="status" style="font-size:12px;color:#697386"></span></section>';
+
+  var stampModal = document.getElementById('schoolStampModal');
+  document.getElementById('schoolStampSettingBtn').addEventListener('click', function() { stampModal.classList.remove('hidden'); });
+  document.getElementById('closeSchoolStampModalBtn').addEventListener('click', function() { stampModal.classList.add('hidden'); });
+  stampModal.addEventListener('click', function(event) { if (event.target === stampModal) stampModal.classList.add('hidden'); });
+
+  var previewStamp = function(stampData, signatureData) {
+    var wrap = document.getElementById('schoolStampPreviewWrap');
+    if (!wrap) return;
+    if (!stampData) { wrap.innerHTML = '<div id="schoolStampPreviewEmpty" class="school-brand-empty">Select a stamp image to preview the dated official stamp.</div>'; return; }
+    var preview = document.getElementById('schoolStampPreview');
+    if (!preview) { wrap.innerHTML = '<img id="schoolStampPreview" alt="Stamp preview with date and signature">'; preview = document.getElementById('schoolStampPreview'); }
+    preview.src = createDatedStampDataUrl(stampData, document.getElementById('brandingStampDate').value, signatureData || '');
+  };
+  document.getElementById('brandingStampDate').addEventListener('change', function() {
+    previewStamp(schoolInfo.schoolStamp || '', schoolInfo.stampSignature || '');
+  });
+  document.getElementById('brandingSchoolStampFile').addEventListener('change', function() {
+    var file = this.files && this.files[0]; if (!file) return;
+    if (!/^image\/(png|jpeg|webp)$/i.test(file.type || '') || file.size > 5 * 1024 * 1024) { showToast('Choose a PNG, JPG or WEBP stamp image up to 5 MB.', 'error'); this.value = ''; return; }
+    var reader = new FileReader(); reader.onload = function(event) { previewStamp(event.target.result, schoolInfo.stampSignature || ''); }; reader.readAsDataURL(file);
+  });
+  document.getElementById('brandingStampSignatureFile').addEventListener('change', function() {
+    var file = this.files && this.files[0]; if (!file) return;
+    if (!/^image\/(png|jpeg|webp)$/i.test(file.type || '') || file.size > 5 * 1024 * 1024) { showToast('Choose a PNG, JPG or WEBP signature up to 5 MB.', 'error'); this.value = ''; return; }
+    var reader = new FileReader(); reader.onload = function(event) { previewStamp(schoolInfo.schoolStamp || '', event.target.result); }; reader.readAsDataURL(file);
+  });
+  document.getElementById('saveSchoolStampBtn').addEventListener('click', async function() {
+    var dateValue = document.getElementById('brandingStampDate').value || getTodayDateInputValue();
+    var stampFile = document.getElementById('brandingSchoolStampFile').files[0];
+    var signatureFile = document.getElementById('brandingStampSignatureFile').files[0];
+    try {
+      if (stampFile) await uploadSchoolBrandingAsset('school-stamp', stampFile);
+      if (signatureFile) await uploadSchoolBrandingAsset('stamp-signature', signatureFile);
+      var dateUpdate = await supabaseClient.from('schools').update({ stamp_date: dateValue }).eq('id', authenticatedProfile.school_id).select('id').maybeSingle();
+      if (dateUpdate.error) throw dateUpdate.error;
+      if (!dateUpdate.data) throw new Error('Stamp date was not saved. Confirm administrator access.');
+      schoolInfo.stampDate = dateValue;
+      selectedResultDate = dateValue;
+      await loadSchoolBrandingAssets();
+      showToast('School stamp settings saved.', 'success');
+      stampModal.classList.add('hidden');
+      renderSchool();
+    } catch (error) { console.error('School stamp settings save failed:', error); showToast(error.message || 'Could not save stamp settings.', 'error'); }
+  });
 
   var saveBtn = document.getElementById('saveSchoolBtn');
   if (saveBtn) saveBtn.addEventListener('click', async function() {
@@ -8617,23 +8685,16 @@ function renderSchool() {
       phone: document.getElementById('schoolPhone').value.trim(),
       address: document.getElementById('schoolAddress').value.trim()
     };
-    var stampDate = document.getElementById('brandingStampDate').value || null;
     if (!patch.name) { showToast('School name is required.', 'error'); return; }
     saveBtn.disabled = true; saveBtn.textContent = 'Saving...';
     try {
-      if (!supabasePersistence || typeof supabasePersistence.updateSchoolProfile !== 'function') {
-        throw new Error('Supabase school profile update is unavailable. Refresh and sign in again.');
-      }
+      if (!supabasePersistence || typeof supabasePersistence.updateSchoolProfile !== 'function') throw new Error('Supabase school profile update is unavailable. Refresh and sign in again.');
       var savedProfile = await supabasePersistence.updateSchoolProfile(patch);
-      var dateUpdate = await supabaseClient.from('schools').update({ stamp_date: stampDate })
-        .eq('id', authenticatedProfile.school_id).select('id').maybeSingle();
-      if (dateUpdate.error) throw dateUpdate.error;
       schoolInfo.name = savedProfile.name || '';
       schoolInfo.email = savedProfile.email || '';
       schoolInfo.phone = savedProfile.phone || '';
       schoolInfo.address = savedProfile.address || '';
       schoolInfo.motto = savedProfile.motto || '';
-      schoolInfo.stampDate = stampDate || '';
       currentSchool.schoolName = savedProfile.name || '';
       currentSchool.name = savedProfile.name || '';
       currentSchool.email = savedProfile.email || '';
@@ -8643,12 +8704,12 @@ function renderSchool() {
       var headerLocation = document.getElementById('schoolLocation');
       if (headerLocation) headerLocation.textContent = currentSchool.schoolName + ' - ' + currentSchool.location;
       if (status) status.textContent = 'Saved to Supabase.';
-      showToast('School information and stamp date saved.', 'success');
+      showToast('School information saved.', 'success');
     } catch (error) {
       console.error('School profile save failed:', error);
       if (status) status.textContent = 'Save failed. Your changes were not confirmed.';
       showToast(error && error.message ? error.message : 'Could not save school information.', 'error');
-    } finally { saveBtn.disabled = false; saveBtn.textContent = 'Save School Information and Stamp Date'; }
+    } finally { saveBtn.disabled = false; saveBtn.textContent = 'Save School Information'; }
   });
 
   [
@@ -8674,7 +8735,6 @@ function renderSchool() {
     });
   });
 }
-
 function renderAdminProfile() {
   if (!currentUser || currentUser.type !== 'admin') return;
   var html = '<div class="card"><h2>Administrator Profile &amp; Security</h2>' +
