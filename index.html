@@ -7349,6 +7349,115 @@ function renderManagement() {
   }
 }
 
+
+async function runTemporarySupabaseResultPreviewTest() {
+  var output = document.getElementById('temporarySupabaseResultPreview');
+  if (!output || !supabaseClient) {
+    if (output) output.innerHTML = '<div class="alert alert-error">Supabase connection is unavailable.</div>';
+    return;
+  }
+  output.innerHTML = '<div class="alert alert-info">Retrieving the sample student, enrolment, registered subjects and result records from Supabase. Read-only test; no data will be changed.</div>';
+  try {
+    var studentId = 'd88d434d-9cb6-4439-a4fd-f99200ae4551';
+    var sessionId = 'a75e1716-180c-495a-b986-32ad282500ee';
+    var termId = 'ba8d6b07-7b21-43a8-8e53-f18840601066';
+    var studentResult = await supabaseClient.from('students')
+      .select('id,admission_number,first_name,last_name,status')
+      .eq('id', studentId).single();
+    if (studentResult.error) throw studentResult.error;
+    var enrolmentResult = await supabaseClient.from('student_enrolments')
+      .select('id,class_id,academic_session_id,register_number,sid')
+      .eq('student_id', studentId)
+      .eq('academic_session_id', sessionId).single();
+    if (enrolmentResult.error) throw enrolmentResult.error;
+    var enrolment = enrolmentResult.data;
+    var classResult = await supabaseClient.from('classes')
+      .select('class_name,level,arm').eq('id', enrolment.class_id).single();
+    if (classResult.error) throw classResult.error;
+    var sessionResult = await supabaseClient.from('academic_sessions')
+      .select('name,is_current').eq('id', enrolment.academic_session_id).single();
+    if (sessionResult.error) throw sessionResult.error;
+    var termResult = await supabaseClient.from('terms')
+      .select('name,term_number,is_current').eq('id', termId).single();
+    if (termResult.error) throw termResult.error;
+    var registrationResult = await supabaseClient.from('class_subject_registrations')
+      .select('id')
+      .eq('class_id', enrolment.class_id)
+      .eq('academic_session_id', enrolment.academic_session_id)
+      .eq('term_id', termId);
+    if (registrationResult.error) throw registrationResult.error;
+    var registrations = registrationResult.data || [];
+    var subjectIds = [];
+    for (var ri = 0; ri < registrations.length; ri++) {
+      var itemResult = await supabaseClient.from('class_subject_registration_items')
+        .select('subject_id').eq('registration_id', registrations[ri].id);
+      if (itemResult.error) throw itemResult.error;
+      (itemResult.data || []).forEach(function(item) {
+        if (subjectIds.indexOf(item.subject_id) === -1) subjectIds.push(item.subject_id);
+      });
+    }
+    var subjects = [];
+    if (subjectIds.length) {
+      var subjectsResult = await supabaseClient.from('subjects')
+        .select('id,name,code,section,is_active').in('id', subjectIds).order('name');
+      if (subjectsResult.error) throw subjectsResult.error;
+      subjects = subjectsResult.data || [];
+    }
+    var resultsResult = await supabaseClient.from('results')
+      .select('subject_id,ca1,ca2,ca3,examination,total,grade,remark,status')
+      .eq('student_id', studentId)
+      .eq('academic_session_id', sessionId)
+      .eq('term_id', termId);
+    if (resultsResult.error) throw resultsResult.error;
+    var scoreBySubject = {};
+    (resultsResult.data || []).forEach(function(row) { scoreBySubject[row.subject_id] = row; });
+    var configResult = await supabaseClient.from('assessment_configurations')
+      .select('ca1_max,ca2_max,ca3_max,examination_max,total_max')
+      .eq('academic_session_id', sessionId)
+      .eq('term_id', termId)
+      .eq('class_level', 'BASIC 7')
+      .eq('is_active', true).maybeSingle();
+    if (configResult.error) throw configResult.error;
+    var config = configResult.data;
+    var cls = classResult.data;
+    var session = sessionResult.data;
+    var term = termResult.data;
+    var student = studentResult.data;
+    var esc = escapeManagementText;
+    var html = '<div class="card" style="border:2px solid #667eea;">' +
+      '<div style="display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;align-items:center;">' +
+      '<div><h2>Temporary Supabase Result Preview Test</h2><p style="color:#666;margin-top:5px;">Live read-only sample from Supabase</p></div>' +
+      '<button type="button" class="btn" id="closeTemporarySupabasePreviewBtn" style="background:#eee;">Close preview</button></div>' +
+      '<div class="grid grid-2" style="margin:16px 0;">' +
+      '<div><strong>Student:</strong> ' + esc(student.first_name + ' ' + student.last_name) + '<br><strong>Admission No:</strong> ' + esc(student.admission_number) + '<br><strong>Register No:</strong> ' + esc(enrolment.register_number) + '</div>' +
+      '<div><strong>Class:</strong> ' + esc(cls.class_name || (cls.level + cls.arm)) + '<br><strong>Session:</strong> ' + esc(session.name) + '<br><strong>Term:</strong> ' + esc(term.name) + '</div></div>' +
+      '<div class="alert alert-info">Assessment: CA1 ' + (config ? config.ca1_max : 'Not configured') + ' | CA2 ' + (config ? config.ca2_max : 'Not configured') + ' | CA3 ' + (config ? config.ca3_max : 'Not configured') + ' | Exam ' + (config ? config.examination_max : 'Not configured') + ' | Total ' + (config ? config.total_max : 'Not configured') + '</div>' +
+      '<div style="overflow-x:auto;"><table><thead><tr><th>Subject</th><th>CA1</th><th>CA2</th><th>CA3</th><th>Exam</th><th>Total</th><th>Signature</th></tr></thead><tbody>';
+    subjects.forEach(function(subject) {
+      var score = scoreBySubject[subject.id] || {};
+      var signature = teacherSignatures && teacherSignatures[subject.name]
+        ? '<img src="' + esc(teacherSignatures[subject.name]) + '" alt="Teacher signature" style="max-width:75px;max-height:34px;object-fit:contain;">'
+        : '<span style="color:#999;">Not available</span>';
+      html += '<tr><td>' + esc(subject.name) + '</td><td>' + (score.ca1 == null ? '—' : esc(score.ca1)) +
+        '</td><td>' + (score.ca2 == null ? '—' : esc(score.ca2)) +
+        '</td><td>' + (score.ca3 == null ? '—' : esc(score.ca3)) +
+        '</td><td>' + (score.examination == null ? '—' : esc(score.examination)) +
+        '</td><td>' + (score.total == null ? '—' : esc(score.total)) +
+        '</td><td>' + signature + '</td></tr>';
+    });
+    html += '</tbody></table></div><p style="margin-top:12px;color:#666;font-size:12px;">' +
+      subjects.length + ' registered subjects retrieved; ' + (resultsResult.data || []).length +
+      ' result rows found. No records were inserted, updated or deleted.</p></div>';
+    output.innerHTML = html;
+    var closeButton = document.getElementById('closeTemporarySupabasePreviewBtn');
+    if (closeButton) closeButton.addEventListener('click', function() { output.innerHTML = ''; });
+  } catch (error) {
+    output.innerHTML = '<div class="alert alert-error"><strong>Preview test failed:</strong> ' +
+      escapeManagementText(error && error.message ? error.message : 'Unable to retrieve sample data.') +
+      '</div>';
+  }
+}
+
 // ===================== DASHBOARD + CLASS ACTIVATION =====================
 function renderDashboard() {
   var assigned = classArms.filter(function(a) { return a.formMaster; }).length;
@@ -7356,6 +7465,9 @@ function renderDashboard() {
   var activatedAssignments = subjectAssignments.filter(function(a) { return a.activated; });
 
   var html = '<div class="card" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 30px;"><h2 style="margin-bottom: 10px;">Welcome, ' + currentUser.name + '!</h2><p style="opacity: 0.9;">' + currentSchool.schoolName + '</p><p style="opacity: 0.9;">Location: <strong>' + currentSchool.location + '</strong></p></div>';
+  if (currentUser && currentUser.type === 'admin') {
+    html += '<div class="card" style="margin-top:16px;border:1px dashed #667eea;background:#f8f9ff;"><h3>Temporary Result Sheet Test</h3><p style="color:#555;margin:8px 0 12px;">Read a real BASIC7A student sample and registered subjects directly from Supabase. This test does not enter or change scores.</p><button type="button" class="btn btn-primary" id="temporarySupabaseResultPreviewBtn">Run Temporary Result Preview Test</button><div id="temporarySupabaseResultPreview" style="margin-top:14px;"></div></div>';
+  }
   html += '<div class="grid grid-2"><div class="card"><div style="font-size: 28px; font-weight: bold; color: #667eea;">30</div><div style="color: #666; margin-top: 5px; font-size: 14px;">Class Arms</div></div>';
   html += '<div class="card"><div style="font-size: 28px; font-weight: bold; color: #667eea;">' + formMasters.length + '</div><div style="color: #666; margin-top: 5px; font-size: 14px;">Form Masters</div></div>';
   html += '<div class="card"><div style="font-size: 28px; font-weight: bold; color: #667eea;">' + students.length + '</div><div style="color: #666; margin-top: 5px; font-size: 14px;">Student Result Records (All Sessions)</div></div>';
@@ -7388,6 +7500,19 @@ function renderDashboard() {
   }
 
   document.getElementById('dashboardTab').innerHTML = html;
+  var temporaryPreviewButton = document.getElementById('temporarySupabaseResultPreviewBtn');
+  if (temporaryPreviewButton) {
+    temporaryPreviewButton.addEventListener('click', async function() {
+      temporaryPreviewButton.disabled = true;
+      temporaryPreviewButton.textContent = 'Retrieving Supabase sample...';
+      try {
+        await runTemporarySupabaseResultPreviewTest();
+      } finally {
+        temporaryPreviewButton.disabled = false;
+        temporaryPreviewButton.textContent = 'Run Temporary Result Preview Test';
+      }
+    });
+  }
   var staffAcademicAuditButton = document.getElementById('runStaffAcademicAuditBtn');
   if (staffAcademicAuditButton) {
     staffAcademicAuditButton.addEventListener('click', async function() {
