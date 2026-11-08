@@ -8155,17 +8155,76 @@ async function renderFormMasterManagement(panel) {
   }
 }
 
-function renderMasters() {
+async function renderMasters() {
+  if (!currentUser || currentUser.type !== 'admin' || !authenticatedProfile ||
+      authenticatedProfile.role !== 'administrator' || authenticatedProfile.is_active !== true) {
+    document.getElementById('mastersTab').innerHTML = '<div class="card"><p class="alert alert-error">Only an active School Administrator can manage staff assignments.</p></div>';
+    return;
+  }
+  if (!supabaseClient || !authenticatedProfile.school_id || !activeAcademicSession || !activeAcademicSession.id) {
+    document.getElementById('mastersTab').innerHTML = '<div class="card"><p class="alert alert-error">An authenticated administrator and active academic session are required.</p></div>';
+    return;
+  }
+
+  // The assignment screen is populated from the current school's live Supabase rows.
+  // Browser snapshots are no longer used as the source of assignment status.
+  try {
+    var liveAssignmentsResult = await supabaseClient.from('teacher_assignments')
+      .select('id,school_id,teacher_id,class_id,subject_id,academic_session_id,is_active')
+      .eq('school_id', authenticatedProfile.school_id)
+      .eq('academic_session_id', activeAcademicSession.id)
+      .order('created_at', { ascending: false });
+    if (liveAssignmentsResult.error) throw liveAssignmentsResult.error;
+    var liveRows = liveAssignmentsResult.data || [];
+    var classIds = Array.from(new Set(liveRows.map(function(row) { return row.class_id; }).filter(Boolean)));
+    var subjectIds = Array.from(new Set(liveRows.map(function(row) { return row.subject_id; }).filter(Boolean)));
+    var teacherIds = Array.from(new Set(liveRows.map(function(row) { return row.teacher_id; }).filter(Boolean)));
+    var related = await Promise.all([
+      classIds.length ? supabaseClient.from('classes').select('id,class_name').eq('school_id', authenticatedProfile.school_id).in('id', classIds) : Promise.resolve({ data: [], error: null }),
+      subjectIds.length ? supabaseClient.from('subjects').select('id,name').eq('school_id', authenticatedProfile.school_id).in('id', subjectIds) : Promise.resolve({ data: [], error: null }),
+      teacherIds.length ? supabaseClient.from('profiles').select('id,full_name,email,is_active').eq('school_id', authenticatedProfile.school_id).in('id', teacherIds) : Promise.resolve({ data: [], error: null })
+    ]);
+    related.forEach(function(result) { if (result.error) throw result.error; });
+    var classesById = {};
+    var subjectsById = {};
+    var teachersById = {};
+    (related[0].data || []).forEach(function(row) { classesById[String(row.id)] = row; });
+    (related[1].data || []).forEach(function(row) { subjectsById[String(row.id)] = row; });
+    (related[2].data || []).forEach(function(row) { teachersById[String(row.id)] = row; });
+    subjectAssignments = liveRows.map(function(row) {
+      var classRecord = classesById[String(row.class_id)] || {};
+      var subjectRecord = subjectsById[String(row.subject_id)] || {};
+      var teacherRecord = teachersById[String(row.teacher_id)] || {};
+      return {
+        id: row.id,
+        teacherId: row.teacher_id,
+        classId: row.class_id,
+        className: classRecord.class_name || 'Class unavailable',
+        subjectId: row.subject_id,
+        subject: subjectRecord.name || 'Subject unavailable',
+        teacherName: teacherRecord.full_name || 'Staff profile unavailable',
+        teacherEmail: teacherRecord.email || '',
+        teacherIsActive: teacherRecord.is_active === true,
+        activated: row.is_active === true,
+        academicSessionId: row.academic_session_id
+      };
+    });
+  } catch (assignmentLoadError) {
+    console.error('Could not load Subject Teacher assignments from Supabase:', assignmentLoadError);
+    document.getElementById('mastersTab').innerHTML = '<div class="card"><p class="alert alert-error">Subject Teacher assignments could not be loaded from Supabase: ' + escapeManagementText(assignmentLoadError.message || 'Unknown database error') + '</p><button type="button" class="btn btn-primary" id="retryMastersLoad">Retry</button></div>';
+    var retryMastersLoad = document.getElementById('retryMastersLoad');
+    if (retryMastersLoad) retryMastersLoad.addEventListener('click', renderMasters);
+    return;
+  }
   var html = '<div class="masters-category-picker" role="group" aria-label="Teacher assignment categories"><button type="button" class="masters-category-button' + (activeMastersCategory === 'formMasters' ? ' selected' : '') + '" data-masters-category="formMasters" aria-pressed="' + (activeMastersCategory === 'formMasters') + '">Form Masters</button><button type="button" class="masters-category-button' + (activeMastersCategory === 'subjectTeachers' ? ' selected' : '') + '" data-masters-category="subjectTeachers" aria-pressed="' + (activeMastersCategory === 'subjectTeachers') + '">Subject Teachers</button></div><div id="mastersFormSection"' + (activeMastersCategory === 'formMasters' ? '' : ' style="display:none"') + '><div class="card"><div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;"><h2 style="margin: 0;">Form Masters</h2>';
   html += '</div><p style="color:#666; font-size:13px; margin-bottom:15px;">Manage individual Supabase Form Master accounts and their class assignments. Temporary passwords are generated only by the server and shown once.</p><div id="formMasterManagementPanel"><p class="alert alert-info">Loading Form Master assignments…</p></div></div></div><div id="mastersSubjectSection"' + (activeMastersCategory === 'subjectTeachers' ? '' : ' style="display:none"') + '>';
 
   html += '<div class="card"><div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;"><h2 style="margin: 0;">Subject Teachers</h2>';
-  if (subjectAssignments.length > 0) html += '<button class="btn btn-danger" onclick="clearAllAssignments()">Clear All Subject Teachers</button>';
   html += '</div><p style="color:#666; font-size:13px; margin-bottom:15px;">Assign a teacher to a specific class arm and subject. Activate a slot to let that teacher log in and enter scores for only that subject.</p>';
   html += '<div style="background: #f9f9f9; padding: 15px; border-radius: 8px; margin-bottom: 20px;"><h3 style="margin: 0 0 15px 0; font-size: 16px;">Add Subject Teacher</h3>' +
     '<div class="input-group"><label>Subject Teacher Account Type</label><div class="subject-teacher-account-options"><label class="subject-teacher-account-option"><input type="radio" name="subjectTeacherAccountType" value="existing" checked> Existing Staff Member</label><label class="subject-teacher-account-option"><input type="radio" name="subjectTeacherAccountType" value="new"> New Staff Member</label></div></div>' +
     '<div id="existingStaffFields"><div class="input-group"><label for="existingStaffSearch">Search existing staff</label><input type="search" id="existingStaffSearch" placeholder="Search staff name, username or email..."></div><div class="input-group"><label for="existingStaffProfile">Select Existing Staff Member</label><select id="existingStaffProfile"><option value="">Loading active staff...</option></select></div><div id="existingStaffDetails" class="alert alert-info">Select a staff member to view their account and responsibilities.</div><div id="existingStaffLoadError" class="hidden alert alert-error"></div></div>' +
-    '<div class="grid grid-3"><div class="input-group"><label for="newStArm">Class</label><select id="newStArm">' + classArms.map(function(a) { return '<option value="' + escapeManagementText(a.name) + '">' + escapeManagementText(a.name) + '</option>'; }).join('') + '</select></div>' +
+    '<div class="grid grid-3"><div class="input-group"><label for="newStArm">Class</label><select id="newStArm"><option value="">Loading classes from Supabase…</option></select></div>' +
     '<div class="input-group" style="grid-column:1/-1;margin-bottom:0"><label for="newStSubjectSearch">Search Subject</label><input type="search" id="newStSubjectSearch" placeholder="Type subject name..." autocomplete="off" style="width:100%;padding:8px;border:1px solid #ddd;border-radius:4px;font-size:13px"></div>' +
     '<div class="input-group"><label for="newStSubject">Subject</label><select id="newStSubject"><option value="">Select an active subject</option></select></div></div>' +
     '<div id="newSubjectTeacherFields" class="grid grid-3 hidden"><div class="input-group"><label for="newStName">Full Name</label><input type="text" id="newStName" placeholder="Teacher full name"></div>' +
@@ -8177,11 +8236,11 @@ function renderMasters() {
     '<button class="btn btn-success" id="addStBtn" style="margin-top: 10px;">Assign Subject Teacher</button></div>';
 
   if (subjectAssignments.length === 0) {
-    html += '<p style="color:#999; padding: 10px 0;">No subject teachers added yet</p>';
+    html += '<p class="alert alert-info">No Subject Teacher assignments are recorded in Supabase for this academic session.</p>';
   } else {
-    html += '<div style="overflow-x:auto;"><table><thead><tr><th>Class</th><th>Subject</th><th>Teacher</th><th>Email</th><th>Status</th><th>Action</th></tr></thead><tbody>';
+    html += '<div style="overflow-x:auto;"><table><thead><tr><th>Class</th><th>Subject</th><th>Teacher</th><th>Email</th><th>Account</th><th>Assignment</th><th>Action</th></tr></thead><tbody>';
     subjectAssignments.forEach(function(a) {
-      html += '<tr><td>' + a.className + '</td><td>' + a.subject + '</td><td>' + a.teacherName + '</td><td>' + a.teacherEmail + '</td><td>' + (a.activated ? '<span style="color:#4CAF50;">✓ Active</span>' : '<span style="color:#999;">○ Inactive</span>') + '</td><td style="white-space:nowrap;"><button class="btn ' + (a.activated ? 'btn-danger' : 'btn-success') + '" onclick="toggleAssignmentActivation(' + a.id + ')" style="padding: 4px 10px; font-size: 11px; margin-right:5px;">' + (a.activated ? 'Deactivate' : 'Activate') + '</button><button class="btn btn-danger" onclick="removeAssignment(' + a.id + ')" style="padding: 4px 10px; font-size: 11px;">Remove</button></td></tr>';
+      html += '<tr><td>' + escapeManagementText(a.className) + '</td><td>' + escapeManagementText(a.subject) + '</td><td>' + escapeManagementText(a.teacherName) + '</td><td>' + escapeManagementText(a.teacherEmail || '—') + '</td><td>' + (a.teacherIsActive ? '<span style="color:#15803d">Active</span>' : '<span style="color:#b45309">Inactive / unavailable</span>') + '</td><td>' + (a.activated ? '<span style="color:#15803d">✓ Active</span>' : '<span style="color:#6b7280">○ Inactive</span>') + '</td><td style="white-space:nowrap;"><button type="button" class="btn ' + (a.activated ? 'btn-danger' : 'btn-success') + ' subject-assignment-toggle" data-id="' + escapeManagementText(a.id) + '" data-next-active="' + (!a.activated) + '" style="padding:4px 10px;font-size:11px;margin-right:5px;">' + (a.activated ? 'Deactivate' : 'Activate') + '</button><button type="button" class="btn btn-danger subject-assignment-remove" data-id="' + escapeManagementText(a.id) + '" style="padding:4px 10px;font-size:11px;">Remove</button></td></tr>';
     });
     html += '</tbody></table></div>';
   }
@@ -8189,6 +8248,54 @@ function renderMasters() {
 
   document.getElementById('mastersTab').innerHTML = html;
   renderFormMasterManagement(document.getElementById('formMasterManagementPanel'));
+
+  document.querySelectorAll('.subject-assignment-toggle').forEach(function(button) {
+    button.addEventListener('click', async function() {
+      var assignmentId = button.getAttribute('data-id');
+      var nextActive = button.getAttribute('data-next-active') === 'true';
+      button.disabled = true;
+      try {
+        var changed = await supabaseClient.functions.invoke('manage-subject-teacher', {
+          body: { action: 'set_active', assignment_id: assignmentId, is_active: nextActive }
+        });
+        if (changed.error || !changed.data || changed.data.success !== true) {
+          throw new Error(changed.data && changed.data.error || changed.error && changed.error.message || 'Supabase did not confirm the assignment status change.');
+        }
+        var current = subjectAssignments.find(function(item) { return String(item.id) === String(assignmentId); });
+        logActivity(nextActive ? 'Activated subject teacher assignment' : 'Deactivated subject teacher assignment',
+          current ? current.className + ' / ' + current.subject : assignmentId);
+        showToast('Subject Teacher assignment ' + (nextActive ? 'activated' : 'deactivated') + ' in Supabase.', 'success');
+        await renderMasters();
+      } catch (error) {
+        showToast('Assignment status was not changed: ' + (error.message || 'Unknown error'), 'error');
+        button.disabled = false;
+      }
+    });
+  });
+
+  document.querySelectorAll('.subject-assignment-remove').forEach(function(button) {
+    button.addEventListener('click', async function() {
+      var assignmentId = button.getAttribute('data-id');
+      var current = subjectAssignments.find(function(item) { return String(item.id) === String(assignmentId); });
+      var description = current ? current.className + ' / ' + current.subject + ' / ' + current.teacherName : 'this assignment';
+      if (!window.confirm('Remove ' + description + '? Only this assignment will be removed. The staff account, other assignments, roles and results will remain.')) return;
+      button.disabled = true;
+      try {
+        var removed = await supabaseClient.functions.invoke('manage-subject-teacher', {
+          body: { action: 'remove_assignment', assignment_id: assignmentId }
+        });
+        if (removed.error || !removed.data || removed.data.success !== true) {
+          throw new Error(removed.data && removed.data.error || removed.error && removed.error.message || 'Supabase did not confirm assignment removal.');
+        }
+        logActivity('Removed subject teacher assignment', description);
+        showToast('Assignment removed. The teacher account and other responsibilities were preserved.', 'success');
+        await renderMasters();
+      } catch (error) {
+        showToast('Assignment was not removed: ' + (error.message || 'Unknown error'), 'error');
+        button.disabled = false;
+      }
+    });
+  });
   document.querySelectorAll('.masters-category-button').forEach(function(button) {
     button.addEventListener('click', function() {
       activeMastersCategory = button.getAttribute('data-masters-category');
@@ -8431,19 +8538,6 @@ function renderMasters() {
         throw new Error(responseMessage || 'The Edge Function did not confirm Subject Teacher creation.');
       }
 
-      subjectAssignments = subjectAssignments.filter(function(item) {
-        var sameTeacher = existingMode
-          ? (String(item.teacherId || '') === String(existingProfile.id) || (email && String(item.teacherEmail || '').trim().toLowerCase() === email.toLowerCase()))
-          : String(item.teacherEmail || '').trim().toLowerCase() === email.toLowerCase();
-        return !(sameTeacher && String(item.className) === String(assignedClass.class_name) && String(item.subject) === String(subject));
-      });
-      subjectAssignments.push({
-        id: Date.now(), teacherId: existingMode ? existingProfile.id : '',
-        classId: assignedClass.id, className: assignedClass.class_name,
-        subjectId: subjectId, subject: subject, teacherName: name,
-        teacherEmail: email, activated: false
-      });
-      await saveAllData();
       logActivity(existingMode ? 'Assigned subject teacher responsibility to existing staff' : 'Added subject teacher assignment', assignedClass.class_name + ' / ' + subject + ' / ' + name);
       if (!existingMode) passwordInput.value = '';
       showToast(existingMode
@@ -8454,7 +8548,7 @@ function renderMasters() {
       showToast(error && error.message ? error.message : 'Could not create or assign the Subject Teacher.', 'error');
     } finally {
       addStBtn.disabled = false;
-      addStBtn.textContent = 'Add Subject Teacher';
+      addStBtn.textContent = 'Assign Subject Teacher';
     }
   });
 }
