@@ -457,3 +457,34 @@ A read-only query found 18 permission catalogue entries, 58 role-to-permission m
 For the DE-GLOBAL school, the current `profiles` role count is one active administrator, 18 active Form Masters, one active portal developer, one active student and one active Subject Teacher. No `sub_administrator` profile currently exists in this school's live profile records. The frontend's per-sub-administrator permission object therefore has no verified, school-scoped individual grant record in the live profile schema inspected so far.
 
 This confirms that a secure migration of individual sub-administrator permissions needs a dedicated, authoritative per-profile grant model (or an equivalent server-verified design), not a client-side permission object and not merely the global `role_permissions` catalogue. The `permissions` table remains one of the previously identified RLS-enabled tables without policies. Do not expose it directly to the browser or grant broad access to resolve this gap. No permissions, roles or profiles were modified in this audit.
+
+
+## 21. Individual Sub Administrator permission foundation deployed — 9 November 2026
+
+### 21.1 Database model
+
+Created two school-scoped tables:
+
+- `profile_permission_grants` stores one grant per school, Sub Administrator profile and permission catalogue entry. It records the granting administrator, grant timestamp, active state and revocation actor/time. A unique constraint prevents duplicate grant rows.
+- `profile_permission_grant_audit` records each grant and revocation. A database trigger writes the audit event in the same transaction as the grant change, so a successful permission mutation cannot commit without its corresponding audit event.
+
+Both tables have RLS enabled. Direct table privileges are revoked from `anon` and `authenticated`; only the trusted server-side `service_role` path has table privileges. No client-facing RLS policy or broad Data API grant was added.
+
+### 21.2 Trusted management endpoint
+
+Deployed `manage-profile-permissions` Edge Function, version 2, with JWT verification enabled. It supports `list`, `grant` and `revoke`. For every request it verifies the JWT caller against the live `profiles` row and requires an active School Administrator. The target must be an active `sub_administrator` profile in the same school. The function derives school and actor identity from the verified caller, not from client-supplied values.
+
+The initial delegation allowlist is limited to operational permissions: `view_results`, `enter_results`, `edit_results`, `submit_results`, `view_reports`, `manage_comments`, `manage_fees`, `manage_students`, `manage_classes` and `manage_subjects`. High-impact permissions such as approving/publishing results, managing users, managing the school and managing sessions are not individually delegable through this endpoint.
+
+### 21.3 Verification and limits
+
+- Both tables were created successfully with RLS enabled.
+- The grant and audit tables have no `anon` or `authenticated` table privileges.
+- The audit trigger is installed; grant/revoke audit writes are transactionally coupled to the row change.
+- The Edge Function is ACTIVE at version 2 and JWT verification is enabled.
+- No active Sub Administrator profile currently exists for this school. Therefore, no grant was issued and no positive authenticated role-session test could yet be run. The endpoint is deployed, but the frontend permission-management screen and end-to-end Sub Administrator result authorisation are not yet integrated.
+- Existing roles, profiles, result rows and legacy browser permission values were not modified or imported.
+
+### 21.4 Next gate
+
+Create or verify an authorised Sub Administrator account through the existing administrator provisioning workflow, then integrate the administrator UI with this Edge Function. Next, implement a server-side permission check in every Sub Administrator result mutation/read route; do not rely on the legacy `currentUser.permissions` object. Only after that should the separate progressive result-release-stage table and administrator result writer be implemented. Browser result storage remains preserved for rollback.
