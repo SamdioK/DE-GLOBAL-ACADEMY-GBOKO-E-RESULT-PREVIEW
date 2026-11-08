@@ -1415,7 +1415,7 @@ async function loadTeacherSignaturesFromSupabase() {
   for (var i = 0; i < (result.data || []).length; i++) {
     var row = result.data[i];
     var signed = await supabaseClient.storage.from('school-private-assets')
-      .createSignedUrl(row.storage_path, 3600);
+      .createSignedUrl(row.storage_path, 604800);
     if (signed.error) throw signed.error;
     if (signed.data && signed.data.signedUrl) resolved[row.subject_name] = signed.data.signedUrl;
   }
@@ -9933,6 +9933,10 @@ function generatePrincipalComment(student) {
 // ===================== PDF GENERATION =====================
 async function generatePDF(list, filenameBase, shareOptions) {
   if (!list || list.length === 0) { showToast('No students found to print', 'error'); return; }
+  // Refresh private signature links immediately before rendering PDFs so long-lived
+  // sessions do not embed expired signed URLs in the generated result sheets.
+  try { await loadTeacherSignaturesFromSupabase(); }
+  catch (signatureError) { console.warn('Could not refresh private teacher signatures before PDF generation.', signatureError); }
   if (typeof html2canvas === 'undefined' || typeof window.jspdf === 'undefined') {
     showToast('PDF library not loaded. Check your connection.', 'error');
     return;
