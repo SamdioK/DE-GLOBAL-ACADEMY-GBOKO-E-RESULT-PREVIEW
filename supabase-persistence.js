@@ -458,7 +458,62 @@
       return data;
     }
 
-    return Object.freeze({ select, insert, update, upsert, remove, getSchoolProfile, updateSchoolProfile, getClasses, auditSchoolAndClasses, auditClassConfigurationReconciliation, auditSchoolDataCounts, auditStudentEnrolmentIntegrity, auditAssignmentIntegrity, auditStaffAndAcademicConfiguration, getStaffDirectory, createStaffDirectoryRecord, updateStaffDirectoryRecord });
+
+    async function appendActivityAudit(entry) {
+      const user = await requireAuthenticatedUser();
+      const profile = await getActiveSchoolProfile(user);
+      const sourceEventId = String(entry && entry.sourceEventId || '').trim();
+      const action = String(entry && entry.action || '').trim();
+      const affectedRecord = entry && entry.affectedRecord != null ? String(entry.affectedRecord).trim() : null;
+      const occurredAt = entry && entry.occurredAt ? new Date(entry.occurredAt) : new Date();
+      const details = entry && entry.details && typeof entry.details === 'object' && !Array.isArray(entry.details)
+        ? entry.details : {};
+      if (!sourceEventId || sourceEventId.length > 160) throw new Error('A valid audit event identifier is required.');
+      if (action.length < 2 || action.length > 160) throw new Error('Audit action must contain between 2 and 160 characters.');
+      if (affectedRecord && affectedRecord.length > 255) throw new Error('Audit affected-record text is too long.');
+      if (Number.isNaN(occurredAt.getTime())) throw new Error('Invalid audit event timestamp.');
+      if (JSON.stringify(details).length > 10000) throw new Error('Audit event details are too large.');
+      const payload = {
+        school_id: profile.school_id,
+        actor_profile_id: user.id,
+        source_event_id: sourceEventId,
+        action: action,
+        affected_record: affectedRecord || null,
+        occurred_at: occurredAt.toISOString(),
+        details: details
+      };
+      const { data, error } = await client.from('school_activity_audit')
+        .insert(payload)
+        .select('id,school_id,actor_profile_id,source_event_id,action,affected_record,occurred_at,details')
+        .maybeSingle();
+      if (!error && data) return data;
+      if (error && error.code === '23505') {
+        const existing = await client.from('school_activity_audit')
+          .select('id,school_id,actor_profile_id,source_event_id,action,affected_record,occurred_at,details')
+          .eq('school_id', profile.school_id)
+          .eq('source_event_id', sourceEventId)
+          .maybeSingle();
+        if (existing.error) throw existing.error;
+        if (existing.data) return existing.data;
+      }
+      if (error) throw error;
+      throw new Error('The audit event was not confirmed by Supabase.');
+    }
+
+    async function getActivityAudit(limit) {
+      const user = await requireAuthenticatedUser();
+      const profile = await getActiveSchoolProfile(user);
+      const safeLimit = Number.isInteger(limit) ? Math.max(1, Math.min(limit, 500)) : 100;
+      const { data, error } = await client.from('school_activity_audit')
+        .select('id,actor_profile_id,source_event_id,action,affected_record,occurred_at,details')
+        .eq('school_id', profile.school_id)
+        .order('occurred_at', { ascending: false })
+        .limit(safeLimit);
+      if (error) throw error;
+      return data || [];
+    }
+
+    return Object.freeze({ select, insert, update, upsert, remove, getSchoolProfile, updateSchoolProfile, getClasses, auditSchoolAndClasses, auditClassConfigurationReconciliation, auditSchoolDataCounts, auditStudentEnrolmentIntegrity, auditAssignmentIntegrity, auditStaffAndAcademicConfiguration, getStaffDirectory, createStaffDirectoryRecord, updateStaffDirectoryRecord, appendActivityAudit, getActivityAudit });
   }
   global.SupabasePersistence = Object.freeze({ create });
 })(window);
