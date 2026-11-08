@@ -1483,6 +1483,7 @@ async function loadSchoolData() {
   currentSchool.email = authoritativeSchoolProfile.email || '';
   currentSchool.phone = authoritativeSchoolProfile.phone || '';
   currentSchool.logo = authoritativeSchoolProfile.logo_url || currentSchool.logo || schoolInfo.logo || '';
+  await loadSchoolBrandingAssets();
 
   var migrated = migrateOldClassNames() || removedLegacyFormMasterPasswords || removedLegacySubjectAssignmentPasswords;
   if (syncStaffDatabaseFromExistingRecords()) migrated = true;
@@ -8483,6 +8484,72 @@ window.clearAllAssignments = async function() {
 };
 
 // ===================== SCHOOL INFO =====================
+
+async function loadSchoolBrandingAssets() {
+  if (!supabaseClient || !authenticatedProfile || !authenticatedProfile.school_id) return;
+  var schoolId = authenticatedProfile.school_id;
+  var result = await supabaseClient.from('schools')
+    .select('logo_url, principal_signature_path, school_stamp_path, stamp_signature_path, stamp_date')
+    .eq('id', schoolId).maybeSingle();
+  if (result.error) throw result.error;
+  if (!result.data) return;
+  var row = result.data;
+  schoolInfo.stampDate = row.stamp_date || schoolInfo.stampDate || '';
+  if (row.logo_url) {
+    if (/^https?:\/\//i.test(row.logo_url)) schoolInfo.logo = row.logo_url;
+    else schoolInfo.logo = supabaseClient.storage.from('school-public-assets').getPublicUrl(row.logo_url).data.publicUrl;
+  }
+  async function signedPath(path) {
+    if (!path) return '';
+    var signed = await supabaseClient.storage.from('school-private-assets').createSignedUrl(path, 3600);
+    if (signed.error) throw signed.error;
+    return signed.data.signedUrl;
+  }
+  schoolInfo.principalSignature = await signedPath(row.principal_signature_path);
+  schoolInfo.schoolStamp = await signedPath(row.school_stamp_path);
+  schoolInfo.stampSignature = await signedPath(row.stamp_signature_path);
+  schoolInfo._brandingPaths = {
+    logo: row.logo_url || '',
+    principalSignature: row.principal_signature_path || '',
+    schoolStamp: row.school_stamp_path || '',
+    stampSignature: row.stamp_signature_path || ''
+  };
+}
+
+async function uploadSchoolBrandingAsset(kind, file) {
+  if (!supabaseClient || !authenticatedProfile || !authenticatedProfile.school_id) {
+    throw new Error('Please sign in again before uploading school branding assets.');
+  }
+  if (!file) return;
+  if (!/^image\/(png|jpeg|webp)$/i.test(file.type || '')) {
+    throw new Error('Use a PNG, JPG or WEBP image.');
+  }
+  if (file.size > 5 * 1024 * 1024) throw new Error('Each image must be 5 MB or smaller.');
+  var schoolId = authenticatedProfile.school_id;
+  var extension = file.type === 'image/jpeg' ? 'jpg' : file.type === 'image/webp' ? 'webp' : 'png';
+  var path = schoolId + '/branding/' + kind + '-' + Date.now() + '-' + Math.random().toString(36).slice(2, 8) + '.' + extension;
+  var isLogo = kind === 'logo';
+  var bucket = isLogo ? 'school-public-assets' : 'school-private-assets';
+  var uploaded = await supabaseClient.storage.from(bucket).upload(path, file, {
+    contentType: file.type, cacheControl: '3600', upsert: false
+  });
+  if (uploaded.error) throw uploaded.error;
+  var column = kind === 'logo' ? 'logo_url' :
+    kind === 'principal-signature' ? 'principal_signature_path' :
+    kind === 'school-stamp' ? 'school_stamp_path' : 'stamp_signature_path';
+  var storedValue = path;
+  if (isLogo) storedValue = supabaseClient.storage.from(bucket).getPublicUrl(path).data.publicUrl;
+  var updated = await supabaseClient.from('schools').update({ [column]: storedValue })
+    .eq('id', schoolId).select('id').maybeSingle();
+  if (updated.error) {
+    await supabaseClient.storage.from(bucket).remove([path]);
+    throw updated.error;
+  }
+  if (!updated.data) throw new Error('The asset uploaded, but the school record was not updated. Check administrator permissions.');
+  await loadSchoolBrandingAssets();
+  return path;
+}
+
 function renderSchool() {
   var escapeValue = function(value) {
     return String(value == null ? '' : value).replace(/[&<>"']/g, function(char) {
@@ -8491,9 +8558,13 @@ function renderSchool() {
   };
   var sessionName = activeAcademicSession && activeAcademicSession.name
     ? activeAcademicSession.name : (schoolInfo.session || '');
+  var logoPreview = schoolInfo.logo ? '<img src="' + escapeValue(schoolInfo.logo) + '" alt="School logo" style="max-width:110px;max-height:90px;object-fit:contain;">' : '<span style="color:#888">No logo uploaded</span>';
+  var principalPreview = schoolInfo.principalSignature ? '<img src="' + escapeValue(schoolInfo.principalSignature) + '" alt="Principal signature" style="max-width:180px;max-height:65px;object-fit:contain;">' : '<span style="color:#888">No principal signature uploaded</span>';
+  var stampPreview = schoolInfo.schoolStamp ? '<img src="' + escapeValue(schoolInfo.schoolStamp) + '" alt="Official school stamp" style="max-width:180px;max-height:120px;object-fit:contain;">' : '<span style="color:#888">No official stamp uploaded</span>';
+  var stampSigPreview = schoolInfo.stampSignature ? '<img src="' + escapeValue(schoolInfo.stampSignature) + '" alt="Small stamp signature" style="max-width:180px;max-height:65px;object-fit:contain;">' : '<span style="color:#888">No small stamp signature uploaded</span>';
   document.getElementById('schoolTab').innerHTML =
     '<div class="card"><h2>School Information</h2>' +
-    '<p style="color:#666;font-size:13px;margin:8px 0 16px">School identity details are securely stored in the school database record.</p>' +
+    '<p style="color:#666;font-size:13px;margin:8px 0 16px">School identity and result-sheet branding are securely stored in Supabase. Private signatures and stamp artwork are served using authenticated, time-limited links.</p>' +
     '<div class="grid grid-2" style="margin:20px 0">' +
       '<div class="input-group"><label for="schoolName">School Name</label><input type="text" id="schoolName" maxlength="255" value="' + escapeValue(schoolInfo.name) + '" required></div>' +
       '<div class="input-group"><label for="schoolEmail">Email</label><input type="email" id="schoolEmail" maxlength="255" value="' + escapeValue(schoolInfo.email) + '"></div>' +
@@ -8502,9 +8573,17 @@ function renderSchool() {
       '<div class="input-group"><label for="schoolPrincipal">Principal Name</label><input type="text" id="schoolPrincipal" value="' + escapeValue(schoolInfo.principalName) + '" readonly aria-describedby="schoolPrincipalNote"></div>' +
       '<div class="input-group"><label for="schoolSession">Current Academic Session</label><input type="text" id="schoolSession" value="' + escapeValue(sessionName) + '" readonly></div>' +
     '</div>' +
-    '<p id="schoolPrincipalNote" style="color:#777;font-size:12px;margin-bottom:12px">Principal details will be connected to the verified staff record in a separate step.</p>' +
-    '<div class="alert alert-info">School logo, principal signature and official stamp uploads are temporarily disabled while their Supabase Storage permissions and file paths are configured. Existing saved files have not been deleted.</div>' +
-    '<button class="btn btn-primary" id="saveSchoolBtn" type="button">Save School Information</button>' +
+    '<p id="schoolPrincipalNote" style="color:#777;font-size:12px;margin-bottom:12px">The principal signature is shown on the result sheet. Principal name remains controlled by the school profile.</p>' +
+    '<h3 style="margin:20px 0 12px">Official Result Sheet Assets</h3>' +
+    '<div class="grid grid-2">' +
+      '<div class="input-group"><label>School Logo</label><div style="min-height:90px;margin:8px 0">' + logoPreview + '</div><input type="file" id="brandingLogoFile" accept="image/png,image/jpeg,image/webp"></div>' +
+      '<div class="input-group"><label>Principal Signature</label><div style="min-height:65px;margin:8px 0">' + principalPreview + '</div><input type="file" id="brandingPrincipalSignatureFile" accept="image/png,image/jpeg,image/webp"></div>' +
+      '<div class="input-group"><label>Official School Stamp Artwork</label><div style="min-height:120px;margin:8px 0">' + stampPreview + '</div><input type="file" id="brandingSchoolStampFile" accept="image/png,image/jpeg,image/webp"></div>' +
+      '<div class="input-group"><label>Small Stamp Signature</label><div style="min-height:65px;margin:8px 0">' + stampSigPreview + '</div><input type="file" id="brandingStampSignatureFile" accept="image/png,image/jpeg,image/webp"></div>' +
+      '<div class="input-group"><label for="brandingStampDate">Stamp / Result Document Date</label><input type="date" id="brandingStampDate" value="' + escapeValue(schoolInfo.stampDate || '') + '"></div>' +
+    '</div>' +
+    '<p style="font-size:12px;color:#666;margin:10px 0">PNG, JPG or WEBP only; maximum 5 MB per image. The school logo is public for display. Principal signature, stamp and small stamp signature remain in private Supabase Storage.</p>' +
+    '<button class="btn btn-primary" id="saveSchoolBtn" type="button">Save School Information and Stamp Date</button>' +
     '<span id="schoolSaveStatus" role="status" style="margin-left:10px;font-size:12px;color:#666"></span></div>';
 
   var saveBtn = document.getElementById('saveSchoolBtn');
@@ -8516,44 +8595,61 @@ function renderSchool() {
       phone: document.getElementById('schoolPhone').value.trim(),
       address: document.getElementById('schoolAddress').value.trim()
     };
-    if (!patch.name) {
-      showToast('School name is required.', 'error');
-      return;
-    }
-    saveBtn.disabled = true;
-    saveBtn.textContent = 'Saving...';
-    if (status) status.textContent = 'Saving to Supabase...';
+    var stampDate = document.getElementById('brandingStampDate').value || null;
+    if (!patch.name) { showToast('School name is required.', 'error'); return; }
+    saveBtn.disabled = true; saveBtn.textContent = 'Saving...';
     try {
       if (!supabasePersistence || typeof supabasePersistence.updateSchoolProfile !== 'function') {
         throw new Error('Supabase school profile update is unavailable. Refresh and sign in again.');
       }
       var savedProfile = await supabasePersistence.updateSchoolProfile(patch);
-      // Update the in-memory view only after Supabase confirms the row update.
+      var dateUpdate = await supabaseClient.from('schools').update({ stamp_date: stampDate })
+        .eq('id', authenticatedProfile.school_id).select('id').maybeSingle();
+      if (dateUpdate.error) throw dateUpdate.error;
       schoolInfo.name = savedProfile.name || '';
       schoolInfo.email = savedProfile.email || '';
       schoolInfo.phone = savedProfile.phone || '';
       schoolInfo.address = savedProfile.address || '';
-      schoolInfo.logo = savedProfile.logo_url || '';
       schoolInfo.motto = savedProfile.motto || '';
+      schoolInfo.stampDate = stampDate || '';
       currentSchool.schoolName = savedProfile.name || '';
       currentSchool.name = savedProfile.name || '';
       currentSchool.email = savedProfile.email || '';
       currentSchool.phone = savedProfile.phone || '';
       currentSchool.address = savedProfile.address || '';
       currentSchool.location = savedProfile.address || '';
-      currentSchool.logo = savedProfile.logo_url || '';
       var headerLocation = document.getElementById('schoolLocation');
       if (headerLocation) headerLocation.textContent = currentSchool.schoolName + ' - ' + currentSchool.location;
       if (status) status.textContent = 'Saved to Supabase.';
-      showToast('School information saved successfully.', 'success');
+      showToast('School information and stamp date saved.', 'success');
     } catch (error) {
       console.error('School profile save failed:', error);
       if (status) status.textContent = 'Save failed. Your changes were not confirmed.';
       showToast(error && error.message ? error.message : 'Could not save school information.', 'error');
-    } finally {
-      saveBtn.disabled = false;
-      saveBtn.textContent = 'Save School Information';
-    }
+    } finally { saveBtn.disabled = false; saveBtn.textContent = 'Save School Information and Stamp Date'; }
+  });
+
+  [
+    ['brandingLogoFile','logo','School logo'],
+    ['brandingPrincipalSignatureFile','principal-signature','Principal signature'],
+    ['brandingSchoolStampFile','school-stamp','Official school stamp'],
+    ['brandingStampSignatureFile','stamp-signature','Small stamp signature']
+  ].forEach(function(item) {
+    var input = document.getElementById(item[0]);
+    if (!input) return;
+    input.addEventListener('change', async function(event) {
+      var file = event.target.files && event.target.files[0];
+      if (!file) return;
+      input.disabled = true;
+      try {
+        await uploadSchoolBrandingAsset(item[1], file);
+        showToast(item[2] + ' uploaded and saved to Supabase.', 'success');
+        renderSchool();
+      } catch (error) {
+        console.error(item[2] + ' upload failed:', error);
+        showToast(error && error.message ? error.message : 'Upload failed.', 'error');
+      } finally { input.disabled = false; }
+    });
   });
 }
 
@@ -9870,6 +9966,7 @@ async function prepareRegisteredPassportsForResults(list) {
 // ===================== PDF GENERATION =====================
 async function generatePDF(list, filenameBase, shareOptions) {
   if (!list || list.length === 0) { showToast('No students found to print', 'error'); return; }
+  try { await loadSchoolBrandingAssets(); } catch (brandingError) { console.error('Could not refresh school branding assets:', brandingError); }
   await prepareRegisteredPassportsForResults(list);
   if (typeof html2canvas === 'undefined' || typeof window.jspdf === 'undefined') {
     showToast('PDF library not loaded. Check your connection.', 'error');
@@ -10041,12 +10138,15 @@ function openPrintWindow(bodyHtml, title) {
   };
 }
 
-window.printStudentResult = function(studentId, action) {
+window.printStudentResult = async function(studentId, action) {
   var student = students.find(function(s) { return String(s.id) === String(studentId); });
   if (!student) { showToast('Student not found', 'error'); return; }
   var filename = (student.studentName || 'Student').replace(/[^a-zA-Z0-9]/g, '_') + '_Result';
-  if (action === 'print') openPrintWindow(buildStudentSheetHTML(student), filename);
-  else generatePDF([student], filename);
+  if (action === 'print') {
+    try { await loadSchoolBrandingAssets(); } catch (brandingError) { console.error('Could not refresh school branding assets:', brandingError); }
+    await prepareRegisteredPassportsForResults([student]);
+    openPrintWindow(buildStudentSheetHTML(student), filename);
+  } else generatePDF([student], filename);
 };
 
 function printMultipleResults(list, label) {
