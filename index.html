@@ -10167,6 +10167,7 @@ window.printStudentResult = async function(studentId, action) {
   var filename = (student.studentName || 'Student').replace(/[^a-zA-Z0-9]/g, '_') + '_Result';
   if (action === 'print') {
     try { await loadSchoolBrandingAssets(); } catch (brandingError) { console.error('Could not refresh school branding assets:', brandingError); }
+    try { await loadTeacherSignaturesFromSupabase(); } catch (signatureError) { console.error('Could not refresh teacher signatures:', signatureError); }
     await prepareRegisteredPassportsForResults([student]);
     openPrintWindow(buildStudentSheetHTML(student), filename);
   } else generatePDF([student], filename);
