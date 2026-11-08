@@ -1412,7 +1412,6 @@ async function loadSchoolData() {
   var loadedSchoolInfo = await cloudStorage.load('schoolInfo');
   var loadedManagementStaff = await cloudStorage.load('managementStaff');
   var loadedSubAdministrators = await cloudStorage.load('subAdministrators');
-  var loadedActivityLog = await cloudStorage.load('activityLog');
   var loadedPortalNews = await cloudStorage.load('portalNews');
   var loadedStaff = await cloudStorage.load('schoolStaff');
   var loadedStaffDatabase = await cloudStorage.load('staffDatabase');
@@ -1429,7 +1428,7 @@ async function loadSchoolData() {
   assessmentConfig = {};
   managementStaff = Array.isArray(loadedManagementStaff) ? loadedManagementStaff : [];
   subAdministrators = Array.isArray(loadedSubAdministrators) ? loadedSubAdministrators : [];
-  activityLog = Array.isArray(loadedActivityLog) ? loadedActivityLog : [];
+  activityLog = [];
   portalNews = Array.isArray(loadedPortalNews) ? loadedPortalNews : [];
   schoolStaff = Array.isArray(loadedStaff) ? loadedStaff : [];
   staffDatabase = Array.isArray(loadedStaffDatabase) ? loadedStaffDatabase : [];
@@ -1486,6 +1485,22 @@ async function loadSchoolData() {
   currentSchool.logo = authoritativeSchoolProfile.logo_url || currentSchool.logo || schoolInfo.logo || '';
   await loadSchoolBrandingAssets();
   await loadTeacherSignaturesFromSupabase();
+
+  // Activity history is now read from the append-only Supabase audit table.
+  // Only school administrators have SELECT access under its RLS policy.
+  if (authenticatedProfile && authenticatedProfile.role === 'administrator' &&
+      supabasePersistence && typeof supabasePersistence.getActivityAudit === 'function') {
+    var auditRows = await supabasePersistence.getActivityAudit(1000);
+    activityLog = auditRows.slice().reverse().map(function(row) {
+      var details = row.details && typeof row.details === 'object' ? row.details : {};
+      return {
+        user: details.legacy_actor_label || 'Authenticated user',
+        action: row.action,
+        affectedRecord: row.affected_record || '',
+        timestamp: row.occurred_at
+      };
+    });
+  }
 
   var migrated = migrateOldClassNames() || removedLegacyFormMasterPasswords || removedLegacySubjectAssignmentPasswords;
   if (syncStaffDatabaseFromExistingRecords()) migrated = true;
@@ -2178,7 +2193,6 @@ async function saveAllData() {
     promises.push(cloudStorage.save('schoolInfo', schoolInfo));
     promises.push(cloudStorage.save('managementStaff', managementStaff));
     promises.push(cloudStorage.save('subAdministrators', subAdministrators));
-    promises.push(cloudStorage.save('activityLog', activityLog.slice(-1000)));
     promises.push(cloudStorage.save('portalNews', portalNews));
     promises.push(cloudStorage.save('schoolStaff', schoolStaff));
     // Staff Database records are persisted directly to Supabase, not browser storage.
