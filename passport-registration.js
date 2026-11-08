@@ -588,6 +588,11 @@
             </button>
             <button type="button"
               class="passport-action passport-primary"
+              id="passportOrphanViewerBtn">
+              View orphaned photos
+            </button>
+            <button type="button"
+              class="passport-action passport-primary"
               id="passportRefreshBtn">
               Refresh records
             </button>
@@ -603,6 +608,12 @@
           <h3 style="margin:0 0 6px;font-size:16px;">Legacy photo reconciliation</h3>
           <p class="passport-muted">Read-only audit. No photographs or records are changed.</p>
           <div id="passportAuditResults" class="passport-muted">Run the audit to view counts.</div>
+        </section>
+
+        <section class="passport-panel" id="passportOrphanViewerPanel" hidden>
+          <h3 style="margin:0 0 6px;font-size:16px;">Orphaned passport photographs</h3>
+          <p class="passport-muted">Administrator-only, read-only previews of files in this school's passport bucket that have no matching student or passport metadata. Images use temporary signed links.</p>
+          <div id="passportOrphanViewerResults" class="passport-muted">Select “View orphaned photos” to load the images.</div>
         </section>
 
         <section class="passport-panel">
@@ -676,6 +687,10 @@
 
     document.getElementById('passportAuditBtn').onclick = function () {
       runLegacyPassportAudit();
+    };
+
+    document.getElementById('passportOrphanViewerBtn').onclick = function () {
+      runOrphanPassportViewer();
     };
 
     document.getElementById('passportStudentSearch').oninput = function () {
@@ -1697,6 +1712,118 @@
       passportNotice(error.message || 'Passport removal failed.', 'error');
     } finally {
       state.busy = false;
+    }
+  }
+
+  // Read-only administrator gallery for orphaned files in this school's
+  // private passport bucket. No database or Storage objects are modified.
+  async function runOrphanPassportViewer() {
+    var panel = document.getElementById('passportOrphanViewerPanel');
+    var output = document.getElementById('passportOrphanViewerResults');
+    var button = document.getElementById('passportOrphanViewerBtn');
+    if (!panel || !output || state.busy) return;
+
+    panel.hidden = false;
+    button.disabled = true;
+    output.textContent = 'Loading orphaned passport photographs…';
+
+    try {
+      await verifyAdminSession();
+
+      var schoolId = String(authenticatedProfile.school_id);
+      var studentResult = await supabaseClient.from('students')
+        .select('id')
+        .eq('school_id', schoolId);
+      if (studentResult.error) throw studentResult.error;
+
+      var passportResult = await supabaseClient.from('student_passports')
+        .select('student_id,storage_path')
+        .eq('school_id', schoolId);
+      if (passportResult.error) throw passportResult.error;
+
+      var knownStudentIds = {};
+      (studentResult.data || []).forEach(function (row) {
+        knownStudentIds[String(row.id)] = true;
+      });
+
+      var metadataPaths = {};
+      (passportResult.data || []).forEach(function (row) {
+        metadataPaths[String(row.storage_path)] = true;
+      });
+
+      var folderResult = await supabaseClient.storage.from(BUCKET)
+        .list(schoolId, { limit: 1000 });
+      if (folderResult.error) throw folderResult.error;
+
+      var folders = (folderResult.data || []).filter(function (item) {
+        return item && !item.id && item.name && !knownStudentIds[String(item.name)];
+      });
+
+      var orphanFiles = [];
+      for (var i = 0; i < folders.length; i++) {
+        var folderName = String(folders[i].name);
+        var pathPrefix = schoolId + '/' + folderName + '/';
+        var fileResult = await supabaseClient.storage.from(BUCKET)
+          .list(schoolId + '/' + folderName, { limit: 1000 });
+        if (fileResult.error) throw fileResult.error;
+
+        for (var j = 0; j < (fileResult.data || []).length; j++) {
+          var file = fileResult.data[j];
+          if (!file || !file.id) continue;
+
+          var path = pathPrefix + file.name;
+          if (metadataPaths[path]) continue;
+
+          var signed = await supabaseClient.storage.from(BUCKET)
+            .createSignedUrl(path, 3600);
+          orphanFiles.push({
+            path: path,
+            createdAt: file.created_at || file.updated_at || '',
+            size: Number(file.metadata && file.metadata.size || 0),
+            signedUrl: !signed.error && signed.data
+              ? signed.data.signedUrl
+              : '',
+            urlError: signed.error ? signed.error.message : ''
+          });
+        }
+      }
+
+      if (!orphanFiles.length) {
+        output.innerHTML = '<div class="passport-empty">No orphaned passport photographs were found for this school.</div>';
+        return;
+      }
+
+      output.innerHTML =
+        '<p class="passport-muted" style="margin:10px 0 14px;">' +
+        orphanFiles.length + ' orphaned file(s) found. This viewer does not delete, move, or modify them.</p>' +
+        '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:14px;">' +
+        orphanFiles.map(function (file) {
+          var preview = file.signedUrl
+            ? '<img src="' + escapeHtml(file.signedUrl) +
+              '" alt="Orphaned passport photograph" loading="lazy" ' +
+              'style="width:100%;height:210px;object-fit:contain;background:#f2f5fa;border-radius:8px;">'
+            : '<div class="passport-empty">Preview unavailable: ' +
+              escapeHtml(file.urlError || 'Signed URL could not be created') + '</div>';
+          var date = file.createdAt
+            ? new Date(file.createdAt).toLocaleString()
+            : 'Upload date unavailable';
+          var size = file.size
+            ? (file.size / 1024).toFixed(1) + ' KB'
+            : 'Size unavailable';
+
+          return '<article style="min-width:0;border:1px solid #e1e7f0;border-radius:10px;padding:10px;background:#fff;">' +
+            preview +
+            '<p style="font-size:11px;line-height:1.45;overflow-wrap:anywhere;margin:9px 0 5px;"><strong>Storage path</strong><br>' +
+            escapeHtml(file.path) + '</p>' +
+            '<p class="passport-muted" style="margin:4px 0;">' +
+            escapeHtml(date) + ' · ' + escapeHtml(size) + '</p>' +
+            '</article>';
+        }).join('') +
+        '</div>';
+    } catch (error) {
+      output.textContent = error.message || 'Could not load orphaned passport photographs.';
+    } finally {
+      button.disabled = false;
     }
   }
 
