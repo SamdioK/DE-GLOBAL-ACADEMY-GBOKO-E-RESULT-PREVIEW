@@ -276,7 +276,7 @@ Seven historical browser activity events were imported from the 8 November brows
 
 Added `appendActivityAudit` and `getActivityAudit` to `supabase-persistence.js`. The append method checks the authenticated user and active school profile, validates event fields, and treats a repeated source event ID as an idempotent retry.
 
-Updated `logActivity` in `index.html` to dual-write newly generated events to Supabase while retaining the existing browser log as a temporary fallback. Personal names are not copied into the new Supabase audit record; an affected-record value is retained only when it is a UUID. A failed Supabase audit write is logged and shown as a warning rather than silently reported as successful.
+Updated `logActivity` in `index.html` to append newly generated events to Supabase. The in-memory activity array is used for the current screen only; `saveAllData` no longer writes the activity log to browser storage. Administrator history is loaded from Supabase. Personal names are not copied into new audit records; an affected-record value is retained only when it is a UUID. A failed Supabase audit write is logged and shown as a warning rather than silently reported as successful.
 
 This activity-log category has now been cut over: the seven legacy events are stored in Supabase, administrator history reads come from Supabase, and new events are written to Supabase. The old browser activityLog key is no longer read or written by the updated application. The old browser copy remains in the browser as a rollback artefact and has not been deleted.
 
