@@ -448,3 +448,12 @@ A separate school-, student-, session- and term-scoped release-stage record (or 
 Do not yet cut over `saveStudent()`, `renderReleaseResults()`, `renderStudentResults()` or `loadStudentPortalData()`. First design the release-stage schema and trusted permission checks, then implement the administrator result writer and student read adapter against official UUIDs. Keep subject-teacher draft/submission/approval workflow distinct from the staged release workflow. Acceptance tests must include all roles, class/session/term boundaries, inactive assignment denial, partial-stage visibility, final publication, and refresh on a second device.
 
 No release-stage table, permissions table, result row or student record was changed or created in this audit. The only live database changes in this stage are the Subject Teacher result RLS policy hardening recorded in Section 18. Legacy browser data remains preserved.
+
+
+## 20. Authoritative permission catalogue and sub-administrator gap — 9 November 2026
+
+A read-only query found 18 permission catalogue entries, 58 role-to-permission mappings and 6 `profile_roles` records across the project. The catalogue already includes `enter_results`, `edit_results`, `submit_results`, `approve_results`, `publish_results`, `view_results` and related management permissions. Role-level mappings are not the same as individual sub-administrator grants.
+
+For the DE-GLOBAL school, the current `profiles` role count is one active administrator, 18 active Form Masters, one active portal developer, one active student and one active Subject Teacher. No `sub_administrator` profile currently exists in this school's live profile records. The frontend's per-sub-administrator permission object therefore has no verified, school-scoped individual grant record in the live profile schema inspected so far.
+
+This confirms that a secure migration of individual sub-administrator permissions needs a dedicated, authoritative per-profile grant model (or an equivalent server-verified design), not a client-side permission object and not merely the global `role_permissions` catalogue. The `permissions` table remains one of the previously identified RLS-enabled tables without policies. Do not expose it directly to the browser or grant broad access to resolve this gap. No permissions, roles or profiles were modified in this audit.
