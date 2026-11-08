@@ -11,6 +11,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="supabase-persistence.js?v=202611071955"></script>
+<script src="school-assets.js?v=202611081200"></script>
 <script src="score-entry-engine.js"></script>
 <style>
 * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -8593,8 +8594,17 @@ function renderAdminProfile() {
     if (newPassword && newPassword.length < 6) { showToast('New password must be at least 6 characters', 'error'); return; }
     if (newPassword !== confirmPassword) { showToast('New passwords do not match', 'error'); return; }
     if (logoFile && (!logoFile.type || logoFile.type.indexOf('image/') !== 0)) { showToast('Choose a valid image for the logo', 'error'); return; }
-    var saveProfile = async function(logoData) {
+    var saveProfile = async function() {
+      var uploadedLogoUrl = null;
       try {
+        if (logoFile) {
+          if (!window.SupabaseSchoolAssets) throw new Error('School asset service is unavailable. Refresh and try again.');
+          var assetService = window.SupabaseSchoolAssets.create(supabaseClient);
+          var uploadedAsset = await assetService.uploadPublicImage(logoFile, 'school-logo', 'main');
+          var publicAsset = supabaseClient.storage.from(uploadedAsset.bucket).getPublicUrl(uploadedAsset.path);
+          uploadedLogoUrl = publicAsset && publicAsset.data ? publicAsset.data.publicUrl : null;
+          if (!uploadedLogoUrl) throw new Error('The logo was uploaded but its public URL could not be generated.');
+        }
         var authUpdates = {};
         if (newEmail !== currentEmail) authUpdates.email = newEmail;
         if (newPassword) authUpdates.password = newPassword;
@@ -8608,7 +8618,7 @@ function renderAdminProfile() {
         authenticatedProfile.email = newEmail;
         authenticatedProfile.phone = newPhone;
       } catch (profileError) {
-        showToast(profileError.code === '42501' ? 'Supabase denied this profile update. Check the profile RLS policy.' : (profileError.message || 'Could not update the Supabase account.'), 'error');
+        showToast(profileError.code === '42501' ? 'Supabase denied this profile update. Check the profile RLS policy.' : (profileError.message || 'Could not update the administrator account or upload the logo.'), 'error');
         return;
       }
       currentSchool.adminName = newName;
@@ -8616,9 +8626,10 @@ function renderAdminProfile() {
       currentSchool.phone = newPhone;
       schoolInfo.email = newEmail;
       schoolInfo.phone = newPhone;
-      if (logoData) {
-        currentSchool.portalLogo = logoData;
-        schoolInfo.portalLogo = logoData;
+      if (uploadedLogoUrl) {
+        currentSchool.portalLogo = uploadedLogoUrl;
+        schoolInfo.portalLogo = uploadedLogoUrl;
+        schoolInfo.logo = uploadedLogoUrl;
       }
       currentUser.name = newName;
       await saveAllData();
@@ -8628,12 +8639,7 @@ function renderAdminProfile() {
       showToast('Administrator profile saved. Use the updated credentials next time you log in.', 'success');
       renderAdminProfile();
     };
-    if (logoFile) {
-      var reader = new FileReader();
-      reader.onload = function(event) { saveProfile(event.target.result); };
-      reader.onerror = function() { showToast('Could not read the selected logo', 'error'); };
-      reader.readAsDataURL(logoFile);
-    } else saveProfile(null);
+    saveProfile();
   });
 }
 
