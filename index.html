@@ -6639,9 +6639,22 @@ function renderStaffDatabase() {
       }
     }
     var file = document.getElementById('staffPhoto').files[0];
-    if (file) { showToast('Staff photo upload will be enabled after the Supabase Storage policy is verified. Save the record without a new photo for now.', 'error'); return; }
     var saveRecord = async function() {
       var record = staffDatabase.find(function(item) { return String(item.id) === editingId; }) || {};
+      var staffRecordId = editingId || (window.crypto && crypto.randomUUID ? crypto.randomUUID() : String(Date.now()));
+      var uploadedPhotoUrl = null;
+      if (file) {
+        try {
+          if (!window.SupabaseSchoolAssets) throw new Error('School asset service is unavailable. Refresh and try again.');
+          var assetService = window.SupabaseSchoolAssets.create(supabaseClient);
+          var asset = await assetService.uploadPublicImage(file, 'staff-photos', staffRecordId);
+          uploadedPhotoUrl = supabaseClient.storage.from(asset.bucket).getPublicUrl(asset.path).data.publicUrl;
+          if (!uploadedPhotoUrl) throw new Error('Could not generate the staff photo URL.');
+        } catch (uploadError) {
+          showToast('Staff photo was not uploaded: ' + (uploadError.message || 'Unknown error'), 'error');
+          return;
+        }
+      }
       inputIds.forEach(function(id) { record[id] = document.getElementById(id).value.trim(); });
       if (selectedDepartment === '12. Others') {
         record.department = '12. Others — ' + customDepartment;
@@ -6665,7 +6678,9 @@ function renderStaffDatabase() {
         delete record.qualificationLegacy;
       }
       record.status = document.getElementById('staffStatus').value; record.showOnPortal = document.getElementById('staffShowOnPortal').checked;
+      if (uploadedPhotoUrl) record.photo = uploadedPhotoUrl;
       var payload = {
+        photo_url: record.photo || null,
         staff_id: record.staffId || null, full_name: record.fullName, gender: record.gender || null,
         designation: record.designation || null, department: record.department || null,
         qualification: Array.isArray(record.qualification) ? record.qualification.join('; ') : (record.qualification || null),
@@ -7233,20 +7248,25 @@ function renderManagement() {
     var photoFile = document.getElementById('managementPhoto').files[0];
     if (!name || !photoFile) { showToast('Name and photo are required', 'error'); return; }
     if (!photoFile.type || photoFile.type.indexOf('image/') !== 0) { showToast('Please choose a valid image file', 'error'); return; }
-    var reader = new FileReader();
-    reader.onload = async function(event) {
+    var managementId = (window.crypto && crypto.randomUUID) ? crypto.randomUUID() : String(Date.now());
+    try {
+      if (!window.SupabaseSchoolAssets) throw new Error('School asset service is unavailable. Refresh and try again.');
+      var assetService = window.SupabaseSchoolAssets.create(supabaseClient);
+      var asset = await assetService.uploadPublicImage(photoFile, 'management-photos', managementId);
+      var photoUrl = supabaseClient.storage.from(asset.bucket).getPublicUrl(asset.path).data.publicUrl;
+      if (!photoUrl) throw new Error('Could not generate the management photo URL.');
       managementStaff.push({
-        id: Date.now(), office: document.getElementById('managementOffice').value, name: name,
-        photo: event.target.result, qualifications: document.getElementById('managementQualifications').value.trim(),
+        id: managementId, office: document.getElementById('managementOffice').value, name: name,
+        photo: photoUrl, qualifications: document.getElementById('managementQualifications').value.trim(),
         email: document.getElementById('managementEmail').value.trim(), hobbies: document.getElementById('managementHobbies').value.trim(),
         bio: document.getElementById('managementBio').value.trim(), published: false, active: true
       });
       await saveAllData();
       showToast('Management profile added as a draft', 'success');
       renderManagement();
-    };
-    reader.onerror = function() { showToast('Could not read the selected photo', 'error'); };
-    reader.readAsDataURL(photoFile);
+    } catch (uploadError) {
+      showToast('Management photo upload failed: ' + (uploadError.message || 'Unknown error'), 'error');
+    }
   });
   document.getElementById('publishManagementBtn').addEventListener('click', async function() {
     if (managementStaff.length === 0) { showToast('Add at least one profile before publishing', 'error'); return; }
