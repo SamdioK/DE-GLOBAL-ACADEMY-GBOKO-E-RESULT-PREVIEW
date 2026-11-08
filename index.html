@@ -9999,11 +9999,8 @@ window.generateStudentResultTest = async function() {
     affectiveDomains.forEach(function(d) { testStudent.affective[d] = 4; });
     psychomotorDomains.forEach(function(d) { testStudent.psychomotor[d] = 4; });
     await attachRegisteredSupabasePassport(testStudent);
-    var w = window.open('', '_blank');
-    if (!w) throw new Error('Allow pop-ups to open the test result.');
-    w.document.write('<!DOCTYPE html><html><head><meta charset="UTF-8"><title>TEST ONLY - Result</title><style>' + buildPrintStyles() + '</style></head><body>' + buildStudentSheetHTML(testStudent) + '<button class="print-btn" onclick="window.print()">Print Test Sheet</button></body></html>');
-    w.document.close();
-    showToast('Test result generated. Fictional scores were not saved.', 'success');
+    await generatePDF([testStudent], 'TEST_ONLY_Terkimbi_Wanger_Sonia');
+    showToast('Test PDF generated. Fictional scores were not saved.', 'success');
   } catch (e) { console.error(e); showToast(e.message || 'Test result generation failed.', 'error'); }
   finally { if (button) { button.disabled = false; button.textContent = 'Generate Test Result (PDF)'; } }
 };
