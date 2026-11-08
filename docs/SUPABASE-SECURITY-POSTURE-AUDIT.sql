@@ -97,12 +97,14 @@ WHERE d.defaclnamespace = 0
    OR n.nspname = 'public'
 ORDER BY schema_name, grantor, object_type;
 
--- RESULT 10: Migration history presence and latest recorded versions.
--- A missing table or empty result is not proof that migrations were never
--- applied manually; reconcile with the linked Supabase CLI migration list.
+-- RESULT 10: Migration history table presence and structure.
+-- This query remains safe if the standard history table does not exist.
+-- Reconcile the actual remote versions with the linked Supabase CLI
+-- migration list workflow; do not infer deployment status from this result.
 SELECT to_regclass('supabase_migrations.schema_migrations') AS migration_history_table;
 
-SELECT version, name
-FROM supabase_migrations.schema_migrations
-ORDER BY version DESC
-LIMIT 30;
+SELECT table_schema, table_name, column_name, data_type
+FROM information_schema.columns
+WHERE table_schema = 'supabase_migrations'
+  AND table_name = 'schema_migrations'
+ORDER BY ordinal_position;
