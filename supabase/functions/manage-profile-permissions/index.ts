@@ -1,11 +1,11 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { withSupabase } from "npm:@supabase/server@^1";
 
-type Payload = { action?: "list" | "grant" | "revoke"; profile_id?: string; permission_key?: string };
+type Payload = { action?: "my_permissions" | "list" | "grant" | "revoke"; profile_id?: string; permission_key?: string };
 const DELEGABLE = new Set([
   "view_results", "enter_results", "edit_results", "submit_results",
   "view_reports", "manage_comments", "manage_fees", "manage_students",
-  "manage_classes", "manage_subjects"
+  "manage_classes", "manage_subjects", "manage_teachers"
 ]);
 
 export default {
@@ -17,26 +17,50 @@ export default {
       const { data: actor, error: actorError } = await ctx.supabaseAdmin.from("profiles")
         .select("id,school_id,role,is_active").eq("id", actorId).maybeSingle();
       if (actorError) throw actorError;
-      if (!actor || actor.role !== "administrator" || actor.is_active !== true || !actor.school_id)
-        return Response.json({ error: "Only an active School Administrator can manage individual permissions." }, { status: 403 });
+      if (!actor || actor.is_active !== true || !actor.school_id)
+        return Response.json({ error: "An active school profile is required." }, { status: 403 });
 
       const body: Payload = await req.json();
+      if (body.action === "my_permissions") {
+        if (actor.role !== "sub_administrator")
+          return Response.json({ error: "This action is only available to Sub Administrators." }, { status: 403 });
+        const { data: grants, error: grantsError } = await ctx.supabaseAdmin.from("profile_permission_grants")
+          .select("permission_id,is_active").eq("school_id", actor.school_id)
+          .eq("profile_id", actorId).eq("is_active", true);
+        if (grantsError) throw grantsError;
+        const ids = (grants || []).map((g: { permission_id: string }) => g.permission_id);
+        if (!ids.length) return Response.json({ success: true, permissions: [] });
+        const { data: permissions, error: permissionError } = await ctx.supabaseAdmin.from("permissions")
+          .select("permission_key,permission_name").in("id", ids);
+        if (permissionError) throw permissionError;
+        return Response.json({ success: true, permissions: permissions || [] });
+      }
+
+      if (actor.role !== "administrator")
+        return Response.json({ error: "Only an active School Administrator can manage another user's permissions." }, { status: 403 });
       if (!["list", "grant", "revoke"].includes(String(body.action)))
         return Response.json({ error: "Unsupported permission action." }, { status: 400 });
       const targetId = String(body.profile_id || "").trim();
       if (!targetId) return Response.json({ error: "A target profile is required." }, { status: 400 });
       const { data: target, error: targetError } = await ctx.supabaseAdmin.from("profiles")
-        .select("id,school_id,role,is_active").eq("id", targetId).eq("school_id", actor.school_id).maybeSingle();
+        .select("id,school_id,role,is_active,full_name,username,email")
+        .eq("id", targetId).eq("school_id", actor.school_id).maybeSingle();
       if (targetError) throw targetError;
       if (!target || target.role !== "sub_administrator" || target.is_active !== true)
         return Response.json({ error: "The target must be an active Sub Administrator in your school." }, { status: 404 });
 
       if (body.action === "list") {
         const { data, error } = await ctx.supabaseAdmin.from("profile_permission_grants")
-          .select("id,is_active,granted_at,revoked_at,permissions(permission_key,permission_name,description)")
+          .select("id,permission_id,is_active,granted_at,revoked_at")
           .eq("school_id", actor.school_id).eq("profile_id", targetId).order("granted_at", { ascending: false });
         if (error) throw error;
-        return Response.json({ success: true, grants: data || [] });
+        const ids = Array.from(new Set((data || []).map((g: { permission_id: string }) => g.permission_id)));
+        const { data: catalogue, error: catalogueError } = ids.length
+          ? await ctx.supabaseAdmin.from("permissions").select("id,permission_key,permission_name").in("id", ids)
+          : { data: [], error: null };
+        if (catalogueError) throw catalogueError;
+        const byId = new Map((catalogue || []).map((x: { id: string }) => [x.id, x]));
+        return Response.json({ success: true, grants: (data || []).map((g: { permission_id: string }) => ({ ...g, permission: byId.get(g.permission_id) || null })) });
       }
 
       const key = String(body.permission_key || "").trim();
