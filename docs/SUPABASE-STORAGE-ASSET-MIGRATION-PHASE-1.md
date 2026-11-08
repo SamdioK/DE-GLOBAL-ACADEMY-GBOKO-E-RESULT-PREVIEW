@@ -159,3 +159,17 @@ This change is on `feature/supabase-storage-assets` only. Test with an active ad
 ## Passport test-object cleanup confirmation
 
 On 2026-11-08, the administrator confirmed that six unmatched passport objects were test uploads no longer required. The six exact objects were deleted manually from the private `student-passports` bucket. A verification query against `storage.objects`, scoped to the school's bucket prefix and the six folder IDs, returned no rows. No student records or valid passport metadata were deleted. The eight valid passport records and their files were preserved. This was an administrator-directed cleanup, not an automated cleanup feature.
+
+## Storage bucket migration safety review (2026-11-08)
+
+The live Storage inventory supplied by the administrator showed only the existing private `student-passports` bucket and its established administrator/Form Master policies. Neither `school-public-assets` nor `school-private-assets` existed at the time of review.
+
+The bucket migration was hardened before it is offered for application:
+
+- Bucket creation now uses `ON CONFLICT DO NOTHING`; it never overwrites the visibility, size limit or MIME allowlist of an existing bucket.
+- A validation block stops the migration if either bucket already exists with settings that differ from the reviewed configuration. An administrator must inspect such a bucket rather than having the migration silently modify it.
+- Public asset objects are retrievable by their public URLs by design. The migration does not grant anonymous object listing. Authenticated administrators can upload, replace and delete objects only under their own school folder.
+- Private assets remain private. Administrators can manage their own school's private objects; the separate signature policy grants authorised same-school users read access only to the signatures folder.
+- No changes are made to the existing `student-passports` bucket or its policies.
+
+This remains an unapplied migration on the feature branch. Review and apply it in Supabase only when the matching frontend release is ready. After application, inspect bucket settings and policies, then run the documented same-school/cross-school access tests.
