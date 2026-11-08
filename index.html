@@ -6936,16 +6936,38 @@ function renderPortalContentAdmin() {
     if (!title || !message) { showToast('Enter a title and message', 'error'); return; }
     if (files.some(function(file) { return !file.type || file.type.indexOf('image/') !== 0; })) { showToast('Only image files can be attached', 'error'); return; }
     try {
-      var photos = await Promise.all(files.map(function(file) { return new Promise(function(resolve, reject) { var reader = new FileReader(); reader.onload = function(event) { resolve(event.target.result); }; reader.onerror = function() { reject(new Error('Could not read an attached photo')); }; reader.readAsDataURL(file); }); }));
-      portalNews.push({ id: Date.now(), category: categories.join(', '), title: title, message: message, photos: photos, date: new Date().toLocaleDateString() });
+      if (!window.SupabaseSchoolAssets) throw new Error('School asset service is unavailable. Refresh and try again.');
+      var newsId = (window.crypto && crypto.randomUUID) ? crypto.randomUUID() : String(Date.now());
+      var assetService = window.SupabaseSchoolAssets.create(supabaseClient);
+      var uploadedPhotos = await Promise.all(files.map(async function(file, index) {
+        var asset = await assetService.uploadPublicImage(file, 'portal-news', newsId + '-' + index);
+        return supabaseClient.storage.from(asset.bucket).getPublicUrl(asset.path).data.publicUrl;
+      }));
+      portalNews.push({ id: newsId, category: categories.join(', '), title: title, message: message, photos: uploadedPhotos, date: new Date().toLocaleDateString() });
       await saveAllData();
       showToast('Portal post published', 'success');
       renderPortalContentAdmin();
     } catch (error) { showToast(error.message || 'Could not read attached photos', 'error'); }
   });
-  function addImageRecord(fileInputId, callback) { var file = document.getElementById(fileInputId).files[0]; if (!file) { callback(''); return; } if (file.type.indexOf('image/') !== 0) { showToast('Choose a valid image', 'error'); return; } var reader = new FileReader(); reader.onload = function(event) { callback(event.target.result); }; reader.onerror = function() { showToast('Could not read image', 'error'); }; reader.readAsDataURL(file); }
-
-  document.getElementById('addPrefectBtn').addEventListener('click', function() { var name = document.getElementById('prefectName').value.trim(), className = document.getElementById('prefectClass').value.trim(), portfolio = document.getElementById('prefectPortfolio').value.trim(); if (!name || !className || !portfolio || !document.getElementById('prefectPhoto').files[0]) { showToast('Enter prefect name, class, portfolio and upload a passport photo', 'error'); return; } if (!getPortalStudentOptions().some(function(student) { return student.name.toLowerCase() === name.toLowerCase() && student.className === className; })) { showToast('Select a student and class from the E-Result student register', 'error'); return; } addImageRecord('prefectPhoto', async function(photo) { prefects.push({ id: Date.now(), name: name, className: className, portfolio: portfolio, photo: photo }); await saveAllData(); renderPortalContentAdmin(); }); });
+  document.getElementById('addPrefectBtn').addEventListener('click', async function() {
+    var name = document.getElementById('prefectName').value.trim();
+    var className = document.getElementById('prefectClass').value.trim();
+    var portfolio = document.getElementById('prefectPortfolio').value.trim();
+    var file = document.getElementById('prefectPhoto').files[0];
+    if (!name || !className || !portfolio || !file) { showToast('Enter prefect name, class, portfolio and upload a passport photo', 'error'); return; }
+    if (!getPortalStudentOptions().some(function(student) { return student.name.toLowerCase() === name.toLowerCase() && student.className === className; })) { showToast('Select a student and class from the E-Result student register', 'error'); return; }
+    try {
+      var prefectId = (window.crypto && crypto.randomUUID) ? crypto.randomUUID() : String(Date.now());
+      var assetService = window.SupabaseSchoolAssets.create(supabaseClient);
+      var asset = await assetService.uploadPublicImage(file, 'prefect-photos', prefectId);
+      var photoUrl = supabaseClient.storage.from(asset.bucket).getPublicUrl(asset.path).data.publicUrl;
+      if (!photoUrl) throw new Error('Could not generate the prefect photo URL.');
+      prefects.push({ id: prefectId, name: name, className: className, portfolio: portfolio, photo: photoUrl });
+      await saveAllData();
+      renderPortalContentAdmin();
+      showToast('Prefect photo uploaded and record saved', 'success');
+    } catch (error) { showToast('Prefect photo upload failed: ' + (error.message || 'Unknown error'), 'error'); }
+  });
   document.getElementById('addDutyBtn').addEventListener('click', async function() { var week = parseInt(document.getElementById('dutyWeek').value, 10), name = document.getElementById('dutyName').value.trim(), schedule = document.getElementById('dutySchedule').value.trim(); if (!week || week > portalSettings.termWeeks || !name || !schedule) { showToast('Enter a valid week, duty master and schedule', 'error'); return; } if (getPortalTeacherNames().indexOf(name) === -1) { showToast('Select a teacher from the E-Result staff database', 'error'); return; } dutyRoster.push({ id: Date.now(), week: week, name: name, schedule: schedule }); await saveAllData(); renderPortalContentAdmin(); });
   document.querySelectorAll('.content-remove').forEach(function(button) { button.addEventListener('click', async function() { var source = { news: portalNews, staff: schoolStaff, prefect: prefects, duty: dutyRoster }[button.dataset.kind]; if (!source) return; var filtered = source.filter(function(item) { return String(item.id) !== button.dataset.id; }); if (button.dataset.kind === 'news') portalNews = filtered; else if (button.dataset.kind === 'staff') schoolStaff = filtered; else if (button.dataset.kind === 'prefect') prefects = filtered; else dutyRoster = filtered; await saveAllData(); renderPortalContentAdmin(); }); });
 }
