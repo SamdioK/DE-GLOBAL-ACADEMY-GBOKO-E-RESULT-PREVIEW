@@ -8581,19 +8581,12 @@ function renderSchool() {
   var sessionName = activeAcademicSession && activeAcademicSession.name
     ? activeAcademicSession.name : (schoolInfo.session || '');
   var logoPreview = schoolInfo.logo ? '<img src="' + escapeValue(schoolInfo.logo) + '" alt="School logo" class="school-brand-preview school-logo-preview">' : '<div class="school-brand-empty">No school logo uploaded</div>';
-  var principalPreview = schoolInfo.principalSignature ? '<img src="' + escapeValue(schoolInfo.principalSignature) + '" alt="Principal signature" class="school-brand-preview school-signature-preview">' : '<div class="school-brand-empty">No principal signature uploaded</div>';
   var stampBase = schoolInfo.schoolStamp || '';
   var stampDate = schoolInfo.stampDate || getTodayDateInputValue();
   var stampSignature = schoolInfo.stampSignature || '';
   var stampPreviewDraft = stampBase;
   var signaturePreviewDraft = stampSignature;
   var stampDateLabel = escapeValue(formatResultDate(stampDate));
-  var stampPreview = stampBase
-    ? '<div class="school-stamp-composite"><img src="' + escapeValue(stampBase) + '" alt="Official school stamp artwork" class="school-stamp-artwork">' +
-      (stampSignature ? '<img src="' + escapeValue(stampSignature) + '" alt="Small stamp signature" class="school-stamp-signature-overlay">' : '') +
-      '<span class="school-stamp-date-overlay">' + stampDateLabel + '</span></div>'
-    : '<div id="schoolStampPreviewEmpty" class="school-brand-empty school-stamp-empty">Upload the official stamp artwork to see the dated preview here.</div>';
-  var stampSigPreview = stampSignature ? '<img src="' + escapeValue(stampSignature) + '" alt="Small stamp signature" class="school-brand-preview school-signature-preview">' : '<div class="school-brand-empty">No small stamp signature uploaded</div>';
 
   document.getElementById('schoolTab').innerHTML =
     '<style>' +
@@ -8622,19 +8615,19 @@ function renderSchool() {
     '</div><p class="school-note">Principal name and academic session are controlled by the relevant school and academic settings.</p></section>' +
     '<section class="school-panel"><div class="school-panel-title"><span>✦</span>Result sheet identity</div><div class="school-assets-grid">' +
       '<div class="school-asset"><h4>School Logo</h4><div class="school-preview-box">' + logoPreview + '</div><input type="file" id="brandingLogoFile" accept="image/png,image/jpeg,image/webp"></div>' +
-      '<div class="school-asset"><h4>Principal Signature</h4><div class="school-preview-box">' + principalPreview + '</div><input type="file" id="brandingPrincipalSignatureFile" accept="image/png,image/jpeg,image/webp"></div>' +
-      '<div class="school-asset"><h4>Official School Stamp</h4><div class="school-preview-box">' + (stampBase ? stampPreview : '<div class="school-brand-empty school-stamp-empty">No official stamp uploaded yet</div>') + '</div><button type="button" class="btn btn-primary school-stamp-settings-btn" id="schoolStampSettingBtn">Open Stamp Settings &amp; Preview</button></div>' +
-      '<div class="school-asset"><h4>Small Stamp Signature</h4><div class="school-preview-box">' + stampSigPreview + '<p class="school-note">Upload or replace this signature only inside Stamp Settings.</p></div></div>' +
+      '<div class="school-asset school-protected-assets"><h4>Protected Result Signatures &amp; Stamp</h4><p class="school-note">Principal signature, official stamp and small stamp signature are hidden here. View or replace them only inside the protected settings gateway.</p><button type="button" class="btn btn-primary school-stamp-settings-btn" id="schoolStampSettingBtn">Open Stamp Settings &amp; Preview</button></div>' +
     '</div><p class="school-note">PNG, JPG or WEBP images only; maximum 5 MB per image. The school logo is public for display. Principal signature, official stamp and small stamp signature are kept in private Supabase Storage.</p></section>' +
     '<div id="schoolStampModal" class="management-modal hidden" role="dialog" aria-modal="true" aria-labelledby="schoolStampModalTitle"><div class="management-modal-content">' +
       '<div style="display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:8px"><h2 id="schoolStampModalTitle" style="color:#293968;font-size:19px">Official School Stamp Settings</h2><button type="button" class="btn btn-danger" id="closeSchoolStampModalBtn">Close</button></div>' +
       '<p style="font-size:13px;color:#697386;line-height:1.6">Upload the original stamp artwork and preview how the date and small signature will appear on the result sheet, just as in the initial E-Result project.</p>' +
-      '<div class="input-group" style="margin-top:16px"><label for="brandingSchoolStampFile">Official Stamp Artwork</label><input type="file" id="brandingSchoolStampFile" accept="image/png,image/jpeg,image/webp"></div>' +
+      '<div class="input-group" style="margin-top:16px"><label for="brandingSchoolStampFile">Official Stamp Artwork (optional replacement)</label><input type="file" id="brandingSchoolStampFile" accept="image/png,image/jpeg,image/webp"><small>Leave unchanged to retain the saved artwork.</small></div>' +
+      '<div class="input-group"><label for="brandingPrincipalSignatureFile">Principal Signature (optional replacement)</label><input type="file" id="brandingPrincipalSignatureFile" accept="image/png,image/jpeg,image/webp"><small>Leave unchanged to retain the saved signature.</small></div>' +
       '<div class="stamp-modal-preview" id="schoolStampPreviewWrap">' + (stampBase ? '<div class="stamp-preview-composite"><img src="' + escapeValue(stampBase) + '" alt="Stamp artwork" class="stamp-preview-artwork">' + (stampSignature ? '<img src="' + escapeValue(stampSignature) + '" alt="Small stamp signature" class="stamp-preview-signature">' : '') + '<span class="stamp-preview-date">' + stampDateLabel + '</span></div>' : '<div id="schoolStampPreviewEmpty" class="school-brand-empty">Select a stamp image to preview the dated official stamp.</div>') + '</div>' +
       '<div class="input-group"><label for="brandingStampDate">Stamp / Result Document Date</label><input type="date" id="brandingStampDate" value="' + escapeValue(stampDate) + '"></div>' +
-      '<div class="input-group"><label for="brandingStampSignatureFile">Small Stamp Signature (optional)</label><input type="file" id="brandingStampSignatureFile" accept="image/png,image/jpeg,image/webp"></div>' +
+      '<div class="input-group"><label for="brandingStampSignatureFile">Small Stamp Signature (optional replacement)</label><input type="file" id="brandingStampSignatureFile" accept="image/png,image/jpeg,image/webp"><small>Leave unchanged to retain the saved signature.</small></div>' +
+      '<div class="input-group"><label for="brandingConfirmKey">Administrator confirmation key</label><input type="password" id="brandingConfirmKey" inputmode="numeric" autocomplete="off" placeholder="Enter confirmation key"><small>Required to replace any protected image. Enter the key from 8 backwards to 0.</small></div>' +
       '<p class="school-note">The preview combines the stamp artwork, selected date and small signature. The original image files remain securely stored; the dated preview is generated for display and result printing.</p>' +
-      '<button type="button" class="btn btn-primary" id="saveSchoolStampBtn" style="margin-top:8px">Save Stamp Date</button></div></div>' +
+      '<button type="button" class="btn btn-primary" id="saveSchoolStampBtn" style="margin-top:8px">Save Protected Branding Settings</button></div></div>' +
     '<section class="school-actions"><button class="btn btn-primary" id="saveSchoolBtn" type="button">Save School Information</button><span id="schoolSaveStatus" role="status" style="font-size:12px;color:#697386"></span></section>';
 
   var stampModal = document.getElementById('schoolStampModal');
@@ -8669,9 +8662,17 @@ function renderSchool() {
     var dateValue = document.getElementById('brandingStampDate').value || getTodayDateInputValue();
     var stampFile = document.getElementById('brandingSchoolStampFile').files[0];
     var signatureFile = document.getElementById('brandingStampSignatureFile').files[0];
+    var principalFile = document.getElementById('brandingPrincipalSignatureFile').files[0];
+    var confirmationKey = document.getElementById('brandingConfirmKey').value;
     if (!schoolInfo.schoolStamp && !stampFile) { showToast('Please choose the official school stamp artwork first.', 'error'); return; }
+    if ((stampFile || signatureFile || principalFile) && !confirmationKey) { showToast('Enter the administrator confirmation key before changing protected images.', 'error'); return; }
     button.disabled = true; button.textContent = 'Saving stamp settings…';
     try {
+      if (stampFile || signatureFile || principalFile) {
+        var confirmation = await supabaseClient.rpc('confirm_school_branding_change', { p_confirmation: confirmationKey });
+        if (confirmation.error) throw confirmation.error;
+        if (confirmation.data !== true) throw new Error('Protected branding confirmation was not accepted.');
+      }
       var schoolId = authenticatedProfile.school_id;
       var bucket = supabaseClient.storage.from('school-private-assets');
       var uploadedPaths = [];
@@ -8693,6 +8694,7 @@ function renderSchool() {
       }
       await uploadStampPart(stampFile, 'school-stamp', 'school_stamp_path', currentPaths.schoolStamp);
       await uploadStampPart(signatureFile, 'stamp-signature', 'stamp_signature_path', currentPaths.stampSignature);
+      await uploadStampPart(principalFile, 'principal-signature', 'principal_signature_path', currentPaths.principalSignature);
       var dateUpdate = await supabaseClient.from('schools').update(patch)
         .eq('id', schoolId).select('id').maybeSingle();
       if (dateUpdate.error) throw dateUpdate.error;
@@ -8700,6 +8702,7 @@ function renderSchool() {
       var stampDatabaseCommitted = true;
       if (oldPaths.length) await bucket.remove(oldPaths);
       schoolInfo.stampDate = dateValue;
+      document.getElementById('brandingConfirmKey').value = '';
       selectedResultDate = dateValue;
       await loadSchoolBrandingAssets();
       showToast('Stamp artwork, signature and date saved successfully.', 'success');
@@ -8752,7 +8755,6 @@ function renderSchool() {
 
   [
     ['brandingLogoFile','logo','School logo'],
-    ['brandingPrincipalSignatureFile','principal-signature','Principal signature']
   ].forEach(function(item) {
     var input = document.getElementById(item[0]);
     if (!input) return;
