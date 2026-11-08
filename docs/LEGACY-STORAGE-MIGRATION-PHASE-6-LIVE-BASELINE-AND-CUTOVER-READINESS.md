@@ -181,3 +181,71 @@ Remediation references:
 - [Public can execute SECURITY DEFINER function](https://supabase.com/docs/guides/database/database-linter?lint=0028_anon_security_definer_function_executable)
 - [Signed-in users can execute SECURITY DEFINER function](https://supabase.com/docs/guides/database/database-linter?lint=0029_authenticated_security_definer_function_executable)
 - [Leaked password protection](https://supabase.com/docs/guides/auth/password-security#password-strength-and-leaked-password-protection)
+
+
+## 13. Fresh browser snapshot — 8 November 2026, 21:00:50 UTC
+
+A new read-only browser backup was received and inspected:
+
+`DE-GLOBAL-LEGACY-BROWSER-BACKUP-2026-11-08T21-00-50-311Z.json`
+
+- Origin: the deployed DE-GLOBAL Academy E-Result application on `samdiok.github.io`.
+- 43 localStorage keys were exported.
+- IndexedDB `EResultDB` was available and contained 16 records.
+- All 16 IndexedDB records exactly matched localStorage entries; there are no additional IndexedDB-only records in this snapshot.
+- `window.storage` was unavailable and returned no records.
+- Two Supabase Auth token keys were intentionally omitted by the exporter. Do not migrate or request these tokens.
+- The backup remains a browser snapshot, not a Supabase database backup and not a Chrome-cookie export.
+
+### 13.1 Fresh snapshot inventory
+
+| Record group | Snapshot finding | Migration decision |
+|---|---|---|
+| Class arms | 30 class names from BASIC7A to SS3E; all student-name and sex slots empty; all legacy activation flags false | No student/class roster import. The live database already has 30 classes. Use the existing Supabase class IDs. |
+| Legacy class passwords | A password field is present on all 30 legacy class objects | Treat these as exposed legacy credentials. Never import or reuse them. Retire the browser password path and use the existing authenticated Form Master/role workflow. |
+| Assessment configuration | 30 class keys, all carrying CA1 10, CA2 10, CA3 10 and examination 70 | Do not bulk import. Reconcile against the six live Supabase assessment configuration rows and keep database configuration authoritative. |
+| Student metadata | Both MAIN and school-scoped metadata report zero batches and zero students | No student data is available in this browser snapshot. Live Supabase student/enrolment records remain authoritative. |
+| School-scoped subject assignment | One BASIC7A Mathematics record, marked active in browser data, but its legacy teacher ID is blank | A matching live Supabase class/subject assignment row exists, has a linked teacher UUID and is inactive. Do not import or activate it. Resolve the identity and activation discrepancy through the authorised administrator workflow. |
+| School information | School profile includes school stamp and stamp-signature data URLs | Extract and validate these binary assets; upload to private `school-private-assets` only through a verified authenticated Storage workflow. Keep object paths, not base64 blobs, in Database. |
+| Subject-teacher signature | One English Studies signature data URL | Candidate for private Storage migration after asset validation and authorised ownership check. |
+| Developer profile photo | One developer profile photo data URL | Exclude from school records. Do not copy developer identity/profile data into school tables or school asset buckets. |
+| Staff database | Four school-scoped legacy staff entries and one separate MAIN administrator entry | Do not bulk import. Reconcile stable identities against the 15 existing Supabase staff directory records; preserve school-scoped permissions and profile links. |
+| Activity history | Seven school-scoped activity records | Preserve the source backup. Import only after a dedicated append-only audit destination and duplicate/idempotency key have been approved. |
+| Portal announcement | One announcement with placeholder-looking title and message | Do not publish or import automatically. Require content-owner approval. |
+| Portal settings | Portal welcome, term weeks and enabled flags are mixed with license-expiry and sales fields | Split school-controlled settings from privileged licensing/sales metadata. Only approved school settings may be migrated. |
+| ID-card settings | Validity date recorded as 31 October 2026, already expired at snapshot time | Do not reactivate or migrate as current policy. Require a fresh administrator-approved validity and fee policy. |
+| UI/theme/workspace keys | Theme preferences and unrelated CodeForge/SDP-BESR menu/workspace state are also present in the same browser origin | Exclude from school E-Result domain data. If a cross-device preference is required, store it in a separate user-scoped preferences table. |
+
+### 13.2 Asset inventory from the fresh snapshot
+
+The snapshot contains four image data URLs:
+
+| Asset | Approximate encoded size | Handling |
+|---|---:|---|
+| Developer profile photo | 434 KB | Exclude from school migration |
+| School stamp | 344 KB | Candidate for private Storage |
+| Stamp signature | 160 KB | Candidate for private Storage |
+| English Studies teacher signature | 252 KB | Candidate for private Storage |
+
+These are base64-encoded image data embedded in browser values. No binary assets were uploaded during this audit. Before upload, validate image decoding, MIME type, dimensions, file size, object naming, ownership and bucket access. Do not store base64 image strings in relational columns.
+
+### 13.3 Cross-check against live Supabase
+
+The live project was queried again for the assignment represented in the fresh snapshot. A single matching class/subject assignment exists in `public.teacher_assignments`, but the live row is inactive and linked to a teacher UUID, whereas the browser copy has a blank teacher ID and says active. This is a conflict, not a safe import candidate. The database record must not be overwritten from the browser snapshot.
+
+The live baseline previously recorded in Section 2 remains unchanged by this inspection. No database row, Storage object, bucket, policy or application file was changed by processing this backup.
+
+### 13.4 Updated cutover decision
+
+The new snapshot confirms that the browser still contains legacy persistence data, but most captured school data is either empty, already represented in Supabase, or requires identity/authority review. The next safe work is therefore **application cutover plus controlled asset migration**, not a blind bulk import.
+
+Priority order:
+
+1. Replace the legacy class/assessment/subject-assignment reads with verified Supabase-backed reads and preserve the live assignment's inactive state until authorised.
+2. Replace the legacy school-info, staff, portal and settings persistence with domain-specific, school-scoped Supabase operations.
+3. Build an authenticated, idempotent image upload flow for the school stamp, stamp signature and teacher signature into the existing private bucket.
+4. Define and secure the append-only activity/audit destination before migrating seven history entries.
+5. Remove legacy class passwords and all browser-held authentication/permission assumptions.
+6. Run role, RLS, cross-device and refresh tests before disabling any legacy read path.
+
+**Phase 6 status remains:** audit and migration decisions documented; no bulk data import or asset upload has been performed. The source backup must remain preserved until each destination is verified.
