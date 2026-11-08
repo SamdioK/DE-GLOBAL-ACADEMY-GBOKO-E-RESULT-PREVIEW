@@ -92,3 +92,30 @@ The feature branch now includes the first frontend integration for private teach
 9. Test a legacy-only subject and confirm its existing signature remains visible until individually migrated.
 
 Do not treat a successful code commit as proof of live Storage or RLS operation.
+
+
+## Student passport reconciliation audit
+
+A read-only audit has been added to the Student Passport Registration screen on the `feature/supabase-storage-assets` branch.
+
+The administrator can run **Audit legacy photos** to compare:
+- legacy result records containing Base64 passport images;
+- those legacy records matched to exactly one Supabase student by admission number;
+- unmatched and ambiguous legacy admission-number matches;
+- official student records without a `student_passports` metadata row;
+- passport metadata rows without a matching legacy photo;
+- files found in the school's `student-passports/<school_id>/<student_id>/` folders;
+- Storage files without metadata and metadata paths whose files are missing.
+
+The audit displays aggregate counts only. It does not display student names, download or copy image content, write database records, upload files, or delete objects. Ambiguous and unmatched records require manual review. No automatic photo migration is authorised by this audit.
+
+### Reconciliation safety gate
+
+Do not remove legacy Base64 photos or existing Storage objects until:
+1. the audit has been run by an active administrator;
+2. all ambiguous and unmatched items have been reviewed against official admission records;
+3. each intended photo has been mapped to one verified `students.id`;
+4. a migration plan has been approved and tested;
+5. result entry, student registers and PDF output have been verified against the new passport metadata and signed URLs.
+
+The audit is branch-only and has not been deployed to production. It requires an authenticated administrator session and the existing `student_passports` table and `student-passports` bucket.
