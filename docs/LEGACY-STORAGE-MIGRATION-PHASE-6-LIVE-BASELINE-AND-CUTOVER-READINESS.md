@@ -270,7 +270,7 @@ Security controls verified after creation:
 - `anon` has no table grants;
 - the unique `(school_id, source_event_id)` constraint supports idempotent retries.
 
-No historical browser activity events were imported. No existing rows were changed or deleted.
+Seven historical browser activity events were imported from the 8 November browser backup after matching the recorded actor label to one active administrator profile in the same school. Deterministic source IDs were derived from the school, actor label, event timestamp, action and affected-record text; the insert used the unique constraint with conflict-safe handling. The two closely timed Geography assignment events were preserved as separate events because their timestamps differ. No source browser records were deleted.
 
 ### 14.2 Application write path
 
@@ -278,7 +278,7 @@ Added `appendActivityAudit` and `getActivityAudit` to `supabase-persistence.js`.
 
 Updated `logActivity` in `index.html` to dual-write newly generated events to Supabase while retaining the existing browser log as a temporary fallback. Personal names are not copied into the new Supabase audit record; an affected-record value is retained only when it is a UUID. A failed Supabase audit write is logged and shown as a warning rather than silently reported as successful.
 
-This is an interim dual-write stage, not a completed cutover. Existing browser activity history remains untouched until its seven legacy entries can be reviewed, deduplicated and imported with an approved actor attribution.
+This activity-log category has now been cut over: the seven legacy events are stored in Supabase, administrator history reads come from Supabase, and new events are written to Supabase. The old browser activityLog key is no longer read or written by the updated application. The old browser copy remains in the browser as a rollback artefact and has not been deleted.
 
 ### 14.3 Related live-code correction
 
@@ -288,6 +288,6 @@ The Subject Teacher login query now requires `teacher_assignments.is_active = tr
 
 - Live SQL verification confirmed RLS enabled, two policies present and zero authenticated UPDATE/DELETE/TRUNCATE grants on `school_activity_audit`.
 - Supabase Security Advisor was rerun. The new audit table did not add an RLS-without-policy finding. The pre-existing findings remain: four other RLS-enabled tables without policies, 17 SECURITY DEFINER functions callable by `anon`, 23 callable by `authenticated`, and leaked-password protection disabled. These remain separate security-review items; no blanket revocations or policy changes were made.
-- No activity rows have yet been written through an authenticated browser session in this maintenance pass. The application write path therefore still requires a live admin-session acceptance test.
-- Browser localStorage, IndexedDB and legacy `window.storage` fallbacks have not been removed. No legacy activity entries, staff rows, portal content, class records, student data or branding assets were bulk-imported or deleted.
+- SQL verification confirmed seven rows and seven unique source event IDs, spanning 2 October to 6 November 2026. The application append path still requires a live authenticated browser-session acceptance test; the SQL historical import does not prove that browser RLS writes work end to end.
+- Browser localStorage, IndexedDB and legacy `window.storage` fallbacks have not been removed. The seven activity events are the only historical browser activity records imported in this stage. No legacy staff rows, portal content, class records, student data or branding assets were bulk-imported or deleted.
 - Next cutover work remains: migrate the class and assignment management screens to authoritative Supabase reads/writes; move school portal content/settings into school-scoped domain tables; import validated branding assets to private Storage; then verify cross-device persistence, RLS, idempotency, refresh behaviour and rollback before retiring browser persistence.
