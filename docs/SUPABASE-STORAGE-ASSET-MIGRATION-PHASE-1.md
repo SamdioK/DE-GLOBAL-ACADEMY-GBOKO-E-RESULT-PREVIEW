@@ -119,3 +119,38 @@ Do not remove legacy Base64 photos or existing Storage objects until:
 5. result entry, student registers and PDF output have been verified against the new passport metadata and signed URLs.
 
 The audit is branch-only and has not been deployed to production. It requires an authenticated administrator session and the existing `student_passports` table and `student-passports` bucket.
+
+## Administrator-only orphaned passport photo viewer
+
+The Student Passport Registration module now includes **View orphaned photos**. It is a read-only inspection tool for files under the authenticated administrator's own school prefix in the private `student-passports` bucket.
+
+### Operation
+
+1. Open Student Passport Registration as an active school administrator.
+2. Select **View orphaned photos**.
+3. The module verifies the current Supabase session and rechecks the administrator's active profile and school.
+4. It lists folders under that school's bucket prefix, compares folder IDs with that school's `students` records, and compares file paths with that school's `student_passports` metadata.
+5. Files with no matching student folder record and no passport metadata are displayed with a temporary signed image URL, Storage path, upload date when available, and file size when available.
+
+### Safety and permissions
+
+- The viewer is administrator-only and uses the existing authenticated Supabase client.
+- It does not use a service-role key or make the bucket public.
+- Signed URLs are temporary (one hour).
+- It performs no upload, update, delete, or move operation.
+- The viewer is for visual inspection only; it does not infer student identity from a photograph or assign an orphaned file to a student.
+- A file that cannot be previewed remains listed with an error message; no file is changed.
+
+### Current reconciliation case
+
+The six previously identified orphaned objects remain untouched. This viewer discovers orphaned files dynamically under the current administrator's school prefix; it does not hard-code those six paths. The administrator must inspect the images before taking any separate removal action.
+
+### Validation before production
+
+This change is on `feature/supabase-storage-assets` only. Test with an active administrator account and confirm:
+- only the current school's orphaned files appear;
+- the six known orphaned images can be previewed;
+- normal student passport registration remains unchanged;
+- non-administrator accounts cannot access the module;
+- the private bucket remains private and signed URLs expire.
+
