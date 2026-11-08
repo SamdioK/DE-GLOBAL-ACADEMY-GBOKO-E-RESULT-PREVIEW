@@ -365,3 +365,32 @@ After that dependency is proven with authenticated role tests, the class-arm scr
 ### 16.5 Verification boundary
 
 This was a read-only audit. No student, enrolment, class, result, assignment or browser record was changed or deleted. The 743 live enrolments and 30 class definitions remain authoritative. No cutover is claimed for the class roster or student results in this section.
+
+
+## 17. Existing Supabase results schema and access-policy audit — 8 November 2026
+
+### 17.1 Existing result destinations
+
+The live schema already contains `results`, `form_master_student_assessments` and `result_comments`. The `results` table is a subject-level score record with school, student, class, subject, academic session and term identifiers; CA1, CA2, CA3, examination, total, grade and remark fields; entering profile; workflow status; and submitted, approved and published timestamps.
+
+The `form_master_student_assessments` table separately stores affective and psychomotor JSON ratings, Form Master comment, attendance days, school days, next-term fees and the assessing profile, scoped to a student, class, session and term. This is aligned with the newer Form Master assessment interface already in the frontend.
+
+### 17.2 Current live data state
+
+Read-only count checks returned zero rows in all three tables for this school: `results` 0, `form_master_student_assessments` 0 and `result_comments` 0. No legacy browser result record has been imported and no result record was created or modified during this audit.
+
+### 17.3 RLS policy observations
+
+RLS is enabled on all three tables. The `results` table has policies for subject teachers to insert, view, update and submit their own assigned draft results; administrators to view, approve and publish; Form Masters and sub-administrators to view scoped results; and students to view only their own published results. Authenticated deletion is explicitly denied by a false DELETE policy. These policy expressions must be tested with real role sessions before relying on them for the cutover.
+
+`form_master_student_assessments` has assigned-Form-Master SELECT, INSERT and UPDATE policies that check the assignment and active enrolment. `result_comments` currently has no policies in the policy catalogue; it remains inaccessible through ordinary authenticated RLS until an intentional authorisation design is approved. Do not add a broad policy merely to make the table writable.
+
+### 17.4 Next implementation boundary
+
+The next implementation should map each legacy result object's subject scores to `results` rows and its Form Master-only fields to `form_master_student_assessments`, using official student, class, session and term UUIDs. It must also establish how existing administrator and sub-administrator score entry should interact with the current subject-teacher draft/submission and administrator approval workflow. Student-facing retrieval must use the published `results` rows and the official student profile link, not a browser-held copy.
+
+Before writing code, inspect the remaining result UI and the current Supabase persistence/Edge Function implementations, reconcile score limits and term IDs, then implement one role path at a time. Validate duplicate prevention, assignment revocation, draft submission, administrator approval/publication, student visibility and refresh/cross-device retrieval. Keep the legacy browser records as rollback copies until all these tests pass.
+
+### 17.5 Verification boundary
+
+This was a read-only schema, policy and row-count audit. No RLS policies, grants, table definitions or records were changed. The browser result store has not been retired.
