@@ -1415,11 +1415,11 @@ async function loadTeacherSignaturesFromSupabase() {
   for (var i = 0; i < (result.data || []).length; i++) {
     var row = result.data[i];
     var signed = await supabaseClient.storage.from('school-private-assets')
-      .createSignedUrl(row.storage_path, 1800);
+      .createSignedUrl(row.storage_path, 3600);
     if (signed.error) throw signed.error;
     if (signed.data && signed.data.signedUrl) resolved[row.subject_name] = signed.data.signedUrl;
   }
-  teacherSignatures = resolved;
+  teacherSignatures = Object.assign({}, teacherSignatures || {}, resolved);
 }
 
 async function loadSchoolData() {
