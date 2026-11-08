@@ -249,3 +249,45 @@ Priority order:
 6. Run role, RLS, cross-device and refresh tests before disabling any legacy read path.
 
 **Phase 6 status remains:** audit and migration decisions documented; no bulk data import or asset upload has been performed. The source backup must remain preserved until each destination is verified.
+
+
+## 14. Supabase audit destination and first live cutover controls — 8 November 2026
+
+### 14.1 Append-only activity audit destination
+
+Created `public.school_activity_audit` in the live DE-GLOBAL-E-RESULT project. This is a domain-specific destination for school activity events, not a generic browser key/value store.
+
+The table records:
+- school scope and authenticated actor profile;
+- an idempotency/source event identifier, unique within a school;
+- action label and optional affected-record UUID;
+- event timestamp and bounded JSON object details.
+
+Security controls verified after creation:
+- RLS is enabled;
+- two policies exist: active school users may insert only as themselves within their own school; active school administrators may read their school's audit rows;
+- authenticated users have no UPDATE, DELETE or TRUNCATE table grants;
+- `anon` has no table grants;
+- the unique `(school_id, source_event_id)` constraint supports idempotent retries.
+
+No historical browser activity events were imported. No existing rows were changed or deleted.
+
+### 14.2 Application write path
+
+Added `appendActivityAudit` and `getActivityAudit` to `supabase-persistence.js`. The append method checks the authenticated user and active school profile, validates event fields, and treats a repeated source event ID as an idempotent retry.
+
+Updated `logActivity` in `index.html` to dual-write newly generated events to Supabase while retaining the existing browser log as a temporary fallback. Personal names are not copied into the new Supabase audit record; an affected-record value is retained only when it is a UUID. A failed Supabase audit write is logged and shown as a warning rather than silently reported as successful.
+
+This is an interim dual-write stage, not a completed cutover. Existing browser activity history remains untouched until its seven legacy entries can be reviewed, deduplicated and imported with an approved actor attribution.
+
+### 14.3 Related live-code correction
+
+The Subject Teacher login query now requires `teacher_assignments.is_active = true`. This prevents an inactive Supabase assignment from being treated as a current assignment merely because a stale browser copy labels it active. The matching live assignment found during the audit remains inactive; it was not activated or altered.
+
+### 14.4 Verification and outstanding work
+
+- Live SQL verification confirmed RLS enabled, two policies present and zero authenticated UPDATE/DELETE/TRUNCATE grants on `school_activity_audit`.
+- Supabase Security Advisor was rerun. The new audit table did not add an RLS-without-policy finding. The pre-existing findings remain: four other RLS-enabled tables without policies, 17 SECURITY DEFINER functions callable by `anon`, 23 callable by `authenticated`, and leaked-password protection disabled. These remain separate security-review items; no blanket revocations or policy changes were made.
+- No activity rows have yet been written through an authenticated browser session in this maintenance pass. The application write path therefore still requires a live admin-session acceptance test.
+- Browser localStorage, IndexedDB and legacy `window.storage` fallbacks have not been removed. No legacy activity entries, staff rows, portal content, class records, student data or branding assets were bulk-imported or deleted.
+- Next cutover work remains: migrate the class and assignment management screens to authoritative Supabase reads/writes; move school portal content/settings into school-scoped domain tables; import validated branding assets to private Storage; then verify cross-device persistence, RLS, idempotency, refresh behaviour and rollback before retiring browser persistence.
