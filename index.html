@@ -9689,7 +9689,7 @@ function updatePrintUI() {
         html += '<tr><td>' + s.studentName + '</td><td>' + s.admNo + '</td><td>' + s.className + '</td><td>' + escapeManagementText(getLegacyResultSession(s)) + '</td><td>' + s.averageScore.toFixed(1) + '%</td><td style="white-space:nowrap;"><button class="btn btn-success" onclick="printStudentResult(' + s.id + ')" style="padding:5px 12px; font-size:11px;">📄 PDF</button> <button class="btn btn-primary" onclick="printStudentResult(' + s.id + ', \'print\')" style="padding:5px 12px; font-size:11px;">🖨 Print</button> <button class="btn" onclick="shareStudentResult(\'whatsapp\', ' + s.id + ')" style="padding:5px 12px; font-size:11px; background:#25D366; color:white;">WhatsApp</button> </td></tr>';
       });
       html += '</tbody></table></div>';
-      actionArea.innerHTML = html;
+      actionArea.innerHTML = '<div style="margin:0 0 14px;padding:12px;border:1px dashed #b45309;border-radius:8px;background:#fffbeb;"><strong style="color:#92400e;">Testing tools</strong><p style="font-size:12px;color:#78350f;margin:5px 0 9px;">Temporary fictional scores for passport and PDF layout testing only. Not saved to the results database.</p><button type="button" class="btn" style="background:#b45309;color:#fff;" onclick="generateStudentResultTest()">Generate Test Result (PDF)</button></div>' + html;
     }
   } else if (scope === 'arm') {
     targetContainer.innerHTML = '<label>Class Arm</label><select id="printArmSelect">' + classArms.map(function(a) { return '<option value="' + a.name + '">' + a.name + '</option>'; }).join('') + '</select>';
@@ -9967,6 +9967,46 @@ function buildPrintStyles() {
     '.print-btn { position:fixed; top:15px; right:15px; padding:8px 16px; background:#667eea; color:white; border:none; border-radius:4px; cursor:pointer; z-index:999; } @media print { html,body { width:100%; margin:0; padding:0; } .sheet { margin:0 auto; } .print-btn { display:none; } .sheet:last-child { page-break-after:auto; break-after:auto; } }';
 }
 
+// TEST ONLY: generates an in-memory sample result; never writes to Supabase or local result storage.
+window.generateStudentResultTest = async function() {
+  var button = document.querySelector('#printActionArea button[onclick="generateStudentResultTest()"]');
+  if (button) { button.disabled = true; button.textContent = 'Preparing test result…'; }
+  try {
+    var source = [
+      ['Mathematics',8,9,8,58], ['English Studies',9,8,9,61],
+      ['Basic Science',8,8,9,57], ['Social Studies',9,9,8,60],
+      ['Computer Studies',10,9,9,63], ['Civic Education',8,9,9,56],
+      ['Agricultural Science',9,8,8,59], ['Physical and Health Education',8,8,9,55]
+    ];
+    var sampleSubjects = source.map(function(x) {
+      var total = x[1] + x[2] + x[3] + x[4];
+      var grade = total >= 75 ? 'A' : total >= 65 ? 'B' : total >= 55 ? 'C' : total >= 40 ? 'D' : 'E';
+      var remark = grade === 'A' ? 'Excellent' : grade === 'B' ? 'Very Good' : grade === 'C' ? 'Good' : grade === 'D' ? 'Fair' : 'Poor';
+      return {name:x[0],ca1:x[1],ca2:x[2],ca3:x[3],exam:x[4],total:total,grade:grade,remark:remark};
+    });
+    var obtained = sampleSubjects.reduce(function(sum, item) { return sum + item.total; }, 0);
+    var testStudent = {
+      id:'TEST-ONLY-D-GA-B7-A-034', studentName:'Terkimbi Wanger Sonia', admNo:'D-GA/B7/A/034',
+      className:'BASIC7A', sex:'Female', dob:'—', age:'—',
+      term:(document.getElementById('printTerm') || {}).value || '1',
+      session:(document.getElementById('printSession') || {}).value || (schoolInfo.session || '2026/2027'),
+      attendanceDays:58, schoolDays:60, nextTermFees:'', subjects:sampleSubjects,
+      totalObtained:obtained, totalObtainable:sampleSubjects.length * 100,
+      averageScore:obtained / sampleSubjects.length, position:3, positionOf:35,
+      affective:{}, psychomotor:{}, formMasterComment:'TEST ONLY: sample comment.',
+      formMaster:'Test Form Master', formMasterGender:'male', isTestResult:true
+    };
+    affectiveDomains.forEach(function(d) { testStudent.affective[d] = 4; });
+    psychomotorDomains.forEach(function(d) { testStudent.psychomotor[d] = 4; });
+    await attachRegisteredSupabasePassport(testStudent);
+    var w = window.open('', '_blank');
+    if (!w) throw new Error('Allow pop-ups to open the test result.');
+    w.document.write('<!DOCTYPE html><html><head><meta charset="UTF-8"><title>TEST ONLY - Result</title><style>' + buildPrintStyles() + '</style></head><body>' + buildStudentSheetHTML(testStudent) + '<button class="print-btn" onclick="window.print()">Print Test Sheet</button></body></html>');
+    w.document.close();
+    showToast('Test result generated. Fictional scores were not saved.', 'success');
+  } catch (e) { console.error(e); showToast(e.message || 'Test result generation failed.', 'error'); }
+  finally { if (button) { button.disabled = false; button.textContent = 'Generate Test Result (PDF)'; } }
+};
 function buildStudentSheetHTML(student) {
   var config = assessmentConfig[student.className] || { ca1: 10, ca2: 10, ca3: 10, exam: 70 };
   var assignedArm = classArms.find(function(arm) { return arm.name === student.className; });
@@ -9998,13 +10038,13 @@ function buildStudentSheetHTML(student) {
   var resultDateText = formatResultDate(selectedResultDate || getTodayDateInputValue());
   var stampData = schoolInfo.schoolStamp || schoolInfo.principalStamp || '';
   var datedStampData = createDatedStampDataUrl(stampData, selectedResultDate || getTodayDateInputValue(), schoolInfo.stampSignature || schoolInfo.principalSignature || '');
-  var stampHtml = datedStampData ? '<div class="school-stamp-wrap"><img class="school-stamp-image" src="' + datedStampData + '" alt="Official school stamp with selected date"></div>' : '';
-  var qrData = getApprovalQrDataUrl(student);
+  var stampHtml = (!student.isTestResult && datedStampData) ? '<div class="school-stamp-wrap"><img class="school-stamp-image" src="' + datedStampData + '" alt="Official school stamp with selected date"></div>' : '';
+  var qrData = student.isTestResult ? '' : getApprovalQrDataUrl(student);
   var qrHtml = qrData ? '<img class="approval-qr" src="' + qrData + '" alt="Approved result QR code">' : '';
 
   return '<div class="sheet">' +
     '<div class="header">' + logoHtml + '<div class="header-text"><div class="school-name">' + (schoolInfo.name || '') + '</div><div>' + (schoolInfo.address || '') + '</div><div>' + (schoolInfo.email || '') + ' | ' + (schoolInfo.phone || '') + '</div><div style="margin-top:5px; font-weight:bold; color:#333;">STUDENT RESULT SHEET - Term ' + student.term + '</div><div>Session: ' + (student.session || schoolInfo.session || '') + '</div></div>' + passportHtml + '</div>' +
-    '<div class="info-grid"><div><strong>Name:</strong> ' + student.studentName + '</div><div><strong>Adm No:</strong> ' + student.admNo + '</div><div><strong>Class:</strong> ' + student.className + '</div><div><strong>Sex:</strong> ' + student.sex + '</div><div><strong>DOB:</strong> ' + student.dob + '</div><div><strong>Age:</strong> ' + student.age + '</div><div><strong>Attendance:</strong> ' + Number(student.attendanceDays || 0) + ' out of ' + Number(student.schoolDays || ((Number(portalSettings.termWeeks) || 12) * 5)) + '</div></div>' +
+    (student.isTestResult ? '<div style="margin:8px 0;padding:8px;text-align:center;border:2px solid #b45309;background:#fffbeb;color:#92400e;font-weight:900;letter-spacing:1px;">TEST ONLY — FICTIONAL SCORES — NOT AN OFFICIAL RESULT</div>' : '') + '<div class="info-grid"><div><strong>Name:</strong> ' + student.studentName + '</div><div><strong>Adm No:</strong> ' + student.admNo + '</div><div><strong>Class:</strong> ' + student.className + '</div><div><strong>Sex:</strong> ' + student.sex + '</div><div><strong>DOB:</strong> ' + student.dob + '</div><div><strong>Age:</strong> ' + student.age + '</div><div><strong>Attendance:</strong> ' + Number(student.attendanceDays || 0) + ' out of ' + Number(student.schoolDays || ((Number(portalSettings.termWeeks) || 12) * 5)) + '</div></div>' +
     '<div style="display:grid;grid-template-columns:1fr 1fr;border:1px solid #333;margin:0 0 10px;"><div style="padding:7px;border-right:1px solid #333;"><strong>Next Term School Fees</strong></div><div style="padding:7px;">' + escapeManagementText(student.nextTermFees == null || student.nextTermFees === '' ? '—' : Number(student.nextTermFees).toLocaleString()) + '</div></div>' +
     '<table><thead><tr><th>Subject</th><th>CA1(' + config.ca1 + ')</th><th>CA2(' + config.ca2 + ')</th><th>CA3(' + config.ca3 + ')</th><th>Exam(' + config.exam + ')</th><th>Total</th><th>Class Average</th><th>Position in Class</th><th>Highest in Class</th><th>Lowest in Class</th><th>Grade</th><th>Remark</th><th>Sign</th></tr></thead><tbody>' + rows + '</tbody></table>' +
     '<div class="summary"><div><div>Total Obtained</div><strong>' + student.totalObtained + '</strong></div><div><div>Total Obtainable</div><strong>' + student.totalObtainable + '</strong></div><div><div>Average</div><strong>' + student.averageScore.toFixed(1) + '%</strong></div><div><div>Position</div><strong>' + getOrdinalPosition(student.position) + ' out of ' + (student.positionOf || '-') + ' Candidates' + '</strong></div></div>' +
