@@ -7557,23 +7557,30 @@ function escapeManagementText(value) {
 window.showPublicManagement = async function() {
   var profilesEl = document.getElementById('publicManagementProfiles');
   var modal = document.getElementById('managementPublicModal');
-  if (!profilesEl || !modal) return;
-  var storedProfiles = await cloudStorage.load('managementStaff');
-  var publishedProfiles = (Array.isArray(storedProfiles) ? storedProfiles : managementStaff).filter(function(profile) {
-    return profile.published === true && profile.active !== false;
-  });
-  if (publishedProfiles.length === 0) {
-    profilesEl.innerHTML = '<p style="color:#777; text-align:center; padding:30px 10px;">School management profiles will appear here once published.</p>';
-  } else {
-    profilesEl.innerHTML = publishedProfiles.map(function(profile) {
-      return '<article class="management-profile"><img src="' + escapeManagementText(profile.photo) + '" alt="Photo of ' + escapeManagementText(profile.name) + '"><div><h3>' + escapeManagementText(profile.office) + '</h3><p style="font-size:17px; font-weight:600; margin:4px 0 8px;">' + escapeManagementText(profile.name) + '</p>' +
-        (profile.qualifications ? '<p><strong>Academic Qualifications:</strong> ' + escapeManagementText(profile.qualifications) + '</p>' : '') +
-        (profile.email ? '<p><strong>Email:</strong> ' + escapeManagementText(profile.email) + '</p>' : '') +
-        (profile.hobbies ? '<p><strong>Hobbies:</strong> ' + escapeManagementText(profile.hobbies) + '</p>' : '') +
-        (profile.bio ? '<p style="margin-top:8px;"><strong>Brief Autobiography:</strong> ' + escapeManagementText(profile.bio) + '</p>' : '') + '</div></article>';
-    }).join('');
+  if (!profilesEl || !modal || !supabaseClient) return;
+  try {
+    var result = await supabaseClient.rpc('get_public_school_portal_content');
+    if (result.error) throw result.error;
+    var publishedProfiles = result.data && Array.isArray(result.data.managementStaff) ? result.data.managementStaff : [];
+    if (publishedProfiles.length === 0) {
+      profilesEl.innerHTML = '<p style="color:#777; text-align:center; padding:30px 10px;">School management profiles will appear here once published.</p>';
+    } else {
+      profilesEl.innerHTML = publishedProfiles.map(function(profile) {
+        return '<article class="management-profile">' +
+          (profile.photo ? '<img src="' + escapeManagementText(profile.photo) + '" alt="Photo of ' + escapeManagementText(profile.name) + '">' : '') +
+          '<div><h3>' + escapeManagementText(profile.office) + '</h3><p style="font-size:17px; font-weight:600; margin:4px 0 8px;">' + escapeManagementText(profile.name) + '</p>' +
+          (profile.qualifications ? '<p><strong>Academic Qualifications:</strong> ' + escapeManagementText(profile.qualifications) + '</p>' : '') +
+          (profile.email ? '<p><strong>Email:</strong> ' + escapeManagementText(profile.email) + '</p>' : '') +
+          (profile.hobbies ? '<p><strong>Hobbies:</strong> ' + escapeManagementText(profile.hobbies) + '</p>' : '') +
+          (profile.bio ? '<p style="margin-top:8px;"><strong>Brief Autobiography:</strong> ' + escapeManagementText(profile.bio) + '</p>' : '') + '</div></article>';
+      }).join('');
+    }
+    modal.classList.remove('hidden');
+  } catch (error) {
+    profilesEl.innerHTML = '<p class="alert alert-info">The public management directory is temporarily unavailable.</p>';
+    modal.classList.remove('hidden');
+    console.error('Public management directory load failed:', error);
   }
-  modal.classList.remove('hidden');
 };
 
 window.closePublicManagement = function() {
@@ -7608,20 +7615,18 @@ function renderManagement() {
     var photoFile = document.getElementById('managementPhoto').files[0];
     if (!name || !photoFile) { showToast('Name and photo are required', 'error'); return; }
     if (!photoFile.type || photoFile.type.indexOf('image/') !== 0) { showToast('Please choose a valid image file', 'error'); return; }
-    var reader = new FileReader();
-    reader.onload = async function(event) {
+    try {
+      var photoUrl = await uploadSchoolPublicAsset(photoFile, 'management-profiles');
       managementStaff.push({
-        id: Date.now(), office: document.getElementById('managementOffice').value, name: name,
-        photo: event.target.result, qualifications: document.getElementById('managementQualifications').value.trim(),
+        id: window.crypto.randomUUID(), office: document.getElementById('managementOffice').value, name: name,
+        photo: photoUrl, qualifications: document.getElementById('managementQualifications').value.trim(),
         email: document.getElementById('managementEmail').value.trim(), hobbies: document.getElementById('managementHobbies').value.trim(),
         bio: document.getElementById('managementBio').value.trim(), published: false, active: true
       });
       await saveAllData();
       showToast('Management profile added as a draft', 'success');
       renderManagement();
-    };
-    reader.onerror = function() { showToast('Could not read the selected photo', 'error'); };
-    reader.readAsDataURL(photoFile);
+    } catch (error) { showToast(error && error.message || 'Could not save the management profile.', 'error'); }
   });
   document.getElementById('publishManagementBtn').addEventListener('click', async function() {
     if (managementStaff.length === 0) { showToast('Add at least one profile before publishing', 'error'); return; }
