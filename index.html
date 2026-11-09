@@ -9125,7 +9125,7 @@ async function saveTeacherSignatureToSupabase(subject, file) {
   if (!supabaseClient || !authenticatedProfile || authenticatedProfile.role !== 'administrator') {
     throw new Error('An active School Administrator account is required to upload signatures.');
   }
-  if (!file || !/^image\\/(png|jpeg|webp)$/i.test(file.type || '') || file.size > 5 * 1024 * 1024) {
+  if (!file || !/^image\/(png|jpeg|webp)$/i.test(file.type || '') || file.size > 5 * 1024 * 1024) {
     throw new Error('Choose a PNG, JPG or WEBP signature image up to 5 MB.');
   }
   var existing = await supabaseClient.from('school_teacher_signatures').select('storage_path')
