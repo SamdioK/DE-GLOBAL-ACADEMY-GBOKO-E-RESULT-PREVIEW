@@ -529,6 +529,55 @@ async function moveLegacyEmbeddedImagesToStorage(value, folder) {
   return value;
 }
 
+async function migrateLegacySchoolBrandingAssets(legacySchoolInfo, schoolId) {
+  if (!legacySchoolInfo || typeof legacySchoolInfo !== 'object' ||
+      String(authenticatedProfile && authenticatedProfile.role || '').toLowerCase() !== 'administrator') return legacySchoolInfo;
+  var value = Object.assign({}, legacySchoolInfo), patch = {}, uploadedPaths = [];
+  var publicBucket = supabaseClient.storage.from('school-public-assets');
+  var privateBucket = supabaseClient.storage.from('school-private-assets');
+  async function uploadLegacyImage(dataUrl, kind, isPublic) {
+    var match = String(dataUrl || '').match(/^data:(image\\/(?:png|jpeg|webp));base64,([A-Za-z0-9+/=]+)$/i);
+    if (!match) return null;
+    var binary = atob(match[2]), bytes = new Uint8Array(binary.length);
+    for (var i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+    var blob = new Blob([bytes], { type: match[1] });
+    var extension = match[1].toLowerCase() === 'image/jpeg' ? 'jpg' : match[1].toLowerCase().split('/')[1];
+    var path = schoolId + '/branding/' + kind + '-' + window.crypto.randomUUID() + '.' + extension;
+    var bucket = isPublic ? publicBucket : privateBucket;
+    var uploaded = await bucket.upload(path, blob, { contentType: match[1], cacheControl: '3600', upsert: false });
+    if (uploaded.error) throw uploaded.error;
+    uploadedPaths.push({ bucket: bucket, path: path });
+    return path;
+  }
+  if (typeof value.logo === 'string' && value.logo.indexOf('data:image/') === 0) {
+    var logoPath = await uploadLegacyImage(value.logo, 'logo', true);
+    if (logoPath) {
+      var logoUrl = publicBucket.getPublicUrl(logoPath).data.publicUrl;
+      patch.logo_url = logoUrl; value.logo = logoUrl; value.portalLogo = logoUrl;
+    }
+  }
+  var privateFields = [
+    { key: 'principalSignature', column: 'principal_signature_path', kind: 'principal-signature' },
+    { key: 'schoolStamp', column: 'school_stamp_path', kind: 'school-stamp' },
+    { key: 'stampSignature', column: 'stamp_signature_path', kind: 'stamp-signature' }
+  ];
+  for (var f = 0; f < privateFields.length; f++) {
+    var field = privateFields[f];
+    if (typeof value[field.key] === 'string' && value[field.key].indexOf('data:image/') === 0) {
+      var privatePath = await uploadLegacyImage(value[field.key], field.kind, false);
+      if (privatePath) { patch[field.column] = privatePath; value[field.key] = ''; }
+    }
+  }
+  if (Object.keys(patch).length) {
+    var updated = await supabaseClient.from('schools').update(patch).eq('id', schoolId).select('id').maybeSingle();
+    if (updated.error || !updated.data) {
+      for (var u = 0; u < uploadedPaths.length; u++) await uploadedPaths[u].bucket.remove([uploadedPaths[u].path]);
+      throw updated.error || new Error('Supabase did not confirm the migrated school branding assets.');
+    }
+  }
+  return value;
+}
+
 async function migrateLegacyStudentPassportBatch(batch, schoolId, userId) {
   if (!Array.isArray(batch)) return batch;
   var bucket = supabaseClient.storage.from('student-passports');
@@ -663,6 +712,7 @@ async function migrateLegacyBrowserStateOnce() {
   for (var keyIndex = 0; keyIndex < keys.length; keyIndex++) {
     var key = keys[keyIndex], value = candidates.get(key).value;
     if (/^students_batch_\\d+$/.test(key)) value = await migrateLegacyStudentPassportBatch(value, schoolId, userId);
+    else if (key === 'schoolInfo') value = await migrateLegacySchoolBrandingAssets(value, schoolId);
     else value = await moveLegacyEmbeddedImagesToStorage(value, 'legacy-' + key.toLowerCase());
     if (key === 'formMasters' && Array.isArray(value)) value.forEach(function(master) { if (master) delete master.password; });
     if (key === 'subjectAssignments' && Array.isArray(value)) value.forEach(function(item) { if (item) { delete item.password; delete item.teacherPassword; } });
