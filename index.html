@@ -587,7 +587,7 @@ async function migrateLegacyStudentPassportBatch(batch, schoolId, userId) {
     var preflightStudent = batch[preflightIndex];
     if (!preflightStudent || typeof preflightStudent !== 'object') continue;
     var hasEmbeddedPassport = ['passport','passportUrl','passport_url','photo','photoUrl','photo_url'].some(function(field) {
-      return typeof preflightStudent[field] === 'string' && /^data:image\\/(png|jpeg|webp);base64,/i.test(preflightStudent[field]);
+      return typeof preflightStudent[field] === 'string' && /^data:image\/(png|jpeg|webp);base64,/i.test(preflightStudent[field]);
     });
     if (!hasEmbeddedPassport) continue;
     var preflightAdmission = String(preflightStudent.admNo || preflightStudent.admissionNumber || preflightStudent.admission_number || '').trim();
