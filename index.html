@@ -399,7 +399,7 @@ async function uploadSchoolPublicAsset(file, folder) {
   if (!supabaseClient || !authenticatedProfile || !authenticatedProfile.school_id) {
     throw new Error('An authenticated school account is required to upload this file.');
   }
-  if (!file || !file.type || !/^image\\/(png|jpeg|webp)$/i.test(file.type)) {
+  if (!file || !file.type || !/^image\/(png|jpeg|webp)$/i.test(file.type)) {
     throw new Error('Choose a PNG, JPG or WEBP image.');
   }
   if (file.size > 5 * 1024 * 1024) throw new Error('Images must not exceed 5 MB.');
