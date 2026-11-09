@@ -536,7 +536,7 @@ async function migrateLegacyStudentPassportBatch(batch, schoolId, userId) {
     var student = batch[i];
     if (!student || typeof student !== 'object') continue;
     var imageField = ['passport','passportUrl','passport_url','photo','photoUrl','photo_url'].find(function(field) {
-      return typeof student[field] === 'string' && /^data:image\\/(png|jpeg|webp);base64,/i.test(student[field]);
+      return typeof student[field] === 'string' && /^data:image\/(png|jpeg|webp);base64,/i.test(student[field]);
     });
     if (!imageField) continue;
     var admission = String(student.admNo || student.admissionNumber || student.admission_number || '').trim();
@@ -545,7 +545,7 @@ async function migrateLegacyStudentPassportBatch(batch, schoolId, userId) {
       .ilike('admission_number', admission).maybeSingle();
     if (official.error) throw official.error;
     if (!official.data || !official.data.id) continue;
-    var match = student[imageField].match(/^data:(image\\/(?:png|jpeg|webp));base64,([A-Za-z0-9+/=]+)$/i);
+    var match = student[imageField].match(/^data:(image\/(?:png|jpeg|webp));base64,([A-Za-z0-9+/=]+)$/i);
     if (!match) continue;
     var binary = atob(match[2]), bytes = new Uint8Array(binary.length);
     for (var b = 0; b < binary.length; b++) bytes[b] = binary.charCodeAt(b);
