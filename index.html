@@ -395,7 +395,7 @@ CloudStorage.prototype.globalLoad = async function(key) {
 
 var cloudStorage = new CloudStorage();
 
-// Score-entry preferences are account data// Score-entry preferences are account data and must live in Supabase, not on the device.
+// Score-entry preferences are account data and must live in Supabase, not on the device.
 async function loadScoreEntryPreferences() {
   if (!supabaseClient || !authenticatedProfile || !authenticatedProfile.id || !authenticatedProfile.school_id) {
     throw new Error('Sign in is required to load score-entry preferences.');
@@ -544,7 +544,6 @@ async function initApp() {
   if (setupView) setupView.classList.add('hidden');
   if (loginView) loginView.classList.remove('hidden');
 
-  setupEventListeners();
   setupEventListeners();
 }
 
@@ -1572,7 +1571,7 @@ async function loadStudentPortalData(admissionNumber) {
   }
 }
 
-function migrateOldClassNames() {function migrateOldClassNames() {
+function migrateOldClassNames() {
   var changed = false;
   classArms.forEach(function(arm) {
     if (!Array.isArray(arm.studentNames)) arm.studentNames = [];
@@ -2235,7 +2234,7 @@ async function saveAllData() {
   return true;
 }
 
-/* ================= SCHOOL ID CARD MODULE/* ================= SCHOOL ID CARD MODULE ================= */
+/* ================= SCHOOL ID CARD MODULE ================= */
 
 var schoolIdCardSettings = {
   studentFee: 361.56,
