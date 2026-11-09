@@ -536,7 +536,7 @@ async function migrateLegacySchoolBrandingAssets(legacySchoolInfo, schoolId) {
   var publicBucket = supabaseClient.storage.from('school-public-assets');
   var privateBucket = supabaseClient.storage.from('school-private-assets');
   async function uploadLegacyImage(dataUrl, kind, isPublic) {
-    var match = String(dataUrl || '').match(/^data:(image\\/(?:png|jpeg|webp));base64,([A-Za-z0-9+/=]+)$/i);
+    var match = String(dataUrl || '').match(/^data:(image\/(?:png|jpeg|webp));base64,([A-Za-z0-9+/=]+)$/i);
     if (!match) return null;
     var binary = atob(match[2]), bytes = new Uint8Array(binary.length);
     for (var i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
