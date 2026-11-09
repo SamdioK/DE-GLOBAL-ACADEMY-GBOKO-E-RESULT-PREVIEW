@@ -3316,7 +3316,7 @@ async function renderReleaseResults() {
           var next = stage + 1;
           var disabled = stage >= 4 || Number(student.eligible_result_count || 0) < 1;
           var actionLabel = stage >= 4 ? 'Fully released' : 'Release ' + labels[next];
-          return '<tr><td>' + escapeManagementText(student.full_name || '') + '</td><td>' + escapeManagementText(student.admission_number || '') + '</td><td>' + escapeManagementText(student.class_name || '') + '</td><td>' + Number(student.eligible_result_count || 0) + '</td><td>' + labels[stage] + '</td><td><button class="btn btn-success release-stage-one" data-student="' + student.student_id + '" data-stage="' + next + '"' + (disabled ? ' disabled' : '') + '>' + actionLabel + '</button></td></tr>';
+          return '<tr><td>' + escapeManagementText(student.full_name || '') + '</td><td>' + escapeManagementText(student.admission_number || '') + '</td><td>' + escapeManagementText(student.class_name || '') + '</td><td>' + Number(student.eligible_result_count || 0) + '</td><td>' + labels[stage] + '</td><td><button class="btn btn-success release-stage-one" data-student="' + student.student_id + '" data-stage="' + next + '"' + (disabled ? ' disabled' : '') + '>' + actionLabel + '</button>' + (stage > 0 ? ' <button class="btn btn-danger release-stage-reset" data-student="' + student.student_id + '">Revoke All</button>' : '') + '</td></tr>';
         }).join('') + '</tbody></table></div>';
       rowsRoot.querySelectorAll('.release-stage-one').forEach(function(button) {
         button.addEventListener('click', async function() {
@@ -3336,6 +3336,27 @@ async function renderReleaseResults() {
             showToast(error.message || 'Could not advance result release.', 'error');
             button.disabled = false;
             button.textContent = 'Release ' + labels[nextStage];
+          }
+        });
+      });
+      rowsRoot.querySelectorAll('.release-stage-reset').forEach(function(button) {
+        button.addEventListener('click', async function() {
+          var studentId = button.getAttribute('data-student');
+          if (!window.confirm('Revoke all released result stages for this student and term?')) return;
+          button.disabled = true;
+          button.textContent = 'Revoking…';
+          try {
+            var saved = await supabaseClient.functions.invoke('manage-student-result-release', {
+              body: { action: 'set_stage', student_id: studentId, academic_session_id: sessionSelect.value, term_id: termSelect.value, release_stage: 0 }
+            });
+            if (saved.error) throw saved.error;
+            if (!saved.data || saved.data.success !== true) throw new Error(saved.data && saved.data.error || 'Release stage could not be revoked.');
+            showToast('All result release stages revoked.', 'success');
+            await loadReleaseRows();
+          } catch (error) {
+            showToast(error.message || 'Could not revoke result release.', 'error');
+            button.disabled = false;
+            button.textContent = 'Revoke All';
           }
         });
       });
