@@ -11166,15 +11166,19 @@ async function renderSubjectTeacherInput() {
         var payloads = rows.map(function(row) {
           var studentId = row.getAttribute('data-student-id');
           var values = {};
+          var hasAnyScore = false;
           ['ca1', 'ca2', 'ca3', 'examination'].forEach(function(field) {
             var input = row.querySelector('[data-field="' + field + '"]');
-            var number = input.value.trim() === '' ? 0 : Number(input.value);
-            if (!Number.isFinite(number) || number < 0 || number > maxima[field]) {
+            var raw = input.value.trim();
+            if (raw !== '') hasAnyScore = true;
+            var number = raw === '' ? null : Number(raw);
+            if (number !== null && (!Number.isFinite(number) || number < 0 || number > maxima[field])) {
               throw new Error('Invalid ' + field.toUpperCase() + ' score for ' + row.cells[1].textContent + '.');
             }
             values[field] = number;
           });
-          var total = values.ca1 + values.ca2 + values.ca3 + values.examination;
+          if (!hasAnyScore) return null;
+          var total = ['ca1', 'ca2', 'ca3', 'examination'].reduce(function(sum, field) { return sum + (values[field] == null ? 0 : values[field]); }, 0);
           var grade = 'F', remark = 'Failed';
           if (total >= 80) { grade = 'A'; remark = 'Excellent'; }
           else if (total >= 70) { grade = 'B'; remark = 'Very Good'; }
@@ -11191,19 +11195,14 @@ async function renderSubjectTeacherInput() {
             total: total, grade: grade, remark: remark, entered_by: teacherId,
             status: existing && existing.status || 'draft', updated_at: new Date().toISOString()
           };
-        });
+        }).filter(Boolean);
 
-        for (var i = 0; i < payloads.length; i++) {
-          var payload = payloads[i];
-          var saved = await supabaseClient.from('results').upsert(payload, {
-            onConflict: 'student_id,subject_id,academic_session_id,term_id'
-          }).select('id,student_id,status').single();
-          if (saved.error) {
-            var failedStudent = officialStudents.find(function(student) { return String(student.id) === String(payload.student_id); });
-            throw new Error('Could not save the result for ' + (failedStudent && failedStudent.name || payload.student_id) + ': ' + saved.error.message);
-          }
-        }
-        showToast('Scores saved successfully. Existing result statuses were preserved.', 'success');
+        if (!payloads.length) throw new Error('No scores have been entered. Enter at least one score before saving.');
+        var saved = await supabaseClient.from('results').upsert(payloads, {
+          onConflict: 'student_id,subject_id,academic_session_id,term_id'
+        }).select('id,student_id,status');
+        if (saved.error) throw new Error('Supabase could not save the score batch: ' + saved.error.message);
+        showToast('Scores saved successfully to Supabase. Blank score cells were preserved as empty, and existing result statuses were preserved.', 'success');
         await renderSubjectTeacherInput();
       } catch (saveError) {
         console.error('Subject score save failed:', saveError);
