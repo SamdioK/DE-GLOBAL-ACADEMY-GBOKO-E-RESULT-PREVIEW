@@ -624,13 +624,62 @@ async function migrateLegacyStudentPassportBatch(batch, schoolId, userId) {
   return batch;
 }
 
+async function migrateLegacyTeacherSignatures(candidates, sourceRows, prefixes, legacyDb, schoolId, userId) {
+  var meta = candidates.get('signature_subjects');
+  if (!meta || !Array.isArray(meta.value)) return 0;
+  var migrated = 0, bucket = supabaseClient.storage.from('school-private-assets');
+  async function cleanup(key) {
+    sourceRows.filter(function(row) { return row.key === key; }).forEach(function(row) {
+      if (row.source === 'localstorage') {
+        try { prefixes.forEach(function(prefix) { localStorage.removeItem(prefix + key); }); } catch (error) {}
+      } else if (row.source === 'indexeddb' && legacyDb) {
+        try { var tx = legacyDb.transaction(['data'], 'readwrite'); prefixes.forEach(function(prefix) { tx.objectStore('data').delete(prefix + key); }); } catch (error) {}
+      } else if (row.source === 'host' && window.storage && typeof window.storage.delete === 'function') {
+        prefixes.forEach(function(prefix) { try { window.storage.delete(prefix + key, true); } catch (error) {} });
+      }
+    });
+  }
+  for (var i = 0; i < meta.value.length; i++) {
+    var subject = String(meta.value[i] || '').trim();
+    if (!subject) continue;
+    var key = 'sig_' + subject.replace(/\\s+/g, '_');
+    var item = candidates.get(key);
+    if (!item) continue;
+    var existing = await supabaseClient.from('school_teacher_signatures').select('storage_path')
+      .eq('school_id', schoolId).eq('subject_name', subject).maybeSingle();
+    if (existing.error) throw existing.error;
+    if (!existing.data) {
+      var match = String(item.value || '').match(/^data:(image\\/(?:png|jpeg|webp));base64,([A-Za-z0-9+/=]+)$/i);
+      if (!match) continue;
+      var binary = atob(match[2]), bytes = new Uint8Array(binary.length);
+      for (var b = 0; b < binary.length; b++) bytes[b] = binary.charCodeAt(b);
+      var blob = new Blob([bytes], { type: match[1] });
+      var extension = match[1].toLowerCase() === 'image/jpeg' ? 'jpg' : match[1].toLowerCase().split('/')[1];
+      var path = schoolId + '/teacher-signatures/' + window.crypto.randomUUID() + '.' + extension;
+      var uploaded = await bucket.upload(path, blob, { contentType: match[1], cacheControl: '3600', upsert: false });
+      if (uploaded.error) throw uploaded.error;
+      var saved = await supabaseClient.from('school_teacher_signatures').insert({
+        school_id: schoolId, subject_name: subject, storage_path: path,
+        created_by: userId, updated_at: new Date().toISOString()
+      }).select('storage_path').single();
+      if (saved.error || !saved.data) { await bucket.remove([path]); throw saved.error || new Error('Legacy teacher signature migration was not confirmed.'); }
+      migrated++;
+    }
+    await cleanup(key);
+    candidates.delete(key);
+  }
+  await cleanup('signature_subjects');
+  candidates.delete('signature_subjects');
+  return migrated;
+}
+
 async function migrateLegacyBrowserStateOnce() {
   if (!supabaseClient || !authenticatedProfile || !authenticatedProfile.school_id ||
       !['administrator','portal_developer'].includes(String(authenticatedProfile.role || '').toLowerCase())) return { imported: 0 };
   var schoolId = String(authenticatedProfile.school_id);
   var userId = String(authenticatedProfile.id);
-  var exactKeys = ['classArms','formMasters','subjectAssignments','schoolInfo','managementStaff','portalNews','schoolStaff','staffDatabase','portalStaffSelections','prefects','dutyRoster','portalSettings','students_meta','schoolIdCardSettings','activationResetV3'];
-  function allowed(key) { return exactKeys.indexOf(key) !== -1 || /^students_batch_\\d+$/.test(key); }
+  var exactKeys = ['classArms','formMasters','subjectAssignments','schoolInfo','managementStaff','portalNews','schoolStaff','staffDatabase','portalStaffSelections','prefects','dutyRoster','portalSettings','students_meta','schoolIdCardSettings','activationResetV3','signature_subjects'];
+  function allowed(key) { return exactKeys.indexOf(key) !== -1 || /^students_batch_\\d+$/.test(key) || /^sig_.+$/.test(key); }
   var candidates = new Map(), sourceRows = [], prefixes = [schoolId + ':', 'MAIN:'];
   function remember(key, value, source) {
     if (!allowed(key)) return;
@@ -649,6 +698,21 @@ async function migrateLegacyBrowserStateOnce() {
       }
     }
   } catch (hostStorageError) {}
+  var signatureMeta = candidates.get('signature_subjects');
+  if (signatureMeta && Array.isArray(signatureMeta.value) && window.storage && typeof window.storage.get === 'function') {
+    for (var signatureIndex = 0; signatureIndex < signatureMeta.value.length; signatureIndex++) {
+      var signatureSubject = String(signatureMeta.value[signatureIndex] || '').trim();
+      if (!signatureSubject) continue;
+      var signatureKey = 'sig_' + signatureSubject.replace(/\\s+/g, '_');
+      if (candidates.has(signatureKey)) continue;
+      for (var signaturePrefix = 0; signaturePrefix < prefixes.length; signaturePrefix++) {
+        try {
+          var hostSignature = await window.storage.get(prefixes[signaturePrefix] + signatureKey, true);
+          if (hostSignature && hostSignature.value != null) remember(signatureKey, JSON.parse(hostSignature.value), 'host');
+        } catch (signatureReadError) {}
+      }
+    }
+  }
   var legacyDb = null;
   try {
     if (typeof indexedDB !== 'undefined') {
@@ -703,8 +767,13 @@ async function migrateLegacyBrowserStateOnce() {
       }
     }
   }
-  if (!candidates.size) { if (legacyDb) legacyDb.close(); return { imported: 0 }; }
-  var keys = Array.from(candidates.keys());
+  if (String(authenticatedProfile.role || '').toLowerCase() === 'administrator') {
+    imported = await migrateLegacyTeacherSignatures(candidates, sourceRows, prefixes, legacyDb, schoolId, userId);
+  }
+  if (!candidates.size) { if (legacyDb) legacyDb.close(); return { imported: imported }; }
+  var keys = Array.from(candidates.keys()).filter(function(key) {
+    return key !== 'signature_subjects' && !/^sig_.+$/.test(key);
+  });
   var existingResult = await supabaseClient.from('school_app_state').select('storage_key').eq('school_id', schoolId).in('storage_key', keys);
   if (existingResult.error) throw existingResult.error;
   var existing = new Set((existingResult.data || []).map(function(row) { return row.storage_key; }));
