@@ -513,7 +513,208 @@
       return data || [];
     }
 
-    return Object.freeze({ select, insert, update, upsert, remove, getSchoolProfile, updateSchoolProfile, getClasses, auditSchoolAndClasses, auditClassConfigurationReconciliation, auditSchoolDataCounts, auditStudentEnrolmentIntegrity, auditAssignmentIntegrity, auditStaffAndAcademicConfiguration, getStaffDirectory, createStaffDirectoryRecord, updateStaffDirectoryRecord, appendActivityAudit, getActivityAudit });
+
+    function cleanText(value, field, maxLength, required) {
+      const text = value == null ? '' : String(value).trim();
+      if (required && !text) throw new Error(field + ' is required.');
+      if (text.length > maxLength) throw new Error(field + ' is too long.');
+      return text || null;
+    }
+
+    async function getSchoolPortalSettings() {
+      const user = await requireAuthenticatedUser();
+      const profile = await getActiveSchoolProfile(user);
+      const { data, error } = await client.from('school_portal_settings')
+        .select('school_id,welcome_enabled,welcome_text,term_weeks,portal_enabled,updated_at')
+        .eq('school_id', profile.school_id).maybeSingle();
+      if (error) throw error;
+      return data || {
+        school_id: profile.school_id, welcome_enabled: false, welcome_text: '',
+        term_weeks: 12, portal_enabled: true
+      };
+    }
+
+    async function saveSchoolPortalSettings(settings) {
+      const user = await requireAuthenticatedUser();
+      const profile = await getActiveSchoolProfile(user);
+      const source = settings || {};
+      const weeks = Number(source.term_weeks);
+      if (!Number.isInteger(weeks) || weeks < 1 || weeks > 60) throw new Error('Term weeks must be between 1 and 60.');
+      const payload = {
+        school_id: profile.school_id,
+        welcome_enabled: source.welcome_enabled === true,
+        welcome_text: cleanText(source.welcome_text, 'Welcome text', 2000, false) || '',
+        term_weeks: weeks,
+        portal_enabled: source.portal_enabled !== false,
+        updated_by: user.id,
+        updated_at: new Date().toISOString()
+      };
+      const { data, error } = await client.from('school_portal_settings')
+        .upsert(payload, { onConflict: 'school_id' })
+        .select('school_id,welcome_enabled,welcome_text,term_weeks,portal_enabled,updated_at').single();
+      if (error) throw error;
+      if (!data) throw new Error('Supabase did not confirm portal settings.');
+      return data;
+    }
+
+    async function getSchoolPortalNews(options) {
+      const user = await requireAuthenticatedUser();
+      const profile = await getActiveSchoolProfile(user);
+      const opts = options || {};
+      let query = client.from('school_portal_news')
+        .select('id,school_id,category,title,message,published_at,is_published,created_at,updated_at')
+        .eq('school_id', profile.school_id)
+        .order('published_at', { ascending: false });
+      if (opts.publishedOnly === true) query = query.eq('is_published', true);
+      const { data, error } = await query;
+      if (error) throw error;
+      return data || [];
+    }
+
+    async function saveSchoolPortalNews(item) {
+      const user = await requireAuthenticatedUser();
+      const profile = await getActiveSchoolProfile(user);
+      const source = item || {};
+      const payload = {
+        school_id: profile.school_id,
+        category: cleanText(source.category || 'Announcement', 'Category', 80, true),
+        title: cleanText(source.title, 'News title', 180, true),
+        message: cleanText(source.message, 'News message', 12000, true),
+        published_at: source.published_at ? new Date(source.published_at).toISOString() : new Date().toISOString(),
+        is_published: source.is_published === true,
+        updated_by: user.id,
+        updated_at: new Date().toISOString()
+      };
+      let query;
+      if (source.id) {
+        query = client.from('school_portal_news').update(payload).eq('id', source.id).eq('school_id', profile.school_id);
+      } else {
+        payload.created_by = user.id;
+        query = client.from('school_portal_news').insert(payload);
+      }
+      const { data, error } = await query.select('id,school_id,category,title,message,published_at,is_published,created_at,updated_at').maybeSingle();
+      if (error) throw error;
+      if (!data) throw new Error('No portal news record was saved. Refresh and try again.');
+      return data;
+    }
+
+    async function deleteSchoolPortalNews(id) {
+      const user = await requireAuthenticatedUser();
+      const profile = await getActiveSchoolProfile(user);
+      if (!id) throw new Error('A news record ID is required.');
+      const { data, error } = await client.from('school_portal_news').delete()
+        .eq('id', id).eq('school_id', profile.school_id).select('id').maybeSingle();
+      if (error) throw error;
+      if (!data) throw new Error('No portal news record was deleted.');
+      return data.id;
+    }
+
+    async function getSchoolDutyRoster(fromDate, toDate) {
+      const user = await requireAuthenticatedUser();
+      const profile = await getActiveSchoolProfile(user);
+      let query = client.from('school_duty_roster')
+        .select('id,school_id,staff_directory_id,staff_profile_id,duty_date,duty_title,location,notes,status,created_at')
+        .eq('school_id', profile.school_id).order('duty_date', { ascending: true });
+      if (fromDate) query = query.gte('duty_date', fromDate);
+      if (toDate) query = query.lte('duty_date', toDate);
+      const { data, error } = await query;
+      if (error) throw error;
+      return data || [];
+    }
+
+    async function saveSchoolDutyRosterEntry(entry) {
+      const user = await requireAuthenticatedUser();
+      const profile = await getActiveSchoolProfile(user);
+      const source = entry || {};
+      const payload = {
+        school_id: profile.school_id,
+        staff_directory_id: source.staff_directory_id || null,
+        staff_profile_id: source.staff_profile_id || null,
+        duty_date: cleanText(source.duty_date, 'Duty date', 10, true),
+        duty_title: cleanText(source.duty_title, 'Duty title', 160, true),
+        location: cleanText(source.location, 'Duty location', 160, false),
+        notes: cleanText(source.notes, 'Duty notes', 2000, false),
+        status: ['scheduled','completed','cancelled'].includes(source.status) ? source.status : 'scheduled'
+      };
+      if (!payload.staff_directory_id && !payload.staff_profile_id) throw new Error('Select a staff member for this duty.');
+      let query;
+      if (source.id) query = client.from('school_duty_roster').update(payload).eq('id', source.id).eq('school_id', profile.school_id);
+      else { payload.created_by = user.id; query = client.from('school_duty_roster').insert(payload); }
+      const { data, error } = await query.select('id,school_id,staff_directory_id,staff_profile_id,duty_date,duty_title,location,notes,status,created_at').maybeSingle();
+      if (error) throw error;
+      if (!data) throw new Error('Supabase did not confirm the duty-roster save.');
+      return data;
+    }
+
+    async function getSchoolIdCardSettings() {
+      const user = await requireAuthenticatedUser();
+      const profile = await getActiveSchoolProfile(user);
+      const { data, error } = await client.from('school_id_card_settings')
+        .select('school_id,valid_until,school_address,school_phone,logo_path,updated_at')
+        .eq('school_id', profile.school_id).maybeSingle();
+      if (error) throw error;
+      return data || { school_id: profile.school_id, valid_until: null, school_address: null, school_phone: null, logo_path: null };
+    }
+
+    async function saveSchoolIdCardSettings(settings) {
+      const user = await requireAuthenticatedUser();
+      const profile = await getActiveSchoolProfile(user);
+      const source = settings || {};
+      const payload = {
+        school_id: profile.school_id,
+        valid_until: source.valid_until || null,
+        school_address: cleanText(source.school_address, 'School address', 500, false),
+        school_phone: cleanText(source.school_phone, 'School phone', 40, false),
+        logo_path: cleanText(source.logo_path, 'Logo storage path', 500, false),
+        updated_by: user.id,
+        updated_at: new Date().toISOString()
+      };
+      const { data, error } = await client.from('school_id_card_settings').upsert(payload, { onConflict: 'school_id' })
+        .select('school_id,valid_until,school_address,school_phone,logo_path,updated_at').single();
+      if (error) throw error;
+      if (!data) throw new Error('Supabase did not confirm ID-card settings.');
+      return data;
+    }
+
+    async function getSchoolPortalStaffSelections() {
+      const user = await requireAuthenticatedUser();
+      const profile = await getActiveSchoolProfile(user);
+      const { data, error } = await client.from('school_portal_staff_selections')
+        .select('id,school_id,staff_directory_id,show_name,show_designation,show_department,show_qualification,show_specialisation,show_photo,display_order,is_visible')
+        .eq('school_id', profile.school_id).order('display_order', { ascending: true });
+      if (error) throw error;
+      return data || [];
+    }
+
+    async function saveSchoolPortalStaffSelections(selections) {
+      const user = await requireAuthenticatedUser();
+      const profile = await getActiveSchoolProfile(user);
+      if (!Array.isArray(selections)) throw new Error('Staff selections must be a list.');
+      const rows = selections.map((item, index) => ({
+        school_id: profile.school_id,
+        staff_directory_id: item.staff_directory_id,
+        show_name: item.show_name !== false,
+        show_designation: item.show_designation !== false,
+        show_department: item.show_department !== false,
+        show_qualification: item.show_qualification !== false,
+        show_specialisation: item.show_specialisation !== false,
+        show_photo: item.show_photo !== false,
+        display_order: Number.isInteger(item.display_order) ? item.display_order : index,
+        is_visible: item.is_visible !== false,
+        updated_by: user.id,
+        updated_at: new Date().toISOString()
+      }));
+      if (!rows.length) return [];
+      const { data, error } = await client.from('school_portal_staff_selections')
+        .upsert(rows, { onConflict: 'school_id,staff_directory_id' })
+        .select('id,school_id,staff_directory_id,show_name,show_designation,show_department,show_qualification,show_specialisation,show_photo,display_order,is_visible');
+      if (error) throw error;
+      if (!data || data.length !== rows.length) throw new Error('Not all staff display selections were confirmed by Supabase.');
+      return data;
+    }
+
+
+    return Object.freeze({ select, insert, update, upsert, remove, getSchoolProfile, updateSchoolProfile, getClasses, auditSchoolAndClasses, auditClassConfigurationReconciliation, auditSchoolDataCounts, auditStudentEnrolmentIntegrity, auditAssignmentIntegrity, auditStaffAndAcademicConfiguration, getStaffDirectory, createStaffDirectoryRecord, updateStaffDirectoryRecord, appendActivityAudit, getActivityAudit, getSchoolPortalSettings, saveSchoolPortalSettings, getSchoolPortalNews, saveSchoolPortalNews, deleteSchoolPortalNews, getSchoolDutyRoster, saveSchoolDutyRosterEntry, getSchoolIdCardSettings, saveSchoolIdCardSettings, getSchoolPortalStaffSelections, saveSchoolPortalStaffSelections });
   }
   global.SupabasePersistence = Object.freeze({ create });
 })(window);
