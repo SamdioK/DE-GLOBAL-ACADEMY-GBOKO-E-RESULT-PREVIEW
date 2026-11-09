@@ -626,12 +626,19 @@ async function migrateLegacyStudentPassportBatch(batch, schoolId, userId) {
     var existing = await supabaseClient.from('student_passports').select('storage_path')
       .eq('school_id', schoolId).eq('student_id', official.data.id).maybeSingle();
     if (existing.error) { await bucket.remove([path]); throw existing.error; }
-    var saved = await supabaseClient.from('student_passports').upsert({
+    if (existing.data && existing.data.storage_path) {
+      // A passport may have been created after preflight. Never replace it.
+      await bucket.remove([path]);
+      return null;
+    }
+    var saved = await supabaseClient.from('student_passports').insert({
       school_id: schoolId, student_id: official.data.id, storage_path: path,
       updated_by: userId, updated_at: new Date().toISOString()
-    }, { onConflict: 'school_id,student_id' }).select('storage_path').single();
-    if (saved.error || !saved.data) { await bucket.remove([path]); throw saved.error || new Error('Passport migration was not confirmed.'); }
-    if (existing.data && existing.data.storage_path) await bucket.remove([existing.data.storage_path]);
+    }).select('storage_path').single();
+    if (saved.error || !saved.data) {
+      await bucket.remove([path]);
+      throw saved.error || new Error('Passport migration was not confirmed. The original legacy batch has been retained.');
+    }
     var signed = await bucket.createSignedUrl(path, 3600);
     if (signed.error) throw signed.error;
     student.passport = signed.data.signedUrl;
