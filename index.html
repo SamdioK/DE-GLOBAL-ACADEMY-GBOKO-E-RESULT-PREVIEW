@@ -9344,7 +9344,7 @@ function renderInput() {
   if (currentUser.type === 'formmaster') { renderFormMasterInput(); return; }
   if (currentUser.type === 'subjectteacher') { renderSubjectTeacherInput(); return; }
 
-  var selectedClass = currentUser.type === 'subadmin' ? (window.__subAdminInputArm || (classArms[0] && classArms[0].name)) : currentUser.arm;
+  var selectedClass = currentUser.type === 'subadmin' ? (window.__subAdminInputArm || (classArms[0] && classArms[0].name)) : (window.__adminInputArm || currentUser.arm || (classArms[0] && classArms[0].name));
   var arm = classArms.find(function(a) { return a.name === selectedClass; });
   var studentNames = [];
   var config = assessmentConfig[selectedClass] || { ca1: 0, ca2: 0, ca3: 0, exam: 0 };
@@ -9353,7 +9353,7 @@ function renderInput() {
   affectiveDomains.forEach(function(d) { affectiveRatings[d] = 5; });
   psychomotorDomains.forEach(function(d) { psychomotorRatings[d] = 5; });
 
-  var classSelector = currentUser.type === 'subadmin' ? '<div class="input-group" style="max-width:260px;"><label>Class Arm</label><select id="subadminInputArm">' + classArms.map(function(a) { return '<option value="' + a.name + '"' + (a.name === selectedClass ? ' selected' : '') + '>' + a.name + '</option>'; }).join('') + '</select></div>' : '';
+  var classSelector = '<div class="input-group" style="max-width:260px;"><label>Class Arm</label><select id="' + (currentUser.type === 'subadmin' ? 'subadminInputArm' : 'adminInputArm') + '">' + classArms.map(function(a) { return '<option value="' + a.name + '"' + (a.name === selectedClass ? ' selected' : '') + '>' + a.name + '</option>'; }).join('') + '</select></div>';
   var manualForm = '<div class="card"><h2>' + selectedClass + ' - Enter Results (Manual Entry)</h2>' + classSelector + '<p id="manualScoreLimits" style="background: #e3f2fd; padding: 10px; border-radius: 5px; margin: 15px 0; font-size: 12px;"><strong>Score Limits:</strong> ' + (getAssessmentConfiguration(selectedClass) ? 'CA1 (0-' + config.ca1 + '), CA2 (0-' + config.ca2 + '), CA3 (0-' + config.ca3 + '), Exam (0-' + config.exam + ')' : 'Assessment configuration has not yet been set for ' + escapeManagementText(normalizeAssessmentLevel(assessmentLevelForArm(selectedClass)) || selectedClass) + ' for the selected session and term.') + '</p><div class="grid grid-2"><div class="input-group"><label>Search Register (serial number or first 3 surname characters)</label><input type="search" id="studentSearch" placeholder="e.g. 01 or Man" autocomplete="off"></div><div class="input-group"><label>Student Name * — Register No.</label><select id="studentName"><option value="">Select</option>' + studentNames.map(function(n, i) { return n ? '<option value="' + escapeManagementText(n) + '" data-register="' + (i + 1) + '">' + String(i + 1).padStart(3, '0') + ' — ' + escapeManagementText(n) + '</option>' : ''; }).join('') + '</select></div><div class="input-group"><label>Admission Number (generated automatically)</label><input type="text" id="admNo" readonly style="background:#f0f0f0;"></div><div class="input-group"><label>Date of Birth *</label><div class="dob-selectors"><select id="dobDay"><option value="">Day</option>' + Array.from({length: 31}, function(_, i) { return '<option value="' + (i+1) + '">' + (i+1) + '</option>'; }).join('') + '</select><select id="dobMonth"><option value="">Month</option><option value="1">January</option><option value="2">February</option><option value="3">March</option><option value="4">April</option><option value="5">May</option><option value="6">June</option><option value="7">July</option><option value="8">August</option><option value="9">September</option><option value="10">October</option><option value="11">November</option><option value="12">December</option></select><select id="dobYear"><option value="">Year</option>' + Array.from({length: 56}, function(_, i) { return '<option value="' + (2015-i) + '">' + (2015-i) + '</option>'; }).join('') + '</select></div></div><div class="input-group"><label>Age</label><input type="text" id="age" disabled style="background: #f0f0f0;"></div><div class="input-group"><label>Sex *</label><select id="sex"><option value="">Select</option><option value="Male">Male</option><option value="Female">Female</option></select></div><div class="input-group"><label>Term *</label><select id="term"><option value="">Select</option><option value="1"' + (activeAssessmentTerm && Number(activeAssessmentTerm.term_number) === 1 ? ' selected' : '') + '>Term 1</option><option value="2"' + (activeAssessmentTerm && Number(activeAssessmentTerm.term_number) === 2 ? ' selected' : '') + '>Term 2</option><option value="3"' + (activeAssessmentTerm && Number(activeAssessmentTerm.term_number) === 3 ? ' selected' : '') + '>Term 3</option></select></div><div class="input-group"><label>Days Present (out of ' + ((Number(portalSettings.termWeeks) || 12) * 5) + ' school days)</label><input type="number" id="attendanceDays" min="0" max="' + ((Number(portalSettings.termWeeks) || 12) * 5) + '" value=""></div><div class="input-group"><label>Next Term School Fees Amount</label><input type="number" id="nextTermFees" min="0" step="0.01" placeholder="Enter amount"></div></div><p class="alert alert-info">Student passport photos and staff signatures are managed separately in the official profile and private asset workflows. They are not embedded in result records.</p><div class="input-group"><label>Select Subjects</label><input type="text" id="subjectSearch" placeholder="Search subjects..." style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; margin-bottom: 10px;"><div class="subject-selector" id="subjectList"></div><div class="input-group" style="margin-top:10px;"><label for="tradeSubjectSelect">Trade Course (optional)</label><select id="tradeSubjectSelect"><option value="">Select a trade course</option>' + getSubjectsForClassName(selectedClass).trade.map(function(subject) { return '<option value="' + escapeManagementText(subject) + '">' + escapeManagementText(subject) + '</option>'; }).join('') + '</select></div><div class="selected-subjects" id="selectedSubjects"></div></div><div id="scoresSection" style="margin-top: 20px;"><h3>Enter Scores</h3><div id="scoreInputs"></div></div><h3 style="margin-top: 25px;">Affective Domain</h3><div id="affectiveSection" style="background: #f9f9f9; padding: 15px; border-radius: 8px; margin-bottom: 20px;"></div><h3>Psychomotor Domain</h3><div id="psychomotorSection" style="background: #f9f9f9; padding: 15px; border-radius: 8px; margin-bottom: 20px;"></div><div class="grid grid-2"><div class="input-group"><label>Form Master Comment</label><textarea id="formMasterComment" rows="3"></textarea></div></div><div style="display: flex; gap: 10px; margin-top: 20px;"><button class="btn btn-success" id="saveStudentBtn">Save Scores to Supabase</button><button class="btn btn-danger" id="clearFormBtn">Clear</button></div></div>';
 
   var canManageRoster = currentUser.type === 'formmaster' || (currentUser.type === 'subadmin' && hasSubAdminPermission('manageStudents'));
@@ -9377,8 +9377,12 @@ function renderInput() {
     var dobGroup = legacyDobDay.closest('.input-group');
     dobGroup.innerHTML = '<label for="studentDob">Date of Birth *</label>' + renderStudentDobField('studentDob', '', '');
   }
-  var subadminArmSelect = document.getElementById('subadminInputArm');
-  if (subadminArmSelect) subadminArmSelect.addEventListener('change', function() { window.__subAdminInputArm = this.value; renderInput(); });
+  var classArmSelect = document.getElementById(currentUser.type === 'subadmin' ? 'subadminInputArm' : 'adminInputArm');
+  if (classArmSelect) classArmSelect.addEventListener('change', function() {
+    if (currentUser.type === 'subadmin') window.__subAdminInputArm = this.value;
+    else window.__adminInputArm = this.value;
+    renderInput();
+  });
 
   renderSubjectList(); renderAffective(); renderPsychomotor();
   loadAdminResultRoster(selectedClass).catch(function(error) {
@@ -9469,7 +9473,7 @@ function calculateAge() {
 function renderSubjectList() {
   var searchInput = document.getElementById('subjectSearch');
   var search = searchInput ? searchInput.value.toLowerCase() : '';
-  var subjectClass = currentUser.type === 'subadmin' ? window.__subAdminInputArm : currentUser.arm;
+  var subjectClass = currentUser.type === 'subadmin' ? window.__subAdminInputArm : (window.__adminInputArm || currentUser.arm);
   var officialCatalog = Array.isArray(window.__adminResultSubjectCatalog) ? window.__adminResultSubjectCatalog : null;
   var coreSubjects = officialCatalog
     ? officialCatalog.filter(function(item) { return item.is_trade !== true; }).map(function(item) { return item.name; })
@@ -9536,7 +9540,7 @@ function renderScoreInputs() {
   if (!container) return;
   container.innerHTML = '';
   if (selectedSubjects.length === 0) { container.innerHTML = '<p style="color: #999;">Select subjects to enter scores</p>'; return; }
-  var scoreClass = currentUser.type === 'subadmin' ? window.__subAdminInputArm : currentUser.arm;
+  var scoreClass = currentUser.type === 'subadmin' ? window.__subAdminInputArm : (window.__adminInputArm || currentUser.arm);
   var config = getAssessmentConfiguration(scoreClass);
   if (!config) {
     container.innerHTML = '<p class="alert alert-error">Assessment configuration has not yet been set for ' + escapeManagementText(normalizeAssessmentLevel(assessmentLevelForArm(scoreClass)) || scoreClass) + ' for the selected session and term.</p>';
@@ -9623,7 +9627,7 @@ async function saveStudent() {
     showToast('Your authenticated Supabase session, academic session and term are required.', 'error');
     return;
   }
-  var selectedClass = currentUser.type === 'subadmin' ? window.__subAdminInputArm : currentUser.arm;
+  var selectedClass = currentUser.type === 'subadmin' ? window.__subAdminInputArm : (window.__adminInputArm || currentUser.arm);
   var officialStudentId = window.__adminResultSelectedStudentId;
   var selectedStudent = (window.__adminResultRoster || []).find(function(x) { return String(x.student.id) === String(officialStudentId); });
   var classId = window.__adminResultClassId;
