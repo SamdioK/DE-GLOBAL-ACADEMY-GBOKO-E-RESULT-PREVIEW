@@ -2448,18 +2448,37 @@ var schoolIdCardSettings = {
 };
 
 async function loadSchoolIdCardSettings() {
-  var saved = await cloudStorage.load('schoolIdCardSettings');
-
-  if (saved && typeof saved === 'object') {
-    schoolIdCardSettings = Object.assign(
-      {},
-      schoolIdCardSettings,
-      saved
-    );
+  if (!supabaseClient || !authenticatedProfile || !authenticatedProfile.school_id) {
+    throw new Error('An authenticated school profile is required to load ID-card settings.');
   }
+  var settingsResult = await supabaseClient.from('school_id_card_settings')
+    .select('valid_until,school_address,school_phone,logo_path')
+    .eq('school_id', authenticatedProfile.school_id).maybeSingle();
+  if (settingsResult.error) throw settingsResult.error;
+  var saved = settingsResult.data || {};
+  var logoUrl = saved.logo_path || '';
+  if (logoUrl && !/^https?:\\/\\//i.test(logoUrl)) {
+    var publicLogo = supabaseClient.storage.from('school-public-assets').getPublicUrl(logoUrl);
+    logoUrl = publicLogo && publicLogo.data && publicLogo.data.publicUrl || '';
+  }
+  var permissionResult = await supabaseClient.from('school_id_card_permissions')
+    .select('account_profile_id,is_granted')
+    .eq('school_id', authenticatedProfile.school_id);
+  if (permissionResult.error) throw permissionResult.error;
+  var permissions = {};
+  (permissionResult.data || []).forEach(function(row) {
+    permissions[String(row.account_profile_id)] = row.is_granted === true;
+  });
+  schoolIdCardSettings = Object.assign({}, schoolIdCardSettings, {
+    validUntil: saved.valid_until || '',
+    schoolAddress: saved.school_address || '',
+    schoolPhone: saved.school_phone || '',
+    logo: logoUrl,
+    permissions: permissions
+  });
 }
 
-function idCardEscape(value) {
+function idCardEscape(value) {function idCardEscape(value) {
   return String(value == null ? '' : value).replace(
     /[&<>"']/g,
     function (ch) {
@@ -2719,66 +2738,79 @@ function renderSchoolIdCardContent() {
 }
 
 async function saveIdCardSettings() {
-  if (!idCardIsDeveloper()) {
+  if (!idCardIsDeveloper() || !supabasePersistence ||
+      typeof supabasePersistence.saveSchoolIdCardSettings !== 'function') {
     showToast('Only the Portal Developer can change card settings.', 'error');
     return;
   }
-
-  schoolIdCardSettings.schoolAddress =
-    document.getElementById('idCardAddress').value.trim();
-  schoolIdCardSettings.schoolPhone =
-    document.getElementById('idCardPhone').value.trim();
-  schoolIdCardSettings.validUntil =
-    document.getElementById('idCardValidity').value;
-  schoolIdCardSettings.logo =
-    document.getElementById('idCardLogo').value.trim();
-
-  var ok = await cloudStorage.save(
-    'schoolIdCardSettings',
-    schoolIdCardSettings
-  );
-
-  showToast(
-    ok ? 'Card settings saved.' : 'Unable to save settings.',
-    ok ? 'success' : 'error'
-  );
+  schoolIdCardSettings.schoolAddress = document.getElementById('idCardAddress').value.trim();
+  schoolIdCardSettings.schoolPhone = document.getElementById('idCardPhone').value.trim();
+  schoolIdCardSettings.validUntil = document.getElementById('idCardValidity').value;
+  schoolIdCardSettings.logo = document.getElementById('idCardLogo').value.trim();
+  try {
+    var saved = await supabasePersistence.saveSchoolIdCardSettings({
+      valid_until: schoolIdCardSettings.validUntil || null,
+      school_address: schoolIdCardSettings.schoolAddress,
+      school_phone: schoolIdCardSettings.schoolPhone,
+      logo_path: schoolIdCardSettings.logo
+    });
+    if (!saved) throw new Error('Supabase did not confirm the settings save.');
+    showToast('Card settings saved to Supabase.', 'success');
+  } catch (error) {
+    showToast(error && error.message || 'Unable to save ID-card settings.', 'error');
+  }
 }
 
 async function updateIdCardPermission(allowed) {
-  if (!idCardIsDeveloper()) return;
-
+  if (!idCardIsDeveloper() || !supabaseClient || !authenticatedProfile) return;
   var input = document.getElementById('idCardPermissionUser');
-  var key = String(input.value || '').trim().toLowerCase();
-
-  if (!key) {
-    showToast('Enter an account identifier.', 'error');
-    return;
+  var key = String(input.value || '').trim();
+  if (!key) { showToast('Enter an account identifier.', 'error'); return; }
+  try {
+    var target = null;
+    if (/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(key)) {
+      var byId = await supabaseClient.from('profiles').select('id').eq('id', key)
+        .eq('school_id', authenticatedProfile.school_id).maybeSingle();
+      if (byId.error) throw byId.error;
+      target = byId.data;
+    } else if (key.indexOf('@') !== -1) {
+      var byEmail = await supabaseClient.from('profiles').select('id').eq('school_id', authenticatedProfile.school_id)
+        .ilike('email', key).limit(1).maybeSingle();
+      if (byEmail.error) throw byEmail.error;
+      target = byEmail.data;
+    } else {
+      var byAdmission = await supabaseClient.from('students').select('profile_id').eq('school_id', authenticatedProfile.school_id)
+        .ilike('admission_number', key).limit(1).maybeSingle();
+      if (byAdmission.error) throw byAdmission.error;
+      if (byAdmission.data && byAdmission.data.profile_id) target = { id: byAdmission.data.profile_id };
+      if (!target) {
+        var byUsername = await supabaseClient.from('profiles').select('id').eq('school_id', authenticatedProfile.school_id)
+          .ilike('username', key).limit(1).maybeSingle();
+        if (byUsername.error) throw byUsername.error;
+        target = byUsername.data;
+      }
+    }
+    if (!target || !target.id) throw new Error('No account in this school matches that identifier.');
+    var result = await supabaseClient.from('school_id_card_permissions').upsert({
+      school_id: authenticatedProfile.school_id,
+      account_profile_id: target.id,
+      is_granted: allowed === true,
+      granted_by: authenticatedProfile.id,
+      updated_at: new Date().toISOString()
+    }, { onConflict: 'school_id,account_profile_id' })
+      .select('account_profile_id,is_granted').single();
+    if (result.error) throw result.error;
+    if (!result.data) throw new Error('Supabase did not confirm the card permission change.');
+    schoolIdCardSettings.permissions = schoolIdCardSettings.permissions || {};
+    schoolIdCardSettings.permissions[String(target.id)] = result.data.is_granted === true;
+    showToast(allowed ? 'Card access granted.' : 'Card access revoked.', 'success');
+    renderSchoolIdCardContent();
+  } catch (error) {
+    showToast(error && error.message || 'Could not save the card permission change.', 'error');
   }
-
-  schoolIdCardSettings.permissions =
-    schoolIdCardSettings.permissions || {};
-
-  if (allowed) {
-    schoolIdCardSettings.permissions[key] = true;
-  } else {
-    delete schoolIdCardSettings.permissions[key];
-  }
-
-  var ok = await cloudStorage.save(
-    'schoolIdCardSettings',
-    schoolIdCardSettings
-  );
-
-  showToast(
-    ok ? (allowed ? 'Card access granted.' : 'Card access revoked.') :
-      'Could not save the permission change.',
-    ok ? 'success' : 'error'
-  );
-
-  renderSchoolIdCardContent();
 }
 
-function renderIdCardPreview(data, targetId) {
+function renderIdCardPreview(data, targetId) {function renderIdCardPreview(data, targetId) {
   var target = document.getElementById(targetId);
   if (!target) return;
 
