@@ -10413,8 +10413,66 @@ async function saveStudent() {
       throw new Error(message);
     }
     if (!result.data || result.data.success !== true) throw new Error(result.data && result.data.message || 'The result could not be saved.');
-    logActivity('Saved draft student results to Supabase', selectedStudent.full_name + ' / ' + selectedClass + ' / ' + activeAssessmentTerm.name);
-    showToast(result.data.saved_count + ' subject result(s) saved to Supabase as drafts.', 'success');
+    var returnedResults = Array.isArray(result.data.results) ? result.data.results : [];
+    if (Number(result.data.saved_count) !== scores.length || returnedResults.length !== scores.length) {
+      throw new Error('The server did not confirm every selected subject result. Keep the form open and inspect Supabase before retrying.');
+    }
+    var resultIds = returnedResults.map(function(item) { return item && item.result_id; }).filter(Boolean);
+    if (resultIds.length !== scores.length) throw new Error('The server returned an incomplete result confirmation.');
+
+    // Verify all administrator batch writes by reading the exact result IDs back
+    // through the authenticated client before clearing the entry form.
+    var resultReadback = await supabaseClient.from('results')
+      .select('id,student_id,class_id,academic_session_id,term_id,total,grade,status')
+      .eq('school_id', authenticatedProfile.school_id)
+      .eq('student_id', officialStudentId).eq('class_id', classId)
+      .eq('academic_session_id', activeAcademicSession.id).eq('term_id', activeAssessmentTerm.id)
+      .in('id', resultIds);
+    if (resultReadback.error) throw new Error('The batch was processed, but Supabase result read-back failed: ' + resultReadback.error.message);
+    var verifiedResults = {};
+    (resultReadback.data || []).forEach(function(item) { verifiedResults[String(item.id)] = item; });
+    returnedResults.forEach(function(expected) {
+      var actual = verifiedResults[String(expected.result_id)];
+      if (!actual || String(actual.student_id) !== String(officialStudentId) ||
+          String(actual.class_id) !== String(classId) ||
+          String(actual.academic_session_id) !== String(activeAcademicSession.id) ||
+          String(actual.term_id) !== String(activeAssessmentTerm.id) ||
+          String(actual.status).toLowerCase() !== 'draft' ||
+          Number(actual.total) !== Number(expected.total) ||
+          String(actual.grade || '') !== String(expected.grade || '')) {
+        throw new Error('Supabase could not independently verify every saved subject result. Keep the form open and inspect the records before retrying.');
+      }
+    });
+
+    // The administrator RPC also writes the Form Master component in the same
+    // database transaction. Confirm that record before clearing the form.
+    var assessmentReadback = await supabaseClient.from('form_master_student_assessments')
+      .select('student_id,class_id,academic_session_id,term_id,affective_ratings,psychomotor_ratings,form_master_comment,attendance_days,school_days,next_term_fees,assessed_by')
+      .eq('school_id', authenticatedProfile.school_id).eq('student_id', officialStudentId)
+      .eq('class_id', classId).eq('academic_session_id', activeAcademicSession.id)
+      .eq('term_id', activeAssessmentTerm.id).maybeSingle();
+    if (assessmentReadback.error) throw new Error('Subject results were saved, but Form Master assessment read-back failed: ' + assessmentReadback.error.message);
+    var verifiedAssessment = assessmentReadback.data;
+    if (!verifiedAssessment) throw new Error('Subject results were saved, but the Form Master assessment could not be confirmed.');
+    ['affective_ratings','psychomotor_ratings'].forEach(function(field) {
+      var expectedRatings = payload.form_assessment[field] || {};
+      var actualRatings = verifiedAssessment[field] || {};
+      var expectedKeys = Object.keys(expectedRatings).sort();
+      var actualKeys = Object.keys(actualRatings).sort();
+      if (JSON.stringify(expectedKeys) !== JSON.stringify(actualKeys)) throw new Error('Form Master assessment read-back mismatch for ' + field + '.');
+      expectedKeys.forEach(function(key) {
+        if (Number(actualRatings[key]) !== Number(expectedRatings[key])) throw new Error('Form Master assessment read-back mismatch for ' + field + '.' + key + '.');
+      });
+    });
+    if (String(verifiedAssessment.form_master_comment || '') !== String(payload.form_assessment.form_master_comment || '') ||
+        Number(verifiedAssessment.school_days) !== Number(payload.form_assessment.school_days) ||
+        (verifiedAssessment.attendance_days == null ? null : Number(verifiedAssessment.attendance_days)) !== payload.form_assessment.attendance_days ||
+        (verifiedAssessment.next_term_fees == null ? null : Number(verifiedAssessment.next_term_fees)) !== payload.form_assessment.next_term_fees ||
+        String(verifiedAssessment.assessed_by) !== String(authenticatedProfile.id)) {
+      throw new Error('Form Master assessment values could not be independently verified in Supabase.');
+    }
+    logActivity('Saved and verified draft student results in Supabase', selectedStudent.full_name + ' / ' + selectedClass + ' / ' + activeAssessmentTerm.name);
+    showToast(returnedResults.length + ' subject result(s) and the Form Master assessment were saved and verified in Supabase.', 'success');
     clearForm();
   } catch (error) {
     showToast(error.message || 'Unable to save results to Supabase.', 'error');
