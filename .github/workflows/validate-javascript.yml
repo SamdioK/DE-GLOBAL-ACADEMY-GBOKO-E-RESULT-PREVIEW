@@ -1,0 +1,16 @@
+name: Validate E-Result JavaScript
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  syntax:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check inline application JavaScript
+        run: |
+          sed -n '14,11218p' index.html | sed '1d;$d' > /tmp/app.js
+          node --check /tmp/app.js
