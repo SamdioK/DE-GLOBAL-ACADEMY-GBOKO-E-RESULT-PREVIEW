@@ -35,7 +35,7 @@ export default {
       const classIds = [...new Set((rows || []).map((x: { class_id: string }) => x.class_id))];
       const subjectIds = [...new Set((rows || []).map((x: { subject_id: string }) => x.subject_id))];
       const { data: classes, error: classError } = classIds.length
-        ? await ctx.supabaseAdmin.from("classes").select("id,name").in("id", classIds)
+        ? await ctx.supabaseAdmin.from("classes").select("id,class_name").in("id", classIds)
         : { data: [], error: null };
       if (classError) throw classError;
       const { data: subjects, error: subjectError } = subjectIds.length
@@ -49,7 +49,7 @@ export default {
         .select("id,name,term_number").in("id", termIds);
       if (termError) throw termError;
 
-      const classMap = new Map((classes || []).map((x: { id: string; name: string }) => [x.id, x.name]));
+      const classMap = new Map((classes || []).map((x: { id: string; class_name: string }) => [x.id, x.class_name]));
       const subjectMap = new Map((subjects || []).map((x: { id: string; name: string }) => [x.id, x.name]));
       const sessionMap = new Map((sessions || []).map((x: { id: string; name: string }) => [x.id, x.name]));
       const termMap = new Map((terms || []).map((x: { id: string; name: string; term_number: number }) => [x.id, x]));
