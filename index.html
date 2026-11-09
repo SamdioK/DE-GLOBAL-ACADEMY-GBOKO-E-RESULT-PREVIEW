@@ -9121,6 +9121,55 @@ async function loadTeacherSignaturesFromSupabase() {
   teacherSignatures = Object.assign({}, teacherSignatures || {}, refreshed);
 }
 
+async function saveTeacherSignatureToSupabase(subject, file) {
+  if (!supabaseClient || !authenticatedProfile || authenticatedProfile.role !== 'administrator') {
+    throw new Error('An active School Administrator account is required to upload signatures.');
+  }
+  if (!file || !/^image\\/(png|jpeg|webp)$/i.test(file.type || '') || file.size > 5 * 1024 * 1024) {
+    throw new Error('Choose a PNG, JPG or WEBP signature image up to 5 MB.');
+  }
+  var existing = await supabaseClient.from('school_teacher_signatures').select('storage_path')
+    .eq('school_id', authenticatedProfile.school_id).eq('subject_name', subject).maybeSingle();
+  if (existing.error) throw existing.error;
+  var extension = file.type.toLowerCase() === 'image/jpeg' ? 'jpg' : file.type.toLowerCase().split('/')[1];
+  var path = authenticatedProfile.school_id + '/teacher-signatures/' + window.crypto.randomUUID() + '.' + extension;
+  var bucket = supabaseClient.storage.from('school-private-assets');
+  var uploaded = await bucket.upload(path, file, { contentType: file.type, cacheControl: '3600', upsert: false });
+  if (uploaded.error) throw uploaded.error;
+  var saved = await supabaseClient.from('school_teacher_signatures').upsert({
+    school_id: authenticatedProfile.school_id, subject_name: subject, storage_path: path,
+    created_by: authenticatedProfile.id, updated_at: new Date().toISOString()
+  }, { onConflict: 'school_id,subject_name' }).select('storage_path').single();
+  if (saved.error || !saved.data) {
+    await bucket.remove([path]);
+    throw saved.error || new Error('Supabase did not confirm the signature record.');
+  }
+  if (existing.data && existing.data.storage_path && existing.data.storage_path !== path) {
+    await bucket.remove([existing.data.storage_path]);
+  }
+  var signed = await bucket.createSignedUrl(path, 3600);
+  if (signed.error) throw signed.error;
+  return signed.data.signedUrl;
+}
+
+async function removeTeacherSignatureFromSupabase(subject) {
+  if (!supabaseClient || !authenticatedProfile || authenticatedProfile.role !== 'administrator') {
+    throw new Error('An active School Administrator account is required to remove signatures.');
+  }
+  var existing = await supabaseClient.from('school_teacher_signatures').select('storage_path')
+    .eq('school_id', authenticatedProfile.school_id).eq('subject_name', subject).maybeSingle();
+  if (existing.error) throw existing.error;
+  var removed = await supabaseClient.from('school_teacher_signatures').delete()
+    .eq('school_id', authenticatedProfile.school_id).eq('subject_name', subject).select('storage_path').maybeSingle();
+  if (removed.error) throw removed.error;
+  var path = removed.data && removed.data.storage_path || existing.data && existing.data.storage_path;
+  if (path) {
+    var fileRemoval = await supabaseClient.storage.from('school-private-assets').remove([path]);
+    if (fileRemoval.error) console.warn('Signature record removed but storage cleanup failed:', fileRemoval.error);
+  }
+  return true;
+}
+
 async function uploadSchoolBrandingAsset(kind, file) {
   if (!supabaseClient || !authenticatedProfile || !authenticatedProfile.school_id) {
     throw new Error('Please sign in again before uploading school branding assets.');
@@ -9537,31 +9586,33 @@ function renderTeacherSignatures() {
     });
   });
   document.querySelectorAll('.teacher-signature-upload').forEach(function(input) {
-    input.addEventListener('change', function() {
+    input.addEventListener('change', async function() {
       var file = input.files && input.files[0];
       if (!file) return;
-      if (!file.type || file.type.indexOf('image/') !== 0) { showToast('Please choose a valid signature image', 'error'); return; }
       var subject = input.getAttribute('data-subject');
-      var reader = new FileReader();
-      reader.onload = async function(event) {
-        teacherSignatures[subject] = event.target.result;
-        await saveAllData();
+      input.disabled = true;
+      try {
+        teacherSignatures[subject] = await saveTeacherSignatureToSupabase(subject, file);
         logActivity('Uploaded subject teacher signature', subject);
-        showToast('Signature saved for ' + subject, 'success');
+        showToast('Signature uploaded securely to Supabase Storage.', 'success');
         renderTeacherSignatures();
-      };
-      reader.onerror = function() { showToast('Could not read the selected signature', 'error'); };
-      reader.readAsDataURL(file);
+      } catch (error) {
+        showToast(error && error.message || 'Could not save the signature.', 'error');
+      } finally { input.disabled = false; }
     });
   });
   document.querySelectorAll('.remove-teacher-signature').forEach(function(button) {
     button.addEventListener('click', async function() {
       var subject = button.getAttribute('data-subject');
-      delete teacherSignatures[subject];
-      await saveAllData();
-      logActivity('Removed subject teacher signature', subject);
-      showToast('Signature removed for ' + subject, 'info');
-      renderTeacherSignatures();
+      button.disabled = true;
+      try {
+        await removeTeacherSignatureFromSupabase(subject);
+        delete teacherSignatures[subject];
+        logActivity('Removed subject teacher signature', subject);
+        showToast('Signature removed from Supabase Storage.', 'info');
+        renderTeacherSignatures();
+      } catch (error) { showToast(error && error.message || 'Could not remove the signature.', 'error'); }
+      finally { button.disabled = false; }
     });
   });
 }
