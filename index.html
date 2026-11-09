@@ -10955,6 +10955,9 @@ async function renderSubjectTeacherInput() {
   var sessionId = currentUser.academicSessionId || (activeAcademicSession && activeAcademicSession.id);
   var className = currentUser.arm;
   var subjectName = currentUser.subject;
+  var scorePreferences = { keyboardStyle: 'classic', direction: 'row' };
+  try { scorePreferences = await loadScoreEntryPreferences(); }
+  catch (preferenceError) { console.warn('Score-entry preferences unavailable; using defaults:', preferenceError); }
 
   if (!sessionId) {
     root.innerHTML = '<div class="card"><p class="alert alert-error">No academic session could be identified for this assignment.</p></div>';
@@ -11056,7 +11059,7 @@ async function renderSubjectTeacherInput() {
         (Number(term.term_number) === Number(selectedTerm.term_number) ? ' selected' : '') + '>' +
         escapeManagementText(term.name) + '</option>';
     });
-    html += '</select></div><div style="overflow-x:auto;margin-top:15px"><table><thead><tr>' +
+    html += '</select></div><div class="st-entry-controls" style="display:flex;gap:10px;flex-wrap:wrap;align-items:end;margin:12px 0"><div><label for="stKeyboardStyle">Keyboard style</label><select id="stKeyboardStyle"><option value="classic"' + (scorePreferences.keyboardStyle === 'classic' ? ' selected' : '') + '>Classic</option><option value="smart"' + (scorePreferences.keyboardStyle === 'smart' ? ' selected' : '') + '>Smart keypad</option><option value="compact"' + (scorePreferences.keyboardStyle === 'compact' ? ' selected' : '') + '>Compact keypad</option></select></div><div><label for="stEntryDirection">Entry direction</label><select id="stEntryDirection"><option value="row"' + (scorePreferences.direction === 'row' ? ' selected' : '') + '>Across the row</option><option value="col"' + (scorePreferences.direction === 'col' ? ' selected' : '') + '>Down the column</option></select></div></div><div style="overflow-x:auto;margin-top:15px"><table><thead><tr>'
       '<th>No.</th><th>Student name</th><th>Admission No.</th><th>CA1</th><th>CA2</th><th>CA3</th>' +
       '<th>Examination</th><th>Total</th><th>Grade</th><th>Status</th></tr></thead><tbody>';
 
@@ -11070,16 +11073,53 @@ async function renderSubjectTeacherInput() {
         '<td>' + escapeManagementText(student.name) + '</td>' +
         '<td>' + escapeManagementText(student.admissionNumber) + '</td>' +
         ['ca1', 'ca2', 'ca3', 'examination'].map(function(field, fieldIndex) {
-          return '<td><input type="number" class="st-score" data-field="' + field + '" min="0" max="' + maxima[field] + '" step="0.01" value="' + escapeManagementText(values[fieldIndex]) + '"></td>';
+          return '<td><input type="number" inputmode="decimal" autocomplete="off" class="st-score" data-field="' + field + '" min="0" max="' + maxima[field] + '" step="0.01" value="' + escapeManagementText(values[fieldIndex]) + '" aria-label="' + escapeManagementText(student.name + ' ' + field) + '"></td>';
         }).join('') +
         '<td class="st-total">' + escapeManagementText(existing && existing.total != null ? existing.total : '—') + '</td>' +
         '<td class="st-grade">' + escapeManagementText(existing && existing.grade || '—') + '</td>' +
         '<td class="st-status">' + escapeManagementText(existing && existing.status || 'new') + '</td></tr>';
     });
     html += '</tbody></table></div><p>' + officialStudents.length + ' officially enrolled student(s).</p>' +
-      '<button type="button" class="btn btn-success" id="saveAllScoresBtn">Save scores as draft</button></div>';
+      '<button type="button" class="btn btn-success" id="saveAllScoresBtn">Save scores as draft</button></div><div id="stKeypad" class="st-keypad" aria-label="Score keypad"><div class="st-keypad-head"><strong>Score keypad</strong><span id="stActiveScoreLabel">Select a score cell</span></div><div class="st-keypad-grid">' + ['1','2','3','4','5','6','7','8','9','0','.','⌫','Clear','Next'].map(function(key) { return '<button type="button" class="st-key" data-key="' + key + '">' + key + '</button>'; }).join('') + '</div></div><style>.st-entry-controls label{display:block;font-size:12px;font-weight:700;margin-bottom:5px}.st-entry-controls select{min-width:145px;padding:8px;border:1px solid #ccd5e5;border-radius:8px;background:#fff}.st-score{width:64px;min-width:58px;max-width:68px;padding:7px 3px;text-align:center;font-weight:700;border:1px solid #d5deeb;border-radius:7px}.st-score:focus{outline:2px solid #536bd8;border-color:#536bd8;background:#f2f5ff}.st-keypad{margin-top:14px;padding:12px;border:1px solid #dce3f0;border-radius:12px;background:#f7f9ff}.st-keypad-head{display:flex;justify-content:space-between;gap:8px;align-items:center;margin-bottom:9px;font-size:12px}.st-keypad-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:7px}.st-key{min-height:42px;border:1px solid #cbd5ea;border-radius:8px;background:#fff;color:#26386f;font-weight:800;font-size:16px;touch-action:manipulation}.st-key:active{background:#e6ebff}.st-key[data-key="Next"]{background:#263f91;color:#fff}.st-key[data-key="Clear"]{font-size:12px}.st-keypad[data-style="compact"] .st-key{min-height:34px;font-size:14px}.st-keypad[data-style="smart"]{background:#eef3ff;border-color:#aab9ed}@media(max-width:600px){.st-score{width:54px;min-width:50px}.st-keypad{padding:9px}.st-key{min-height:46px}}</style></div>;
     root.innerHTML = html;
 
+    var activeScoreInput = null;
+    var styleSelect = root.querySelector('#stKeyboardStyle');
+    var directionSelect = root.querySelector('#stEntryDirection');
+    var keypad = root.querySelector('#stKeypad');
+    keypad.dataset.style = scorePreferences.keyboardStyle;
+    async function persistScorePreferences() {
+      try { await saveScoreEntryPreferences(styleSelect.value, directionSelect.value); showToast('Score-entry preferences saved to your account.', 'success'); }
+      catch (error) { showToast(error.message || 'Could not save score-entry preferences.', 'error'); }
+    }
+    styleSelect.addEventListener('change', function() { keypad.dataset.style = this.value; persistScorePreferences(); });
+    directionSelect.addEventListener('change', persistScorePreferences);
+    root.querySelectorAll('.st-score').forEach(function(input) {
+      input.addEventListener('focus', function() { activeScoreInput = this; var row=this.closest('tr'); var label=row && row.cells[1] ? row.cells[1].textContent : 'Student'; root.querySelector('#stActiveScoreLabel').textContent=label+' · '+this.dataset.field.toUpperCase(); });
+      input.addEventListener('keydown', function(event) {
+        if (event.key !== 'Enter' && event.key !== 'ArrowDown' && event.key !== 'ArrowUp' && event.key !== 'ArrowRight' && event.key !== 'ArrowLeft') return;
+        event.preventDefault();
+        var row=this.closest('tr'); var rowIndex=Array.from(root.querySelectorAll('tbody tr')).indexOf(row); var colIndex=['ca1','ca2','ca3','examination'].indexOf(this.dataset.field); var rowCount=root.querySelectorAll('tbody tr').length;
+        if (event.key==='ArrowDown') rowIndex++;
+        else if (event.key==='ArrowUp') rowIndex--;
+        else if (event.key==='ArrowRight') colIndex++;
+        else if (event.key==='ArrowLeft') colIndex--;
+        else if (directionSelect.value==='row') { colIndex++; if(colIndex>3){colIndex=0;rowIndex++;} }
+        else { rowIndex++; if(rowIndex>=rowCount){rowIndex=0;colIndex++;} }
+        if(rowIndex<0||colIndex<0||colIndex>3||rowIndex>=rowCount) return;
+        var next=root.querySelectorAll('tbody tr')[rowIndex].querySelector('[data-field="'+['ca1','ca2','ca3','examination'][colIndex]+'"]'); if(next) next.focus();
+      });
+    });
+    keypad.addEventListener('click', function(event) {
+      var keyButton=event.target.closest('[data-key]'); if(!keyButton||!activeScoreInput) return;
+      var key=keyButton.dataset.key; var value=activeScoreInput.value;
+      if(key==='Next'){ activeScoreInput.dispatchEvent(new KeyboardEvent('keydown',{key:'Enter',bubbles:true})); return; }
+      if(key==='Clear') activeScoreInput.value='';
+      else if(key==='⌫') activeScoreInput.value=value.slice(0,-1);
+      else if(key==='.' && value.indexOf('.')!==-1) return;
+      else activeScoreInput.value=value+key;
+      activeScoreInput.dispatchEvent(new Event('input',{bubbles:true}));
+    });
     root.querySelector('#stTermSelect').addEventListener('change', function() {
       window.__stSelectedTerm = this.value;
       renderSubjectTeacherInput();
