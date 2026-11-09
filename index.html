@@ -2678,36 +2678,10 @@ async function loadSchoolIdCardSettings() {
         ? legacySettings.permissions : {};
       for (var legacyKey of Object.keys(legacyPermissions)) {
         if (legacyPermissions[legacyKey] !== true) continue;
-        var target = null;
-        if (/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(legacyKey)) {
-          var idLookup = await supabaseClient.from('profiles').select('id').eq('id', legacyKey)
-            .eq('school_id', authenticatedProfile.school_id).maybeSingle();
-          if (idLookup.error) throw idLookup.error;
-          target = idLookup.data;
-        } else if (legacyKey.indexOf('@') !== -1) {
-          var emailLookup = await supabaseClient.from('profiles').select('id').eq('school_id', authenticatedProfile.school_id)
-            .ilike('email', legacyKey).limit(1).maybeSingle();
-          if (emailLookup.error) throw emailLookup.error;
-          target = emailLookup.data;
-        } else {
-          var admissionLookup = await supabaseClient.from('students').select('profile_id').eq('school_id', authenticatedProfile.school_id)
-            .ilike('admission_number', legacyKey).limit(1).maybeSingle();
-          if (admissionLookup.error) throw admissionLookup.error;
-          if (admissionLookup.data && admissionLookup.data.profile_id) target = { id: admissionLookup.data.profile_id };
-          if (!target) {
-            var usernameLookup = await supabaseClient.from('profiles').select('id').eq('school_id', authenticatedProfile.school_id)
-              .ilike('username', legacyKey).limit(1).maybeSingle();
-            if (usernameLookup.error) throw usernameLookup.error;
-            target = usernameLookup.data;
-          }
-        }
-        if (target && target.id) {
-          var migratedPermission = await supabaseClient.from('school_id_card_permissions').upsert({
-            school_id: authenticatedProfile.school_id, account_profile_id: target.id,
-            is_granted: true, granted_by: authenticatedProfile.id, updated_at: new Date().toISOString()
-          }, { onConflict: 'school_id,account_profile_id' });
-          if (migratedPermission.error) throw migratedPermission.error;
-        }
+        var migratedPermission = await supabaseClient.rpc('set_school_id_card_permission', {
+          p_identifier: legacyKey, p_granted: true
+        });
+        if (migratedPermission.error) throw migratedPermission.error;
       }
       await supabaseClient.from('school_app_state').delete()
         .eq('school_id', authenticatedProfile.school_id).eq('storage_key', 'schoolIdCardSettings');
