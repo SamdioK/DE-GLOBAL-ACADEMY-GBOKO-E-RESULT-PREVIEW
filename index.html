@@ -11035,7 +11035,7 @@ async function renderSubjectTeacherInput() {
 
     var classLevel = normalizeAssessmentLevel(assessmentLevelForArm(className));
     var configResult = await supabaseClient.from('assessment_configurations')
-      .select('ca1_max,ca2_max,ca3_max,examination_max')
+      .select('ca1_max,ca2_max,ca3_max,examination_max,total_max')
       .eq('school_id', schoolId).eq('academic_session_id', sessionId)
       .eq('term_id', selectedTerm.id).eq('is_active', true)
       .eq('class_level', classLevel).maybeSingle();
@@ -11043,18 +11043,31 @@ async function renderSubjectTeacherInput() {
     var config = configResult.data;
     if (!config) throw new Error('No active assessment configuration was found for ' + classLevel + ', ' + selectedTerm.name + '.');
 
-    var maxima = {
-      ca1: Number(config.ca1_max), ca2: Number(config.ca2_max),
-      ca3: Number(config.ca3_max), examination: Number(config.examination_max)
-    };
-    if (Object.keys(maxima).some(function(field) { return !Number.isFinite(maxima[field]) || maxima[field] < 0; })) {
-      throw new Error('The assessment configuration contains invalid score limits.');
+    var assessmentFields = [
+      { key: 'ca1', label: 'CA1', maximum: Number(config.ca1_max) },
+      { key: 'ca2', label: 'CA2', maximum: Number(config.ca2_max) },
+      { key: 'ca3', label: 'CA3', maximum: Number(config.ca3_max) },
+      { key: 'examination', label: 'Examination', maximum: Number(config.examination_max) }
+    ];
+    var maxima = {};
+    assessmentFields.forEach(function(item) { maxima[item.key] = item.maximum; });
+    var configuredTotalMaximum = Number(config.total_max);
+    if (assessmentFields.some(function(item) { return !Number.isFinite(item.maximum) || item.maximum < 0; }) ||
+        !Number.isFinite(configuredTotalMaximum) || configuredTotalMaximum <= 0) {
+      throw new Error('The active assessment configuration contains invalid score limits or total maximum.');
     }
+    var activeAssessmentFields = assessmentFields.filter(function(item) { return item.maximum > 0; });
+    if (!activeAssessmentFields.length) throw new Error('No assessment components are enabled for this class and term.');
+    var configuredComponentTotal = activeAssessmentFields.reduce(function(sum, item) { return sum + item.maximum; }, 0);
+    if (configuredComponentTotal > configuredTotalMaximum) {
+      throw new Error('The configured component maxima exceed the configured total maximum. Ask the administrator to correct the assessment configuration.');
+    }
+    var scoreLimitSummary = activeAssessmentFields.map(function(item) { return item.label + ': 0–' + item.maximum; }).join(' · ');
 
     var html = '<div class="card"><h2>' + escapeManagementText(className) + ' — ' + escapeManagementText(subjectName) + '</h2>' +
       '<p><strong>Academic session:</strong> ' + escapeManagementText(activeAcademicSession && activeAcademicSession.name || '') + '</p>' +
       '<p><strong>Term:</strong> ' + escapeManagementText(selectedTerm.name) + '</p>' +
-      '<p class="alert alert-info"><strong>Score limits:</strong> CA1: 0–' + maxima.ca1 + ', CA2: 0–' + maxima.ca2 + ', CA3: 0–' + maxima.ca3 + ', Examination: 0–' + maxima.examination + '</p>' +
+      '<p class="alert alert-info"><strong>Configured assessment components:</strong> ' + escapeManagementText(scoreLimitSummary) + '<br><strong>Total maximum:</strong> ' + configuredTotalMaximum + '</p>' +
       '<div class="input-group" style="max-width:260px"><label for="stTermSelect">Select term</label><select id="stTermSelect">';
     terms.forEach(function(term) {
       html += '<option value="' + escapeManagementText(term.term_number) + '"' +
@@ -11062,8 +11075,9 @@ async function renderSubjectTeacherInput() {
         escapeManagementText(term.name) + '</option>';
     });
     html += '</select></div><div class="st-entry-controls" style="display:flex;gap:10px;flex-wrap:wrap;align-items:end;margin:12px 0"><div><label for="stKeyboardStyle">Keyboard style</label><select id="stKeyboardStyle"><option value="classic"' + (scorePreferences.keyboardStyle === 'classic' ? ' selected' : '') + '>Classic device keyboard</option><option value="smart"' + (scorePreferences.keyboardStyle === 'smart' ? ' selected' : '') + '>Smart keypad</option><option value="touch"' + (scorePreferences.keyboardStyle === 'touch' ? ' selected' : '') + '>Touch score tiles</option></select></div><div><label for="stEntryDirection">Entry direction</label><select id="stEntryDirection"><option value="row"' + (scorePreferences.direction === 'row' ? ' selected' : '') + '>Across the row</option><option value="col"' + (scorePreferences.direction === 'col' ? ' selected' : '') + '>Down the column</option></select></div></div><div style="overflow-x:auto;margin-top:15px"><table><thead><tr>' +
-      '<th>No.</th><th>Student name</th><th>Admission No.</th><th>CA1</th><th>CA2</th><th>CA3</th>' +
-      '<th>Examination</th><th>Total</th><th>Grade</th><th>Status</th></tr></thead><tbody>';
+      '<th>No.</th><th>Student name</th><th>Admission No.</th>' +
+      activeAssessmentFields.map(function(item) { return '<th>' + escapeManagementText(item.label) + '<br><small>Max ' + item.maximum + '</small></th>'; }).join('') +
+      '<th>Total / ' + configuredTotalMaximum + '</th><th>Grade</th><th>Status</th></tr></thead><tbody>';
 
     officialStudents.forEach(function(student, index) {
       var existing = resultsByStudent[String(student.id)];
@@ -11074,8 +11088,9 @@ async function renderSubjectTeacherInput() {
         '<td>' + escapeManagementText(student.registerNumber || index + 1) + '</td>' +
         '<td>' + escapeManagementText(student.name) + '</td>' +
         '<td>' + escapeManagementText(student.admissionNumber) + '</td>' +
-        ['ca1', 'ca2', 'ca3', 'examination'].map(function(field, fieldIndex) {
-          return '<td><input type="number" inputmode="decimal" autocomplete="off" class="st-score" data-field="' + field + '" min="0" max="' + maxima[field] + '" step="0.01" value="' + escapeManagementText(values[fieldIndex]) + '" aria-label="' + escapeManagementText(student.name + ' ' + field) + '"></td>';
+        activeAssessmentFields.map(function(item) {
+          var value = existing && existing[item.key] != null ? existing[item.key] : '';
+          return '<td><input type="number" inputmode="decimal" autocomplete="off" class="st-score" data-field="' + item.key + '" min="0" max="' + item.maximum + '" step="0.01" value="' + escapeManagementText(value) + '" aria-label="' + escapeManagementText(student.name + ' ' + item.label) + '"></td>';
         }).join('') +
         '<td class="st-total">' + escapeManagementText(existing && existing.total != null ? existing.total : '—') + '</td>' +
         '<td class="st-grade">' + escapeManagementText(existing && existing.grade || '—') + '</td>' +
@@ -11113,15 +11128,15 @@ async function renderSubjectTeacherInput() {
       input.addEventListener('keydown', function(event) {
         if (event.key !== 'Enter' && event.key !== 'ArrowDown' && event.key !== 'ArrowUp' && event.key !== 'ArrowRight' && event.key !== 'ArrowLeft') return;
         event.preventDefault();
-        var row=this.closest('tr'); var rowIndex=Array.from(root.querySelectorAll('tbody tr')).indexOf(row); var colIndex=['ca1','ca2','ca3','examination'].indexOf(this.dataset.field); var rowCount=root.querySelectorAll('tbody tr').length;
+        var row=this.closest('tr'); var rowIndex=Array.from(root.querySelectorAll('tbody tr')).indexOf(row); var colIndex=activeAssessmentFields.findIndex(function(item){return item.key===this.dataset.field;},this); var rowCount=root.querySelectorAll('tbody tr').length;
         if (event.key==='ArrowDown') rowIndex++;
         else if (event.key==='ArrowUp') rowIndex--;
         else if (event.key==='ArrowRight') colIndex++;
         else if (event.key==='ArrowLeft') colIndex--;
-        else if (directionSelect.value==='row') { colIndex++; if(colIndex>3){colIndex=0;rowIndex++;} }
+        else if (directionSelect.value==='row') { colIndex++; if(colIndex>=activeAssessmentFields.length){colIndex=0;rowIndex++;} }
         else { rowIndex++; if(rowIndex>=rowCount){rowIndex=0;colIndex++;} }
-        if(rowIndex<0||colIndex<0||colIndex>3||rowIndex>=rowCount) return;
-        var next=root.querySelectorAll('tbody tr')[rowIndex].querySelector('[data-field="'+['ca1','ca2','ca3','examination'][colIndex]+'"]'); if(next) next.focus();
+        if(rowIndex<0||colIndex<0||colIndex>=activeAssessmentFields.length||rowIndex>=rowCount) return;
+        var next=root.querySelectorAll('tbody tr')[rowIndex].querySelector('[data-field="'+activeAssessmentFields[colIndex].key+'"]'); if(next) next.focus();
       });
     });
     keypad.addEventListener('click', function(event) {
@@ -11141,15 +11156,15 @@ async function renderSubjectTeacherInput() {
 
     function calculateRow(row) {
       var values = {};
-      ['ca1', 'ca2', 'ca3', 'examination'].forEach(function(field) {
-        values[field] = Number(row.querySelector('[data-field="' + field + '"]').value || 0);
+      activeAssessmentFields.forEach(function(item) {
+        values[item.key] = Number(row.querySelector('[data-field="' + item.key + '"]').value || 0);
       });
-      var total = values.ca1 + values.ca2 + values.ca3 + values.examination;
+      var total = activeAssessmentFields.reduce(function(sum, item) { return sum + values[item.key]; }, 0);
       var grade = 'F', remark = 'Failed';
-      if (total >= 80) { grade = 'A'; remark = 'Excellent'; }
-      else if (total >= 70) { grade = 'B'; remark = 'Very Good'; }
-      else if (total >= 60) { grade = 'C'; remark = 'Good'; }
-      else if (total >= 50) { grade = 'D'; remark = 'Pass'; }
+      if (total >= configuredTotalMaximum * 0.8) { grade = 'A'; remark = 'Excellent'; }
+      else if (total >= configuredTotalMaximum * 0.7) { grade = 'B'; remark = 'Very Good'; }
+      else if (total >= configuredTotalMaximum * 0.6) { grade = 'C'; remark = 'Good'; }
+      else if (total >= configuredTotalMaximum * 0.5) { grade = 'D'; remark = 'Pass'; }
       row.querySelector('.st-total').textContent = total;
       row.querySelector('.st-grade').textContent = grade;
       return { ca1: values.ca1, ca2: values.ca2, ca3: values.ca3, examination: values.examination, total: total, grade: grade, remark: remark };
@@ -11181,23 +11196,28 @@ async function renderSubjectTeacherInput() {
           var studentId = row.getAttribute('data-student-id');
           var values = {};
           var hasAnyScore = false;
-          ['ca1', 'ca2', 'ca3', 'examination'].forEach(function(field) {
-            var input = row.querySelector('[data-field="' + field + '"]');
+          var existing = resultsByStudent[String(studentId)];
+          assessmentFields.forEach(function(item) {
+            var input = row.querySelector('[data-field="' + item.key + '"]');
+            if (!input) {
+              values[item.key] = existing && existing[item.key] != null ? Number(existing[item.key]) : null;
+              return;
+            }
             var raw = input.value.trim();
             if (raw !== '') hasAnyScore = true;
             var number = raw === '' ? null : Number(raw);
-            if (number !== null && (!Number.isFinite(number) || number < 0 || number > maxima[field])) {
-              throw new Error('Invalid ' + field.toUpperCase() + ' score for ' + row.cells[1].textContent + '.');
+            if (number !== null && (!Number.isFinite(number) || number < 0 || number > item.maximum)) {
+              throw new Error('Invalid ' + item.label + ' score for ' + row.cells[1].textContent + '. Enter a value from 0 to ' + item.maximum + '.');
             }
-            values[field] = number;
+            values[item.key] = number;
           });
           if (!hasAnyScore) return null;
-          var total = ['ca1', 'ca2', 'ca3', 'examination'].reduce(function(sum, field) { return sum + (values[field] == null ? 0 : values[field]); }, 0);
+          var total = activeAssessmentFields.reduce(function(sum, item) { return sum + (values[item.key] == null ? 0 : values[item.key]); }, 0);
           var grade = 'F', remark = 'Failed';
-          if (total >= 80) { grade = 'A'; remark = 'Excellent'; }
-          else if (total >= 70) { grade = 'B'; remark = 'Very Good'; }
-          else if (total >= 60) { grade = 'C'; remark = 'Good'; }
-          else if (total >= 50) { grade = 'D'; remark = 'Pass'; }
+          if (total >= configuredTotalMaximum * 0.8) { grade = 'A'; remark = 'Excellent'; }
+      else if (total >= configuredTotalMaximum * 0.7) { grade = 'B'; remark = 'Very Good'; }
+      else if (total >= configuredTotalMaximum * 0.6) { grade = 'C'; remark = 'Good'; }
+      else if (total >= configuredTotalMaximum * 0.5) { grade = 'D'; remark = 'Pass'; }
           var existing = resultsByStudent[String(studentId)];
           if (existing && ['submitted', 'approved', 'published'].indexOf(String(existing.status || '').toLowerCase()) !== -1) {
             throw new Error('The result for ' + row.cells[1].textContent + ' is ' + existing.status + '. It must be returned to an editable state through the authorised workflow before changes can be saved.');
