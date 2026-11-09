@@ -4710,10 +4710,9 @@ function setOfficialStudentPasswordResetStatus(studentId, message, type) {
 }
 
 async function resetOfficialStudentPassword(studentId, button) {
-  var key = '';
-  var stateKey = '';
   var operationId = '';
-  var sessionStore = null;
+  var operationState = null;
+  var retryAuthorized = false;
   var invocationStarted = false;
   var lockKey = String(studentId);
   var unavailableMessage = 'Reset outcome could not be confirmed. Do not start a new reset. An unresolved operation may require the Portal Developer to reconcile it.';
@@ -4742,15 +4741,7 @@ async function resetOfficialStudentPassword(studentId, button) {
     setOfficialStudentPasswordResetStatus(studentId, 'Supabase is unavailable. No reset was started.', 'error');
     return;
   }
-  try {
-    sessionStore = window.sessionStorage;
-    if (!sessionStore) throw new Error('Session storage is unavailable.');
-  } catch (storageError) {
-    setOfficialStudentPasswordResetStatus(studentId, 'Session storage is unavailable. No reset was started.', 'error');
-    return;
-  }
-
-  studentDbState.activePasswordResets[lockKey] = true;
+   studentDbState.activePasswordResets[lockKey] = true;
   if (button) { button.disabled = true; button.textContent = 'Resetting…'; }
   setOfficialStudentPasswordResetStatus(studentId, 'Verifying administrator session…', 'info');
   try {
@@ -4764,32 +4755,40 @@ async function resetOfficialStudentPassword(studentId, button) {
       throw new Error('The administrator account could not be verified.');
     }
 
-    key = 'studentPasswordReset:' + JSON.stringify([String(authenticatedProfile.school_id), String(authenticatedProfile.id), lockKey]);
-    stateKey = key + ':state';
-    var operationState = null;
-    var retryAuthorized = false;
-    try {
-      operationId = sessionStore.getItem(key) || '';
-      if (operationId) {
-        try { operationState = JSON.parse(sessionStore.getItem(stateKey) || 'null'); } catch (stateError) { operationState = null; }
-        retryAuthorized = !!(operationState && operationState.operation_id === operationId && operationState.retry_same_operation === true);
-        if (!retryAuthorized) {
-          setOfficialStudentPasswordResetStatus(studentId, 'A previous reset request has an unresolved outcome. No second reset was sent. Contact the Portal Developer to reconcile this operation before starting another reset.', 'warning');
-          return;
-        }
-      } else {
-        if (!window.isSecureContext || !window.crypto || typeof window.crypto.randomUUID !== 'function') {
-          throw new Error('A secure HTTPS context with crypto.randomUUID() is required to start a password reset.');
-        }
-        operationId = window.crypto.randomUUID();
-        sessionStore.setItem(key, operationId);
-        if (sessionStore.getItem(key) !== operationId) throw new Error('The reset operation ID could not be safely retained in this browser session.');
+    var priorOperation = await supabaseClient.from('student_password_reset_client_operations')
+      .select('operation_id,status,retry_same_operation')
+      .eq('school_id', authenticatedProfile.school_id)
+      .eq('initiated_by', authenticatedProfile.id)
+      .eq('student_id', lockKey)
+      .maybeSingle();
+    if (priorOperation.error) throw priorOperation.error;
+    if (priorOperation.data) {
+      operationState = priorOperation.data;
+      operationId = String(operationState.operation_id);
+      retryAuthorized = operationState.retry_same_operation === true &&
+        ['in_progress','outcome_uncertain'].indexOf(String(operationState.status)) !== -1;
+      if (!retryAuthorized) {
+        setOfficialStudentPasswordResetStatus(studentId, 'A previous reset request has an unresolved or completed outcome. No second reset was sent. Reconcile or acknowledge the existing operation before starting another reset.', 'warning');
+        return;
       }
+    } else {
+      if (!window.crypto || typeof window.crypto.randomUUID !== 'function') {
+        throw new Error('A secure random UUID generator is required to start a password reset.');
+      }
+      operationId = window.crypto.randomUUID();
       operationState = { operation_id: operationId, status: 'request_started', retry_same_operation: false };
-      sessionStore.setItem(stateKey, JSON.stringify(operationState));
-      if (sessionStore.getItem(stateKey) !== JSON.stringify(operationState)) throw new Error('The reset status could not be safely retained in this browser session.');
-    } catch (storageError) {
-      throw new Error(storageError && storageError.message ? storageError.message : 'Session storage is unavailable. No reset was started.');
+      var createdOperation = await supabaseClient.from('student_password_reset_client_operations').insert({
+        school_id: authenticatedProfile.school_id,
+        initiated_by: authenticatedProfile.id,
+        student_id: lockKey,
+        operation_id: operationId,
+        status: 'request_started',
+        retry_same_operation: false
+      }).select('operation_id,status,retry_same_operation').single();
+      if (createdOperation.error) throw createdOperation.error;
+      if (!createdOperation.data || String(createdOperation.data.operation_id) !== operationId) {
+        throw new Error('Supabase did not confirm the password-reset operation record. No reset request was sent.');
+      }
     }
 
     setOfficialStudentPasswordResetStatus(studentId, retryAuthorized ? 'Retrying the same reset operation securely…' : 'Requesting the password reset securely…', 'info');
@@ -4815,7 +4814,12 @@ async function resetOfficialStudentPassword(studentId, button) {
         response.retry_with_same_operation_id === true &&
         ['in_progress', 'outcome_uncertain'].indexOf(String(response.status || '')) !== -1);
       operationState = { operation_id: operationId, status: explicitlyRetryable ? response.status : 'outcome_uncertain', retry_same_operation: explicitlyRetryable };
-      try { sessionStore.setItem(stateKey, JSON.stringify(operationState)); } catch (stateSaveError) {}
+      var savedUncertainState = await supabaseClient.from('student_password_reset_client_operations')
+        .update({ status: operationState.status, retry_same_operation: operationState.retry_same_operation, updated_at: new Date().toISOString() })
+        .eq('school_id', authenticatedProfile.school_id).eq('initiated_by', authenticatedProfile.id)
+        .eq('student_id', lockKey).eq('operation_id', operationId).select('operation_id').maybeSingle();
+      if (savedUncertainState.error) throw savedUncertainState.error;
+      if (!savedUncertainState.data) throw new Error('The reset outcome could not be persisted in Supabase. Contact the Portal Developer.');
       var responseMessage = response && response.message ? ' ' + response.message : '';
       setOfficialStudentPasswordResetStatus(studentId, explicitlyRetryable
         ? 'The server confirmed this same operation may be retried safely. Retry only with the existing button and operation ID.' + responseMessage
@@ -4824,7 +4828,12 @@ async function resetOfficialStudentPassword(studentId, button) {
     }
 
     operationState = { operation_id: operationId, status: 'completed_credentials_shown', retry_same_operation: false };
-    try { sessionStore.setItem(stateKey, JSON.stringify(operationState)); } catch (stateSaveError) {}
+    var savedCompletedState = await supabaseClient.from('student_password_reset_client_operations')
+      .update({ status: operationState.status, retry_same_operation: false, updated_at: new Date().toISOString() })
+      .eq('school_id', authenticatedProfile.school_id).eq('initiated_by', authenticatedProfile.id)
+      .eq('student_id', lockKey).eq('operation_id', operationId).select('operation_id').maybeSingle();
+    if (savedCompletedState.error) throw savedCompletedState.error;
+    if (!savedCompletedState.data) throw new Error('The completed reset state was not confirmed by Supabase.');
     setOfficialStudentPasswordResetStatus(studentId, 'Password reset confirmed. The temporary password is shown in the private dialog; record it before closing.', 'success');
     var dialog = showStudentDbDialog('Student Password Reset',
       '<p class="alert alert-success"><strong>Password reset confirmed.</strong></p>' +
@@ -4835,24 +4844,35 @@ async function resetOfficialStudentPassword(studentId, button) {
       '<button type="button" class="btn btn-success" id="confirmPasswordRecordedBtn">I have safely recorded the password</button>');
     dialog.querySelector('#confirmPasswordRecordedBtn').addEventListener('click', function() {
       var status = dialog.querySelector('#passwordResetRecordStatus');
-      try {
-        sessionStore.removeItem(key);
-        sessionStore.removeItem(stateKey);
-        if (sessionStore.getItem(key) !== null || sessionStore.getItem(stateKey) !== null) throw new Error('The reset operation record is still stored.');
-        status.className = 'alert alert-success';
-        status.textContent = 'Confirmation recorded. The saved reset operation ID was cleared.';
-        setOfficialStudentPasswordResetStatus(studentId, 'Password reset recorded by the administrator.', 'success');
-        this.disabled = true;
-      } catch (clearError) {
-        status.className = 'alert alert-error';
-        status.textContent = 'Could not clear the saved operation ID. Keep it stored and contact the Portal Developer before starting another reset.';
-      }
+      (async function() {
+        try {
+          var cleared = await supabaseClient.from('student_password_reset_client_operations').delete()
+            .eq('school_id', authenticatedProfile.school_id).eq('initiated_by', authenticatedProfile.id)
+            .eq('student_id', lockKey).eq('operation_id', operationId).select('operation_id').maybeSingle();
+          if (cleared.error) throw cleared.error;
+          if (!cleared.data) throw new Error('The operation pointer was not cleared by Supabase.');
+          status.className = 'alert alert-success';
+          status.textContent = 'Confirmation recorded in the secure reset workflow. The completed operation pointer was cleared.';
+          setOfficialStudentPasswordResetStatus(studentId, 'Password reset recorded by the administrator.', 'success');
+          dialog.querySelector('#confirmPasswordRecordedBtn').disabled = true;
+        } catch (clearError) {
+          status.className = 'alert alert-error';
+          status.textContent = 'Supabase could not clear the operation pointer. Keep the record unchanged and contact the Portal Developer.';
+        }
+      })();
     });
   } catch (error) {
     var detail = error && error.message ? ' ' + error.message : '';
-    if (invocationStarted && sessionStore && stateKey && operationId) {
+    if (invocationStarted && operationId) {
       operationState = { operation_id: operationId, status: 'outcome_uncertain', retry_same_operation: false };
-      try { sessionStore.setItem(stateKey, JSON.stringify(operationState)); } catch (stateSaveError) {}
+      try {
+        await supabaseClient.from('student_password_reset_client_operations')
+          .update({ status: 'outcome_uncertain', retry_same_operation: false, updated_at: new Date().toISOString() })
+          .eq('school_id', authenticatedProfile.school_id).eq('initiated_by', authenticatedProfile.id)
+          .eq('student_id', lockKey).eq('operation_id', operationId);
+      } catch (stateSaveError) {
+        console.error('Could not persist uncertain reset state to Supabase:', stateSaveError);
+      }
     }
     var message = invocationStarted
       ? unavailableMessage + detail
