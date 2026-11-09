@@ -11097,11 +11097,56 @@ async function renderSubjectTeacherInput() {
         '<td class="st-status">' + escapeManagementText(existing && existing.status || 'new') + '</td></tr>';
     });
     html += '</tbody></table></div><p>' + officialStudents.length + ' officially enrolled student(s).</p>' +
-      '<button type="button" class="btn btn-success" id="saveAllScoresBtn">Save scores as draft</button></div><div id="stKeypad" class="st-keypad" aria-label="Score keypad"><div class="st-keypad-head"><strong>Score keypad</strong><span id="stActiveScoreLabel">Select a score cell</span></div><div class="st-keypad-grid">' + ['1','2','3','4','5','6','7','8','9','0','.','⌫','Clear','Next'].map(function(key) { return '<button type="button" class="st-key" data-key="' + key + '">' + key + '</button>'; }).join('') + '</div></div><style>.st-entry-controls label{display:block;font-size:12px;font-weight:700;margin-bottom:5px}.st-entry-controls select{min-width:145px;padding:8px;border:1px solid #ccd5e5;border-radius:8px;background:#fff}.st-score{width:64px;min-width:58px;max-width:68px;padding:7px 3px;text-align:center;font-weight:700;border:1px solid #d5deeb;border-radius:7px}.st-score:focus{outline:2px solid #536bd8;border-color:#536bd8;background:#f2f5ff}.st-keypad{margin-top:14px;padding:12px;border:1px solid #dce3f0;border-radius:12px;background:#f7f9ff}.st-keypad-head{display:flex;justify-content:space-between;gap:8px;align-items:center;margin-bottom:9px;font-size:12px}.st-keypad-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:7px}.st-key{min-height:42px;border:1px solid #cbd5ea;border-radius:8px;background:#fff;color:#26386f;font-weight:800;font-size:16px;touch-action:manipulation}.st-key:active{background:#e6ebff}.st-key[data-key="Next"]{background:#263f91;color:#fff}.st-key[data-key="Clear"]{font-size:12px}.st-keypad[data-style="smart"]{background:#eef3ff;border-color:#aab9ed}.st-keypad[data-style="touch"] .st-key{min-height:58px;font-size:20px;border-radius:12px}.st-keypad[data-style="touch"]{padding:16px}#inputTab[data-score-keyboard-style="touch"] .st-score{width:82px;min-width:78px;min-height:54px;font-size:18px;border-radius:11px}#inputTab[data-score-keyboard-style="touch"] .st-keypad{padding:16px}.st-score[readonly]{background:#f4f7ff;cursor:pointer}.st-keypad[hidden]{display:none!important}@media(max-width:600px){.st-score{width:54px;min-width:50px}.st-keypad{padding:9px}.st-key{min-height:46px}}</style></div>';
+      '<button type="button" class="btn btn-success" id="saveAllScoresBtn">Save scores as draft</button></div><div id="stScoreValidation" role="alert" aria-live="assertive" style="display:none;margin-top:10px;padding:10px 12px;border:1px solid #dc2626;border-radius:8px;background:#fef2f2;color:#b91c1c;font-weight:700;font-size:13px"></div><div id="stKeypad" class="st-keypad" aria-label="Score keypad"><div class="st-keypad-head"><strong>Score keypad</strong><span id="stActiveScoreLabel">Select a score cell</span></div><div class="st-keypad-grid">' + ['1','2','3','4','5','6','7','8','9','0','.','⌫','Clear','Next'].map(function(key) { return '<button type="button" class="st-key" data-key="' + key + '">' + key + '</button>'; }).join('') + '</div></div><style>.st-entry-controls label{display:block;font-size:12px;font-weight:700;margin-bottom:5px}.st-entry-controls select{min-width:145px;padding:8px;border:1px solid #ccd5e5;border-radius:8px;background:#fff}.st-score{width:64px;min-width:58px;max-width:68px;padding:7px 3px;text-align:center;font-weight:700;border:1px solid #d5deeb;border-radius:7px}.st-score:focus{outline:2px solid #536bd8;border-color:#536bd8;background:#f2f5ff}.st-score-invalid{border:2px solid #dc2626!important;background:#fff1f2!important}.st-keypad{margin-top:14px;padding:12px;border:1px solid #dce3f0;border-radius:12px;background:#f7f9ff}.st-keypad-head{display:flex;justify-content:space-between;gap:8px;align-items:center;margin-bottom:9px;font-size:12px}.st-keypad-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:7px}.st-key{min-height:42px;border:1px solid #cbd5ea;border-radius:8px;background:#fff;color:#26386f;font-weight:800;font-size:16px;touch-action:manipulation}.st-key:active{background:#e6ebff}.st-key[data-key="Next"]{background:#263f91;color:#fff}.st-key[data-key="Clear"]{font-size:12px}.st-keypad[data-style="smart"]{background:#eef3ff;border-color:#aab9ed}.st-keypad[data-style="touch"] .st-key{min-height:58px;font-size:20px;border-radius:12px}.st-keypad[data-style="touch"]{padding:16px}#inputTab[data-score-keyboard-style="touch"] .st-score{width:82px;min-width:78px;min-height:54px;font-size:18px;border-radius:11px}#inputTab[data-score-keyboard-style="touch"] .st-keypad{padding:16px}.st-score[readonly]{background:#f4f7ff;cursor:pointer}.st-keypad[hidden]{display:none!important}@media(max-width:600px){.st-score{width:54px;min-width:50px}.st-keypad{padding:9px}.st-key{min-height:46px}}</style></div>';
     root.innerHTML = html;
 
     var activeScoreInput = null;
+    var autoAdvanceTimer = null;
+    var validationTimer = null;
     var styleSelect = root.querySelector('#stKeyboardStyle');
+    var validationBox = root.querySelector('#stScoreValidation');
+    function showScoreValidation(message) {
+      if (validationTimer) clearTimeout(validationTimer);
+      validationBox.textContent = message;
+      validationBox.style.display = 'block';
+      validationTimer = setTimeout(function() {
+        validationBox.style.display = 'none';
+        validationBox.textContent = '';
+      }, 3500);
+    }
+    function clearScoreValidation() {
+      if (validationTimer) clearTimeout(validationTimer);
+      validationBox.style.display = 'none';
+      validationBox.textContent = '';
+      root.querySelectorAll('.st-score-invalid').forEach(function(input) { input.classList.remove('st-score-invalid'); });
+    }
+    function moveToNextScore(input) {
+      var row = input.closest('tr');
+      var rowIndex = Array.from(root.querySelectorAll('tbody tr')).indexOf(row);
+      var colIndex = activeAssessmentFields.findIndex(function(item) { return item.key === input.dataset.field; });
+      var rowCount = root.querySelectorAll('tbody tr').length;
+      if (directionSelect.value === 'row') {
+        colIndex++;
+        if (colIndex >= activeAssessmentFields.length) { colIndex = 0; rowIndex++; }
+      } else {
+        rowIndex++;
+        if (rowIndex >= rowCount) { rowIndex = 0; colIndex++; }
+      }
+      if (rowIndex < 0 || rowIndex >= rowCount || colIndex < 0 || colIndex >= activeAssessmentFields.length) return;
+      var next = root.querySelectorAll('tbody tr')[rowIndex].querySelector('[data-field="' + activeAssessmentFields[colIndex].key + '"]');
+      if (next) next.focus();
+    }
+    function scheduleSmartAdvance(input) {
+      if (autoAdvanceTimer) clearTimeout(autoAdvanceTimer);
+      if (styleSelect.value === 'classic' || !input.value.trim() || input.value.endsWith('.')) return;
+      var enteredValue = input.value;
+      autoAdvanceTimer = setTimeout(function() {
+        if (!input.isConnected || input.value !== enteredValue || document.activeElement !== input) return;
+        var numericValue = Number(enteredValue);
+        var limit = Number(input.max);
+        if (Number.isFinite(numericValue) && numericValue >= 0 && numericValue <= limit) moveToNextScore(input);
+      }, 650);
+    }
     var directionSelect = root.querySelector('#stEntryDirection');
     var keypad = root.querySelector('#stKeypad');
     function applyScoreKeyboardStyle(style) {
@@ -11124,7 +11169,14 @@ async function renderSubjectTeacherInput() {
     styleSelect.addEventListener('change', function() { applyScoreKeyboardStyle(this.value); persistScorePreferences(); });
     directionSelect.addEventListener('change', persistScorePreferences);
     root.querySelectorAll('.st-score').forEach(function(input) {
-      input.addEventListener('focus', function() { activeScoreInput = this; var row=this.closest('tr'); var label=row && row.cells[1] ? row.cells[1].textContent : 'Student'; root.querySelector('#stActiveScoreLabel').textContent=label+' · '+this.dataset.field.toUpperCase(); });
+      input.addEventListener('focus', function() {
+        activeScoreInput = this;
+        var row=this.closest('tr');
+        var label=row && row.cells[1] ? row.cells[1].textContent : 'Student';
+        var field=activeAssessmentFields.find(function(item){return item.key===this.dataset.field;},this);
+        root.querySelector('#stActiveScoreLabel').textContent=label+' · '+(field ? field.label : this.dataset.field.toUpperCase())+' (max '+this.max+')';
+      });
+      input.addEventListener('click', function() { activeScoreInput = this; });
       input.addEventListener('keydown', function(event) {
         if (event.key !== 'Enter' && event.key !== 'ArrowDown' && event.key !== 'ArrowUp' && event.key !== 'ArrowRight' && event.key !== 'ArrowLeft') return;
         event.preventDefault();
@@ -11142,12 +11194,14 @@ async function renderSubjectTeacherInput() {
     keypad.addEventListener('click', function(event) {
       var keyButton=event.target.closest('[data-key]'); if(!keyButton||!activeScoreInput) return;
       var key=keyButton.dataset.key; var value=activeScoreInput.value;
-      if(key==='Next'){ activeScoreInput.dispatchEvent(new KeyboardEvent('keydown',{key:'Enter',bubbles:true})); return; }
+      if (autoAdvanceTimer) clearTimeout(autoAdvanceTimer);
+      if(key==='Next'){ moveToNextScore(activeScoreInput); return; }
       if(key==='Clear') activeScoreInput.value='';
       else if(key==='⌫') activeScoreInput.value=value.slice(0,-1);
       else if(key==='.' && value.indexOf('.')!==-1) return;
       else activeScoreInput.value=value+key;
       activeScoreInput.dispatchEvent(new Event('input',{bubbles:true}));
+      activeScoreInput.focus();
     });
     root.querySelector('#stTermSelect').addEventListener('change', function() {
       window.__stSelectedTerm = this.value;
@@ -11172,10 +11226,23 @@ async function renderSubjectTeacherInput() {
 
     root.querySelectorAll('.st-score').forEach(function(input) {
       input.addEventListener('input', function() {
-        var value = Number(this.value);
+        var raw = this.value.trim();
+        var value = Number(raw);
         var max = Number(this.max);
-        this.setCustomValidity(this.value !== '' && (!Number.isFinite(value) || value < 0 || value > max) ? 'Enter a score from 0 to ' + max + '.' : '');
-        if (!this.validationMessage) calculateRow(this.closest('tr'));
+        this.setCustomValidity('');
+        if (raw !== '' && (!Number.isFinite(value) || value < 0 || value > max)) {
+          if (autoAdvanceTimer) clearTimeout(autoAdvanceTimer);
+          this.value = '';
+          this.classList.add('st-score-invalid');
+          showScoreValidation('Invalid ' + this.dataset.field.toUpperCase() + ' score. The maximum allowed is ' + max + '. The entry has been cleared; please enter a valid score.');
+          calculateRow(this.closest('tr'));
+          this.focus();
+          return;
+        }
+        this.classList.remove('st-score-invalid');
+        clearScoreValidation();
+        calculateRow(this.closest('tr'));
+        scheduleSmartAdvance(this);
       });
     });
 
