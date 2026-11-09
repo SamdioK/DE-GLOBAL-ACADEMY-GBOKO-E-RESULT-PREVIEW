@@ -45,6 +45,7 @@ export default {
         }
         const stageMap = new Map(stages.map((x: Record<string, unknown>) =>
           [String(x.student_id) + ":" + String(x.academic_session_id) + ":" + String(x.term_id), x]));
+        let eligibleCounts = new Map<string, number>();
         let publishedCounts = new Map<string, number>();
         if (studentIds.length && body.term_id) {
           const { data: publishedRows, error: publishedError } = await ctx.supabaseAdmin.from("results")
@@ -52,8 +53,10 @@ export default {
             .eq("academic_session_id", body.academic_session_id).eq("term_id", body.term_id)
             .in("status", ["approved","published"]).in("student_id", studentIds);
           if (publishedError) throw publishedError;
-          (publishedRows || []).forEach((row: { student_id: string }) =>
-            publishedCounts.set(row.student_id, (publishedCounts.get(row.student_id) || 0) + 1));
+          (publishedRows || []).forEach((row: { student_id: string; status: string }) => {
+            eligibleCounts.set(row.student_id, (eligibleCounts.get(row.student_id) || 0) + 1);
+            if (row.status === "published") publishedCounts.set(row.student_id, (publishedCounts.get(row.student_id) || 0) + 1);
+          });
         }
         const output = (enrolments || []).map((e: Record<string, any>) => {
           const student = Array.isArray(e.students) ? e.students[0] : e.students;
@@ -65,7 +68,8 @@ export default {
             academic_session_id: e.academic_session_id,
             admission_number: student?.admission_number || "",
             full_name: [student?.first_name, student?.middle_name, student?.last_name].filter(Boolean).join(" "),
-            eligible_result_count: publishedCounts.get(e.student_id) || 0,
+            eligible_result_count: eligibleCounts.get(e.student_id) || 0,
+            published_result_count: publishedCounts.get(e.student_id) || 0,
             stages: stages.filter((s) => s.student_id === e.student_id && s.academic_session_id === e.academic_session_id &&
               (!body.term_id || s.term_id === body.term_id))
           };
