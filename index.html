@@ -11955,7 +11955,36 @@ async function renderSubjectTeacherInput() {
           onConflict: 'student_id,subject_id,academic_session_id,term_id'
         }).select('id,student_id,status');
         if (saved.error) throw new Error('Supabase could not save the score batch: ' + saved.error.message);
-        showToast('Scores saved successfully to Supabase. Blank score cells were preserved as empty, and existing result statuses were preserved.', 'success');
+        if (!Array.isArray(saved.data) || saved.data.length !== payloads.length) {
+          throw new Error('Supabase did not confirm every submitted student result. No success message has been issued; reload the score sheet and inspect the saved records before retrying.');
+        }
+
+        // Independent server read-back: a successful write response alone is not
+        // treated as proof that every score is now retrievable from the database.
+        var savedStudentIds = payloads.map(function(item) { return item.student_id; });
+        var verification = await supabaseClient.from('results')
+          .select('id,student_id,ca1,ca2,ca3,examination,total,grade,remark,status')
+          .eq('school_id', schoolId).eq('class_id', classId).eq('subject_id', subjectId)
+          .eq('academic_session_id', sessionId).eq('term_id', selectedTerm.id)
+          .in('student_id', savedStudentIds);
+        if (verification.error) throw new Error('Scores were written, but Supabase read-back verification failed: ' + verification.error.message + '. Do not assume the batch is fully saved until it is rechecked.');
+        var verifiedByStudent = {};
+        (verification.data || []).forEach(function(item) { verifiedByStudent[String(item.student_id)] = item; });
+        payloads.forEach(function(expected) {
+          var actual = verifiedByStudent[String(expected.student_id)];
+          if (!actual) throw new Error('Supabase read-back did not return a saved result for student ' + expected.student_id + '.');
+          ['ca1','ca2','ca3','examination','total'].forEach(function(field) {
+            var expectedValue = expected[field] == null ? null : Number(expected[field]);
+            var actualValue = actual[field] == null ? null : Number(actual[field]);
+            if (expectedValue !== actualValue) throw new Error('Supabase read-back mismatch for ' + field + ' on student ' + expected.student_id + '.');
+          });
+          ['grade','remark','status'].forEach(function(field) {
+            if (String(actual[field] == null ? '' : actual[field]) !== String(expected[field] == null ? '' : expected[field])) {
+              throw new Error('Supabase read-back mismatch for ' + field + ' on student ' + expected.student_id + '.');
+            }
+          });
+        });
+        showToast('All ' + payloads.length + ' result record(s) were saved and independently verified in Supabase.', 'success');
         await renderSubjectTeacherInput();
       } catch (saveError) {
         console.error('Subject score save failed:', saveError);
