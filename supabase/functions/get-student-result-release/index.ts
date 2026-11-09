@@ -22,7 +22,7 @@ export default {
       const sessionId = String(body.academic_session_id || "");
       const termId = String(body.term_id || "");
       let stageQuery = ctx.supabaseAdmin.from("student_result_release_stages")
-        .select("release_stage").eq("school_id", profile.school_id).eq("student_id", student.id);
+        .select("academic_session_id,term_id,release_stage").eq("school_id", profile.school_id).eq("student_id", student.id);
       if (sessionId) stageQuery = stageQuery.eq("academic_session_id", sessionId);
       if (termId) stageQuery = stageQuery.eq("term_id", termId);
       const { data: stages, error: stageError } = await stageQuery;
