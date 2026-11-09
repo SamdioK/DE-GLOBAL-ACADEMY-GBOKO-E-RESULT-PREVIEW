@@ -2228,7 +2228,7 @@ async function saveAllData() {
   for (var b = 0; b < batches.length; b++) tasks.push(cloudStorage.save('students_batch_' + b, batches[b]));
   tasks.push(cloudStorage.save('students_meta', { totalBatches: batches.length, totalStudents: students.length, lastUpdated: new Date().toISOString() }));
   var sigKeys = Object.keys(teacherSignatures);
-  for (var j = 0; j < sigKeys.length; j++) tasks.push(cloudStorage.save('sig_' + sigKeys[j].replace(/\\s+/g, '_'), teacherSignatures[sigKeys[j]]));
+  for (var j = 0; j < sigKeys.length; j++) tasks.push(cloudStorage.save('sig_' + sigKeys[j].replace(/\s+/g, '_'), teacherSignatures[sigKeys[j]]));
   tasks.push(cloudStorage.save('signature_subjects', sigKeys));
   await Promise.all(tasks);
   return true;
