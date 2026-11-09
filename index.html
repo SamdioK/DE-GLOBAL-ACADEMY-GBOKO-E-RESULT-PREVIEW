@@ -395,6 +395,119 @@ CloudStorage.prototype.globalLoad = async function(key) {
 
 var cloudStorage = new CloudStorage();
 
+// One-time bridge: import recognised legacy records into Supabase, then remove
+// their local copies only after a cloud row is confirmed. This is not a runtime
+// fallback; all normal reads and writes below use Supabase exclusively.
+async function migrateLegacyBrowserStateOnce() {
+  if (!supabaseClient || !authenticatedProfile || !authenticatedProfile.school_id ||
+      !['administrator','portal_developer'].includes(String(authenticatedProfile.role || '').toLowerCase())) return { imported: 0 };
+  var schoolId = String(authenticatedProfile.school_id);
+  var userId = String(authenticatedProfile.id);
+  var exactKeys = ['classArms','formMasters','subjectAssignments','schoolInfo','managementStaff','portalNews','schoolStaff','staffDatabase','portalStaffSelections','prefects','dutyRoster','portalSettings','students_meta','schoolIdCardSettings','activationResetV3'];
+  function allowed(key) { return exactKeys.indexOf(key) !== -1 || /^students_batch_\\d+$/.test(key); }
+  var candidates = new Map(), sourceRows = [], prefixes = [schoolId + ':', 'MAIN:'];
+  function remember(key, value, source) {
+    if (!allowed(key)) return;
+    var rank = source === 'host' ? 3 : source === 'indexeddb' ? 2 : 1;
+    var prior = candidates.get(key);
+    if (!prior || rank > prior.rank) candidates.set(key, { value: value, rank: rank });
+    sourceRows.push({ key: key, source: source });
+  }
+  try {
+    if (window.storage && typeof window.storage.get === 'function') {
+      for (var p = 0; p < prefixes.length; p++) for (var k = 0; k < exactKeys.length; k++) {
+        try {
+          var hostItem = await window.storage.get(prefixes[p] + exactKeys[k], true);
+          if (hostItem && hostItem.value != null) remember(exactKeys[k], JSON.parse(hostItem.value), 'host');
+        } catch (hostReadError) {}
+      }
+    }
+  } catch (hostStorageError) {}
+  var legacyDb = null;
+  try {
+    if (typeof indexedDB !== 'undefined') {
+      legacyDb = await new Promise(function(resolve) {
+        var request = indexedDB.open('EResultDB', 1);
+        request.onsuccess = function(event) { resolve(event.target.result); };
+        request.onerror = function() { resolve(null); };
+        request.onblocked = function() { resolve(null); };
+      });
+      if (legacyDb && legacyDb.objectStoreNames.contains('data')) {
+        var rows = await new Promise(function(resolve) {
+          try {
+            var request = legacyDb.transaction(['data'], 'readonly').objectStore('data').getAll();
+            request.onsuccess = function() { resolve(request.result || []); };
+            request.onerror = function() { resolve([]); };
+          } catch (readError) { resolve([]); }
+        });
+        rows.forEach(function(row) {
+          if (!row || typeof row.key !== 'string') return;
+          prefixes.forEach(function(prefix) {
+            if (row.key.indexOf(prefix) === 0) remember(row.key.slice(prefix.length), row.value, 'indexeddb');
+          });
+        });
+      }
+    }
+  } catch (indexedDbError) {}
+  try {
+    if (typeof localStorage !== 'undefined') {
+      for (var i = 0; i < localStorage.length; i++) {
+        var localKey = localStorage.key(i);
+        if (!localKey) continue;
+        prefixes.forEach(function(prefix) {
+          if (localKey.indexOf(prefix) !== 0) return;
+          var storageKey = localKey.slice(prefix.length);
+          if (!allowed(storageKey)) return;
+          try { remember(storageKey, JSON.parse(localStorage.getItem(localKey)), 'localstorage'); } catch (parseError) {}
+        });
+      }
+    }
+  } catch (localReadError) {}
+  var meta = candidates.get('students_meta');
+  var batchCount = meta && meta.value && Number(meta.value.totalBatches) || 0;
+  if (window.storage && typeof window.storage.get === 'function') {
+    for (var batchIndex = 0; batchIndex < Math.min(batchCount, 1000); batchIndex++) {
+      var batchKey = 'students_batch_' + batchIndex;
+      if (candidates.has(batchKey)) continue;
+      for (var prefixIndex = 0; prefixIndex < prefixes.length; prefixIndex++) {
+        try {
+          var batchItem = await window.storage.get(prefixes[prefixIndex] + batchKey, true);
+          if (batchItem && batchItem.value != null) remember(batchKey, JSON.parse(batchItem.value), 'host');
+        } catch (batchReadError) {}
+      }
+    }
+  }
+  if (!candidates.size) { if (legacyDb) legacyDb.close(); return { imported: 0 }; }
+  var keys = Array.from(candidates.keys());
+  var existingResult = await supabaseClient.from('school_app_state').select('storage_key').eq('school_id', schoolId).in('storage_key', keys);
+  if (existingResult.error) throw existingResult.error;
+  var existing = new Set((existingResult.data || []).map(function(row) { return row.storage_key; }));
+  var imported = 0;
+  for (var keyIndex = 0; keyIndex < keys.length; keyIndex++) {
+    var key = keys[keyIndex], value = candidates.get(key).value;
+    if (key === 'formMasters' && Array.isArray(value)) value.forEach(function(master) { if (master) delete master.password; });
+    if (key === 'subjectAssignments' && Array.isArray(value)) value.forEach(function(item) { if (item) { delete item.password; delete item.teacherPassword; } });
+    if (!existing.has(key)) {
+      var saved = await supabaseClient.from('school_app_state').insert({ school_id: schoolId, storage_key: key, value: value, updated_by: userId }).select('storage_key').single();
+      if (saved.error) throw saved.error;
+      if (!saved.data || saved.data.storage_key !== key) throw new Error('Supabase did not confirm migration of ' + key + '.');
+      imported++;
+    }
+    sourceRows.filter(function(row) { return row.key === key; }).forEach(function(row) {
+      if (row.source === 'localstorage') {
+        try { prefixes.forEach(function(prefix) { localStorage.removeItem(prefix + key); }); } catch (removeError) {}
+      } else if (row.source === 'indexeddb' && legacyDb) {
+        try { var tx = legacyDb.transaction(['data'], 'readwrite'); prefixes.forEach(function(prefix) { tx.objectStore('data').delete(prefix + key); }); } catch (deleteError) {}
+      } else if (row.source === 'host' && window.storage && typeof window.storage.delete === 'function') {
+        prefixes.forEach(function(prefix) { try { window.storage.delete(prefix + key, true); } catch (hostDeleteError) {} });
+      }
+    });
+  }
+  if (legacyDb) { try { legacyDb.close(); } catch (closeError) {} }
+  return { imported: imported, checked: keys.length };
+}
+
+
 // Score-entry preferences are account data and must live in Supabase, not on the device.
 async function loadScoreEntryPreferences() {
   if (!supabaseClient || !authenticatedProfile || !authenticatedProfile.id || !authenticatedProfile.school_id) {
@@ -1051,6 +1164,7 @@ async function handleSupabaseLogin(userType, errorDiv) {
     });
     cloudStorage.setSchoolId(String(profile.school_id || 'DEVELOPER'));
     if (dbSchool) {
+      await migrateLegacyBrowserStateOnce();
       await loadSchoolData();
       await loadSupabaseAssessmentConfigurations();
     } else {
@@ -1470,15 +1584,7 @@ async function loadSchoolData() {
     }
   }
 
-  var sigSubjects = await cloudStorage.load('signature_subjects');
   teacherSignatures = {};
-  if (sigSubjects && Array.isArray(sigSubjects)) {
-    for (var j = 0; j < sigSubjects.length; j++) {
-      var subj = sigSubjects[j];
-      var sig = await cloudStorage.load('sig_' + subj.replace(/\s+/g, '_'));
-      if (sig) teacherSignatures[subj] = sig;
-    }
-  }
 
   // The school identity fields are read from Supabase, never from the legacy browser cache.
   schoolInfo = loadedSchoolInfo && typeof loadedSchoolInfo === 'object'
@@ -2227,9 +2333,7 @@ async function saveAllData() {
   for (var i = 0; i < students.length; i += 50) batches.push(students.slice(i, i + 50));
   for (var b = 0; b < batches.length; b++) tasks.push(cloudStorage.save('students_batch_' + b, batches[b]));
   tasks.push(cloudStorage.save('students_meta', { totalBatches: batches.length, totalStudents: students.length, lastUpdated: new Date().toISOString() }));
-  var sigKeys = Object.keys(teacherSignatures);
-  for (var j = 0; j < sigKeys.length; j++) tasks.push(cloudStorage.save('sig_' + sigKeys[j].replace(/\s+/g, '_'), teacherSignatures[sigKeys[j]]));
-  tasks.push(cloudStorage.save('signature_subjects', sigKeys));
+  // Teacher signatures are persisted in Supabase Storage, not in JSON state.
   await Promise.all(tasks);
   return true;
 }
