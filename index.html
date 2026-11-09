@@ -1579,19 +1579,7 @@ async function loadStudentPortalData(admissionNumber) {
   };
   if (loadedPortalSettings && typeof loadedPortalSettings === 'object') portalSettings = Object.assign(portalSettings, loadedPortalSettings);
 
-  students = [];
-  var meta = await cloudStorage.load('students_meta');
-  if (meta && meta.totalBatches > 0) {
-    for (var i = 0; i < meta.totalBatches; i++) {
-      var batch = await cloudStorage.load('students_batch_' + i);
-      if (!Array.isArray(batch)) continue;
-      students = students.concat(batch.filter(function(student) {
-        return String(student.admNo || '').trim().toLowerCase() === String(admissionNumber || '').trim().toLowerCase();
-      }));
-    }
-  }
-
-  var subjects = await cloudStorage.load('signature_subjects');
+  // Student result rows are retrieved from the authenticated Supabase release endpoint, never browser batches.\n  students = [];\n\n  var subjects = await cloudStorage.load('signature_subjects');
   teacherSignatures = {};
   if (Array.isArray(subjects)) {
     for (var j = 0; j < subjects.length; j++) {
@@ -3277,152 +3265,132 @@ function getSubjectPerformanceStats(student, subjectName) {
   };
 }
 
-async function renderReleaseResults() {
-  if (currentUser.type !== 'admin') return;
-  var host = document.getElementById('releaseTab');
-  if (!host || !supabaseClient || !authenticatedProfile) return;
-  host.innerHTML = '<div class="card"><h2>Student Result Release</h2><p>Loading official classes, sessions and terms from Supabase…</p></div>';
+async async function renderReleaseResults() {
+  var root = document.getElementById('releaseTab');
+  if (!root || (currentUser.type !== 'admin' && currentUser.type !== 'subadmin')) return;
+  if (currentUser.type !== 'admin') {
+    root.innerHTML = '<div class="card"><p class="alert alert-info">Progressive result release is restricted to the School Administrator.</p></div>';
+    return;
+  }
+  root.innerHTML = '<div class="card"><h2>Progressive Student Result Release</h2><p>Release approved results in four stages: first CA, second CA, third CA, and final. Approval and publication remain separate from release-stage visibility. Students only receive the fields allowed by their current stage.</p><div class="grid grid-3"><div class="input-group"><label>Academic Session</label><select id="releaseSessionSelect"><option value="">Loading sessions…</option></select></div><div class="input-group"><label>Term</label><select id="releaseTermSelect"><option value="">Loading terms…</option></select></div><div class="input-group"><label>Class Arm</label><select id="releaseClassSelect"><option value="">All classes</option></select></div></div><div id="releaseStageStatus" style="margin:12px 0;color:#667085;">Loading release records from Supabase…</div><div id="releaseStageRows"></div></div>';
+  var sessionSelect = document.getElementById('releaseSessionSelect');
+  var termSelect = document.getElementById('releaseTermSelect');
+  var classSelect = document.getElementById('releaseClassSelect');
+  var status = document.getElementById('releaseStageStatus');
+  var rowsRoot = document.getElementById('releaseStageRows');
   try {
-    var schoolId = authenticatedProfile.school_id;
-    var [classResponse, sessionResponse, termResponse] = await Promise.all([
-      supabaseClient.from('classes').select('id,class_name').eq('school_id', schoolId).order('class_name'),
-      supabaseClient.from('academic_sessions').select('id,name,is_current').eq('school_id', schoolId).order('start_date', {ascending:false}),
-      supabaseClient.from('terms').select('id,name,term_number,is_current').eq('school_id', schoolId).order('term_number')
+    var loaded = await Promise.all([
+      supabaseClient.from('academic_sessions').select('id,name,is_current').eq('school_id', authenticatedProfile.school_id).order('created_at', { ascending: false }),
+      supabaseClient.from('terms').select('id,name,term_number,is_current').eq('school_id', authenticatedProfile.school_id).order('term_number'),
+      supabaseClient.from('classes').select('id,class_name').eq('school_id', authenticatedProfile.school_id).order('class_name')
     ]);
-    if (classResponse.error) throw classResponse.error;
-    if (sessionResponse.error) throw sessionResponse.error;
-    if (termResponse.error) throw termResponse.error;
-    var classes = classResponse.data || [], sessions = sessionResponse.data || [], terms = termResponse.data || [];
+    loaded.forEach(function(result) { if (result.error) throw result.error; });
+    var sessions = loaded[0].data || [], terms = loaded[1].data || [], classes = loaded[2].data || [];
+    sessionSelect.innerHTML = sessions.map(function(x) { return '<option value="' + x.id + '"' + (x.is_current ? ' selected' : '') + '>' + escapeManagementText(x.name) + '</option>'; }).join('');
+    termSelect.innerHTML = terms.map(function(x) { return '<option value="' + x.id + '"' + (x.is_current ? ' selected' : '') + '>' + escapeManagementText(x.name) + '</option>'; }).join('');
+    classSelect.innerHTML = '<option value="">All classes</option>' + classes.map(function(x) { return '<option value="' + x.id + '">' + escapeManagementText(x.class_name) + '</option>'; }).join('');
     if (!sessions.length || !terms.length) {
-      host.innerHTML = '<div class="card"><h2>Result Release</h2><p>Configure an academic session and term before releasing results.</p></div>';
+      status.textContent = 'Create an academic session and term before releasing results.';
+      rowsRoot.innerHTML = '';
       return;
     }
-    var activeSession = sessions.find(function(x){return x.is_current;}) || sessions[0];
-    var activeTerm = terms.find(function(x){return x.is_current;}) || terms[0];
-    host.innerHTML = '<div class="card"><h2>Student Result Release</h2>' +
-      '<p style="color:#667085;margin:8px 0 16px;">Progressive release is stored separately from result approval. Only published subject results can be released. Each student advances one stage at a time.</p>' +
-      '<div class="grid grid-3">' +
-      '<div class="input-group"><label>Academic Session</label><select id="releaseSession">' + sessions.map(function(x){return '<option value="'+x.id+'"'+(x.id===activeSession.id?' selected':'')+'>'+escapeManagementText(x.name)+'</option>';}).join('') + '</select></div>' +
-      '<div class="input-group"><label>Term</label><select id="releaseTerm">' + terms.map(function(x){return '<option value="'+x.id+'"'+(x.id===activeTerm.id?' selected':'')+'>'+escapeManagementText(x.name || ('Term '+x.term_number))+'</option>';}).join('') + '</select></div>' +
-      '<div class="input-group"><label>Class Arm</label><select id="releaseClass"><option value="">All classes</option>' + classes.map(function(x){return '<option value="'+x.id+'">'+escapeManagementText(x.class_name)+'</option>';}).join('') + '</select></div></div>' +
-      '<div id="releaseStudentList" style="margin-top:16px;">Loading students…</div></div>';
-    async function refreshReleaseList() {
-      var sessionId = document.getElementById('releaseSession').value;
-      var termId = document.getElementById('releaseTerm').value;
-      var classId = document.getElementById('releaseClass').value;
-      var listHost = document.getElementById('releaseStudentList');
-      listHost.innerHTML = '<p>Loading official enrolments and release stages…</p>';
-      var response = await supabaseClient.functions.invoke('manage-student-result-release', {
-        body: {action:'list', academic_session_id:sessionId, term_id:termId, class_id:classId || undefined}
+    async function loadReleaseRows() {
+      status.textContent = 'Refreshing release records from Supabase…';
+      rowsRoot.innerHTML = '';
+      var result = await supabaseClient.functions.invoke('manage-student-result-release', {
+        body: { action: 'list', academic_session_id: sessionSelect.value, term_id: termSelect.value, class_id: classSelect.value || undefined }
       });
-      if (response.error) throw response.error;
-      if (!response.data || !response.data.success) throw new Error(response.data && response.data.error || 'Unable to load release records.');
-      var students = response.data.students || [];
-      if (!students.length) {
-        listHost.innerHTML = '<p style="padding:12px;color:#667085;">No active student enrolments match this selection.</p>';
+      if (result.error) throw result.error;
+      if (!result.data || result.data.success !== true) throw new Error(result.data && result.data.error || 'Could not load release records.');
+      var studentsForRelease = result.data.students || [];
+      if (!studentsForRelease.length) {
+        status.textContent = 'No active enrolments were found for this selection.';
         return;
       }
-      var stageLabels = {0:'Not released',1:'1st CA',2:'2nd CA',3:'3rd CA',4:'Final'};
-      var body = '<div style="overflow-x:auto;"><table><thead><tr><th>Student</th><th>Admission No.</th><th>Class</th><th>Published Subjects</th><th>Released Through</th><th>Action</th></tr></thead><tbody>';
-      students.forEach(function(student) {
-        var stageRecord = (student.stages || []).find(function(x){return x.academic_session_id===sessionId && x.term_id===termId;});
-        var stage = Number(stageRecord && stageRecord.release_stage || 0);
-        var count = Number(student.published_result_count || 0);
-        body += '<tr data-student-id="'+student.student_id+'"><td>'+escapeManagementText(student.full_name)+'</td>' +
-          '<td>'+escapeManagementText(student.admission_number)+'</td><td>'+escapeManagementText(student.class_name)+'</td>' +
-          '<td>'+count+'</td><td>'+stageLabels[stage]+'</td><td>' +
-          '<button class="btn btn-success release-next" '+(stage>=4 || count===0?'disabled':'')+'>'+ (stage>=4?'Fully Released':'Release '+stageLabels[stage+1]) +'</button> '+
-          (stage>0?'<button class="btn btn-secondary release-revoke">Revoke</button>':'')+'</td></tr>';
-      });
-      body += '</tbody></table></div>';
-      listHost.innerHTML = body;
-      listHost.querySelectorAll('.release-next').forEach(function(button){
-        button.addEventListener('click', async function(){
-          var row=button.closest('tr'), student=students.find(function(x){return x.student_id===row.getAttribute('data-student-id');});
-          var current=(student.stages||[]).find(function(x){return x.academic_session_id===sessionId&&x.term_id===termId;});
-          var next=Number(current&&current.release_stage||0)+1;
-          button.disabled=true;
+      status.textContent = studentsForRelease.length + ' active student enrolment(s) loaded from Supabase.';
+      rowsRoot.innerHTML = '<div style="overflow-x:auto"><table><thead><tr><th>Student</th><th>Admission No.</th><th>Class</th><th>Approved / Published Rows</th><th>Released Through</th><th>Action</th></tr></thead><tbody>' +
+        studentsForRelease.map(function(student) {
+          var stageRecord = (student.stages || []).find(function(x) { return String(x.term_id) === String(termSelect.value) && String(x.academic_session_id) === String(sessionSelect.value); });
+          var stage = Number(stageRecord && stageRecord.release_stage || 0);
+          var labels = ['Not released','1st CA','2nd CA','3rd CA','Final'];
+          var next = stage + 1;
+          var disabled = stage >= 4 || Number(student.eligible_result_count || 0) < 1;
+          var actionLabel = stage >= 4 ? 'Fully released' : 'Release ' + labels[next];
+          return '<tr><td>' + escapeManagementText(student.full_name || '') + '</td><td>' + escapeManagementText(student.admission_number || '') + '</td><td>' + escapeManagementText(student.class_name || '') + '</td><td>' + Number(student.eligible_result_count || 0) + '</td><td>' + labels[stage] + '</td><td><button class="btn btn-success release-stage-one" data-student="' + student.student_id + '" data-stage="' + next + '"' + (disabled ? ' disabled' : '') + '>' + actionLabel + '</button></td></tr>';
+        }).join('') + '</tbody></table></div>';
+      rowsRoot.querySelectorAll('.release-stage-one').forEach(function(button) {
+        button.addEventListener('click', async function() {
+          var nextStage = Number(button.getAttribute('data-stage'));
+          var studentId = button.getAttribute('data-student');
+          button.disabled = true;
+          button.textContent = 'Saving…';
           try {
-            var saved=await supabaseClient.functions.invoke('manage-student-result-release',{body:{action:'set_stage',student_id:student.student_id,academic_session_id:sessionId,term_id:termId,release_stage:next}});
-            if(saved.error) throw saved.error;
-            if(!saved.data||!saved.data.success) throw new Error(saved.data&&saved.data.error||'Release failed.');
-            showToast('Result advanced to '+stageLabels[next]+'.','success');
-            await refreshReleaseList();
-          } catch(error) { showToast(error.message||'Unable to release result.','error'); button.disabled=false; }
-        });
-      });
-      listHost.querySelectorAll('.release-revoke').forEach(function(button){
-        button.addEventListener('click', async function(){
-          var row=button.closest('tr'), student=students.find(function(x){return x.student_id===row.getAttribute('data-student-id');});
-          if(!confirm('Revoke all progressive result stages for this student and term?')) return;
-          button.disabled=true;
-          try {
-            var saved=await supabaseClient.functions.invoke('manage-student-result-release',{body:{action:'set_stage',student_id:student.student_id,academic_session_id:sessionId,term_id:termId,release_stage:0}});
-            if(saved.error) throw saved.error;
-            if(!saved.data||!saved.data.success) throw new Error(saved.data&&saved.data.error||'Revocation failed.');
-            showToast('Progressive release revoked.','success');
-            await refreshReleaseList();
-          } catch(error) { showToast(error.message||'Unable to revoke release.','error'); button.disabled=false; }
+            var saved = await supabaseClient.functions.invoke('manage-student-result-release', {
+              body: { action: 'set_stage', student_id: studentId, academic_session_id: sessionSelect.value, term_id: termSelect.value, release_stage: nextStage }
+            });
+            if (saved.error) throw saved.error;
+            if (!saved.data || saved.data.success !== true) throw new Error(saved.data && saved.data.error || 'Release stage could not be saved.');
+            showToast('Result release advanced to ' + labels[nextStage] + '.', 'success');
+            await loadReleaseRows();
+          } catch (error) {
+            showToast(error.message || 'Could not advance result release.', 'error');
+            button.disabled = false;
+            button.textContent = 'Release ' + labels[nextStage];
+          }
         });
       });
     }
-    ['releaseSession','releaseTerm','releaseClass'].forEach(function(id){
-      document.getElementById(id).addEventListener('change',function(){refreshReleaseList().catch(function(error){showToast(error.message,'error');});});
-    });
-    await refreshReleaseList();
-  } catch(error) {
-    console.error('Supabase result release screen failed:',error);
-    host.innerHTML = '<div class="card"><h2>Result Release unavailable</h2><p>'+escapeManagementText(error.message||'Unable to load result release controls.')+'</p></div>';
+    sessionSelect.addEventListener('change', function() { loadReleaseRows().catch(function(e) { status.textContent = e.message; }); });
+    termSelect.addEventListener('change', function() { loadReleaseRows().catch(function(e) { status.textContent = e.message; }); });
+    classSelect.addEventListener('change', function() { loadReleaseRows().catch(function(e) { status.textContent = e.message; }); });
+    await loadReleaseRows();
+  } catch (error) {
+    status.textContent = error.message || 'Unable to load result release controls.';
+    showToast(status.textContent, 'error');
   }
 }
 
 async function renderStudentResults() {
   var container = document.getElementById('studentResultsTab');
   if (!container) return;
-  container.innerHTML = '<div class="card"><p>Loading your released results securely…</p></div>';
-  if (!supabaseClient) {
-    container.innerHTML = '<div class="card"><h2>Result unavailable</h2><p>Secure result service is not available. Please sign in again.</p></div>';
+  if (!supabaseClient || !currentUser || currentUser.type !== 'student' || !currentUser.studentId) {
+    container.innerHTML = '<div class="card"><h2>Result unavailable</h2><p>Sign in with your official student account to view released results.</p></div>';
     return;
   }
+  container.innerHTML = '<div class="card"><h2>Student Results</h2><p>Retrieving your released results securely from Supabase…</p></div>';
   try {
-    var response = await supabaseClient.functions.invoke('student-results-portal', { body: {} });
-    if (response.error) throw response.error;
-    var payload = response.data || {};
-    if (!payload.success) throw new Error(payload.error || 'Unable to load results.');
-    var released = Array.isArray(payload.results) ? payload.results : [];
+    var result = await supabaseClient.functions.invoke('get-student-result-release', { body: {} });
+    if (result.error) throw result.error;
+    if (!result.data || result.data.success !== true) throw new Error(result.data && result.data.error || 'Your result could not be retrieved.');
+    var student = result.data.student || {};
+    var released = result.data.results || [];
     if (!released.length) {
-      container.innerHTML = '<div class="card"><h2>Result unavailable</h2><p>No results have been released for this account. Contact the school administrator.</p></div>';
+      container.innerHTML = '<div class="card"><h2>Result unavailable</h2><p>No result stage has been released for this account yet. Contact the School Administrator.</p></div>';
       return;
     }
-    var student = payload.student || {};
-    container.innerHTML = released.map(function(result) {
-      var stage = Number(result.release_stage) || 0;
-      var subjects = Array.isArray(result.subjects) ? result.subjects : [];
-      var headers = '<th>Subject</th><th>1st CA</th>' +
-        (stage >= 2 ? '<th>2nd CA</th>' : '') +
-        (stage >= 3 ? '<th>3rd CA</th>' : '') +
-        (stage >= 4 ? '<th>Examination</th><th>Total</th><th>Grade</th><th>Remark</th>' : '');
-      var rows = subjects.map(function(subject) {
-        return '<tr><td>' + escapeManagementText(subject.subject || '') + '</td>' +
-          '<td>' + escapeManagementText(subject.ca1 == null ? '—' : subject.ca1) + '</td>' +
-          (stage >= 2 ? '<td>' + escapeManagementText(subject.ca2 == null ? '—' : subject.ca2) + '</td>' : '') +
-          (stage >= 3 ? '<td>' + escapeManagementText(subject.ca3 == null ? '—' : subject.ca3) + '</td>' : '') +
-          (stage >= 4 ? '<td>' + escapeManagementText(subject.examination == null ? '—' : subject.examination) + '</td><td>' + escapeManagementText(subject.total == null ? '—' : subject.total) + '</td><td>' + escapeManagementText(subject.grade || '') + '</td><td>' + escapeManagementText(subject.remark || '') + '</td>' : '') +
-          '</tr>';
+    var groups = {};
+    released.forEach(function(item) {
+      var row = item.row || {};
+      var key = String(row.academic_session_id || '') + ':' + String(row.term_id || '');
+      if (!groups[key]) groups[key] = { session: row.session || '', term: row.term || '', stage: Number(item.stage || 0), rows: [] };
+      groups[key].rows.push(row);
+      groups[key].stage = Math.max(groups[key].stage, Number(item.stage || 0));
+    });
+    var labels = ['Not released','1st CA','2nd CA','3rd CA','Final'];
+    container.innerHTML = Object.keys(groups).map(function(key) {
+      var group = groups[key];
+      var stage = Math.max(0, Math.min(4, group.stage));
+      var headers = '<th>Subject</th><th>1st CA</th>' + (stage >= 2 ? '<th>2nd CA</th>' : '') + (stage >= 3 ? '<th>3rd CA</th>' : '') + (stage >= 4 ? '<th>Examination</th><th>Total</th><th>Grade</th><th>Remark</th>' : '');
+      var rows = group.rows.map(function(row) {
+        return '<tr><td>' + escapeManagementText(row.subject || '') + '</td><td>' + escapeManagementText(row.ca1 == null ? '—' : row.ca1) + '</td>' +
+          (stage >= 2 ? '<td>' + escapeManagementText(row.ca2 == null ? '—' : row.ca2) + '</td>' : '') +
+          (stage >= 3 ? '<td>' + escapeManagementText(row.ca3 == null ? '—' : row.ca3) + '</td>' : '') +
+          (stage >= 4 ? '<td>' + escapeManagementText(row.examination == null ? '—' : row.examination) + '</td><td>' + escapeManagementText(row.total == null ? '—' : row.total) + '</td><td>' + escapeManagementText(row.grade || '—') + '</td><td>' + escapeManagementText(row.remark || '—') + '</td>' : '') + '</tr>';
       }).join('');
-      var stageLabels = {1:'First Continuous Assessment',2:'Second Continuous Assessment',3:'Third Continuous Assessment',4:'Final Result'};
-      return '<div class="card"><h2>' + escapeManagementText(schoolInfo.name || currentSchool.schoolName || 'School') + ' — Student Result</h2>' +
-        '<p style="margin:12px 0;"><strong>Student:</strong> ' + escapeManagementText(student.full_name || '') +
-        ' &nbsp; <strong>Admission No:</strong> ' + escapeManagementText(student.admission_number || '') +
-        ' &nbsp; <strong>Class:</strong> ' + escapeManagementText(result.class_name || '') +
-        ' &nbsp; <strong>Term:</strong> ' + escapeManagementText(result.term || '') +
-        ' &nbsp; <strong>Session:</strong> ' + escapeManagementText(result.session || '') + '</p>' +
-        '<p style="margin-bottom:10px;color:#5568d3;"><strong>Released through:</strong> ' + stageLabels[stage] + '</p>' +
-        '<div style="overflow-x:auto;"><table><thead><tr>' + headers + '</tr></thead><tbody>' + rows + '</tbody></table></div></div>';
+      return '<div class="card"><h2>Student Result</h2><p><strong>Student:</strong> ' + escapeManagementText(student.full_name || currentUser.name || '') + ' &nbsp; <strong>Admission No:</strong> ' + escapeManagementText(student.admission_number || currentUser.admission || '') + '</p><p><strong>Session:</strong> ' + escapeManagementText(group.session) + ' &nbsp; <strong>Term:</strong> ' + escapeManagementText(group.term) + '</p><p style="color:#5568d3"><strong>Released through:</strong> ' + labels[stage] + '</p><div style="overflow-x:auto"><table><thead><tr>' + headers + '</tr></thead><tbody>' + rows + '</tbody></table></div></div>';
     }).join('');
   } catch (error) {
-    console.error('Secure student result load failed:', error);
-    container.innerHTML = '<div class="card"><h2>Result unavailable</h2><p>' + escapeManagementText(error && error.message ? error.message : 'The result service could not be reached. Please try again later.') + '</p></div>';
+    container.innerHTML = '<div class="card"><h2>Result temporarily unavailable</h2><p>' + escapeManagementText(error.message || 'Please refresh and try again.') + '</p></div>';
   }
 }
 
