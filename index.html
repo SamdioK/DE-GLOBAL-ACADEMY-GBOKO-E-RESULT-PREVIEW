@@ -395,6 +395,32 @@ CloudStorage.prototype.globalLoad = async function(key) {
 
 var cloudStorage = new CloudStorage();
 
+async function uploadSchoolPublicAsset(file, folder) {
+  if (!supabaseClient || !authenticatedProfile || !authenticatedProfile.school_id) {
+    throw new Error('An authenticated school account is required to upload this file.');
+  }
+  if (!file || !file.type || !/^image\\/(png|jpeg|webp)$/i.test(file.type)) {
+    throw new Error('Choose a PNG, JPG or WEBP image.');
+  }
+  if (file.size > 5 * 1024 * 1024) throw new Error('Images must not exceed 5 MB.');
+  var role = String(authenticatedProfile.role || '').toLowerCase();
+  if (!['administrator','portal_developer'].includes(role)) throw new Error('This account cannot upload public school assets.');
+  if (!window.crypto || typeof window.crypto.randomUUID !== 'function') throw new Error('Secure file naming is unavailable in this browser.');
+  var extension = file.type.toLowerCase() === 'image/jpeg' ? 'jpg' : file.type.toLowerCase().split('/')[1];
+  var safeFolder = String(folder || 'general').replace(/[^a-z0-9-]/gi, '').toLowerCase() || 'general';
+  var path = String(authenticatedProfile.school_id) + '/' + safeFolder + '/' + window.crypto.randomUUID() + '.' + extension;
+  var uploaded = await supabaseClient.storage.from('school-public-assets').upload(path, file, {
+    cacheControl: '3600', upsert: false, contentType: file.type
+  });
+  if (uploaded.error) throw uploaded.error;
+  if (!uploaded.data || uploaded.data.path !== path) throw new Error('Supabase Storage did not confirm the uploaded file.');
+  var publicUrl = supabaseClient.storage.from('school-public-assets').getPublicUrl(path);
+  if (!publicUrl || !publicUrl.data || !publicUrl.data.publicUrl) throw new Error('The uploaded image URL could not be confirmed.');
+  return publicUrl.data.publicUrl;
+}
+
+
+
 // One-time bridge: import recognised legacy records into Supabase, then remove
 // their local copies only after a cloud row is confirmed. This is not a runtime
 // fallback; all normal reads and writes below use Supabase exclusively.
@@ -7240,14 +7266,19 @@ function renderPortalContentAdmin() {
     if (!title || !message) { showToast('Enter a title and message', 'error'); return; }
     if (files.some(function(file) { return !file.type || file.type.indexOf('image/') !== 0; })) { showToast('Only image files can be attached', 'error'); return; }
     try {
-      var photos = await Promise.all(files.map(function(file) { return new Promise(function(resolve, reject) { var reader = new FileReader(); reader.onload = function(event) { resolve(event.target.result); }; reader.onerror = function() { reject(new Error('Could not read an attached photo')); }; reader.readAsDataURL(file); }); }));
-      portalNews.push({ id: Date.now(), category: categories.join(', '), title: title, message: message, photos: photos, date: new Date().toLocaleDateString() });
+      var photos = await Promise.all(files.map(function(file) { return uploadSchoolPublicAsset(file, 'portal-news'); }));
+      portalNews.push({ id: window.crypto.randomUUID(), category: categories.join(', '), title: title, message: message, photos: photos, date: new Date().toISOString() });
       await saveAllData();
       showToast('Portal post published', 'success');
       renderPortalContentAdmin();
     } catch (error) { showToast(error.message || 'Could not read attached photos', 'error'); }
   });
-  function addImageRecord(fileInputId, callback) { var file = document.getElementById(fileInputId).files[0]; if (!file) { callback(''); return; } if (file.type.indexOf('image/') !== 0) { showToast('Choose a valid image', 'error'); return; } var reader = new FileReader(); reader.onload = function(event) { callback(event.target.result); }; reader.onerror = function() { showToast('Could not read image', 'error'); }; reader.readAsDataURL(file); }
+  async function addImageRecord(fileInputId, callback) {
+    var file = document.getElementById(fileInputId).files[0];
+    if (!file) { showToast('Choose an image first.', 'error'); return; }
+    try { var publicUrl = await uploadSchoolPublicAsset(file, 'portal-prefects'); await callback(publicUrl); }
+    catch (error) { showToast(error && error.message || 'Could not upload image to Supabase Storage.', 'error'); }
+  }
 
   document.getElementById('addPrefectBtn').addEventListener('click', function() { var name = document.getElementById('prefectName').value.trim(), className = document.getElementById('prefectClass').value.trim(), portfolio = document.getElementById('prefectPortfolio').value.trim(); if (!name || !className || !portfolio || !document.getElementById('prefectPhoto').files[0]) { showToast('Enter prefect name, class, portfolio and upload a passport photo', 'error'); return; } if (!getPortalStudentOptions().some(function(student) { return student.name.toLowerCase() === name.toLowerCase() && student.className === className; })) { showToast('Select a student and class from the E-Result student register', 'error'); return; } addImageRecord('prefectPhoto', async function(photo) { prefects.push({ id: Date.now(), name: name, className: className, portfolio: portfolio, photo: photo }); await saveAllData(); renderPortalContentAdmin(); }); });
   document.getElementById('addDutyBtn').addEventListener('click', async function() { var week = parseInt(document.getElementById('dutyWeek').value, 10), name = document.getElementById('dutyName').value.trim(), schedule = document.getElementById('dutySchedule').value.trim(); if (!week || week > portalSettings.termWeeks || !name || !schedule) { showToast('Enter a valid week, duty master and schedule', 'error'); return; } if (getPortalTeacherNames().indexOf(name) === -1) { showToast('Select a teacher from the E-Result staff database', 'error'); return; } dutyRoster.push({ id: Date.now(), week: week, name: name, schedule: schedule }); await saveAllData(); renderPortalContentAdmin(); });
@@ -7486,7 +7517,7 @@ async function renderDeveloperConsole() {
     }
   });
 
-  document.getElementById('saveDeveloperProfileBtn').addEventListener('click', async function() { account.name = document.getElementById('devName').value.trim() || 'Portal Developer'; account.email = document.getElementById('devEmail').value.trim(); account.whatsapp = document.getElementById('devWhatsApp').value.trim(); account.phone = document.getElementById('devPhone').value.trim();  var file = document.getElementById('devPhoto').files[0]; var save = async function(photo) { if (photo) account.photo = photo; await cloudStorage.globalSave('portal:developer', account); currentUser.name = account.name; document.getElementById('currentUserName').textContent = currentUser.name; showToast('Developer profile saved', 'success'); renderDeveloperConsole(); }; if (file) { if (file.type.indexOf('image/') !== 0) { showToast('Choose a valid image', 'error'); return; } var reader = new FileReader(); reader.onload = function(event) { save(event.target.result); }; reader.readAsDataURL(file); } else save(null); });
+  document.getElementById('saveDeveloperProfileBtn').addEventListener('click', async function() { account.name = document.getElementById('devName').value.trim() || 'Portal Developer'; account.email = document.getElementById('devEmail').value.trim(); account.whatsapp = document.getElementById('devWhatsApp').value.trim(); account.phone = document.getElementById('devPhone').value.trim();  var file = document.getElementById('devPhoto').files[0]; var save = async function(photo) { if (photo) account.photo = photo; await cloudStorage.globalSave('portal:developer', account); currentUser.name = account.name; document.getElementById('currentUserName').textContent = currentUser.name; showToast('Developer profile saved', 'success'); renderDeveloperConsole(); }; if (file) { try { var photoUrl = await uploadSchoolPublicAsset(file, 'portal-developer'); await save(photoUrl); } catch (uploadError) { showToast(uploadError && uploadError.message || 'Could not upload developer photo to Supabase Storage.', 'error'); } } else await save(null); });
   document.getElementById('grantLicenseBtn').addEventListener('click', async function() { var days = parseInt(document.getElementById('licenseDays').value, 10), customer = document.getElementById('licenseCustomer').value.trim(); if (!days || days < 1 || !customer) { showToast('Enter recipient name and valid days', 'error'); return; } var start = Math.max(Date.now(), Number(portalSettings.licenseUntil) || 0); portalSettings.licenseUntil = start + days * 86400000; portalSettings.sales = portalSettings.sales || []; portalSettings.sales.push({ customer: customer, days: days, date: Date.now() }); await saveAllData(); showToast('Access extended for ' + days + ' days', 'success'); renderDeveloperConsole(); });
   document.getElementById('togglePortalBtn').addEventListener('click', async function() { portalSettings.portalEnabled = portalSettings.portalEnabled === false; await saveAllData(); showToast('Portal turned ' + (portalSettings.portalEnabled ? 'on' : 'off'), 'info'); renderDeveloperConsole(); });
 }
