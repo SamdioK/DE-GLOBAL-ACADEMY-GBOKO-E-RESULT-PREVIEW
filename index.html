@@ -683,7 +683,7 @@ async function migrateLegacyBrowserStateOnce() {
   var schoolId = String(authenticatedProfile.school_id);
   var userId = String(authenticatedProfile.id);
   var exactKeys = ['classArms','formMasters','subjectAssignments','schoolInfo','managementStaff','portalNews','schoolStaff','staffDatabase','portalStaffSelections','prefects','dutyRoster','portalSettings','students_meta','schoolIdCardSettings','activationResetV3','signature_subjects'];
-  function allowed(key) { return exactKeys.indexOf(key) !== -1 || /^students_batch_\\d+$/.test(key) || /^sig_.+$/.test(key); }
+  function allowed(key) { return exactKeys.indexOf(key) !== -1 || /^students_batch_\d+$/.test(key) || /^sig_.+$/.test(key); }
   var candidates = new Map(), sourceRows = [], prefixes = [schoolId + ':', 'MAIN:'];
   function remember(key, value, source) {
     if (!allowed(key)) return;
@@ -785,7 +785,7 @@ async function migrateLegacyBrowserStateOnce() {
   var existing = new Set((existingResult.data || []).map(function(row) { return row.storage_key; }));
   for (var keyIndex = 0; keyIndex < keys.length; keyIndex++) {
     var key = keys[keyIndex], value = candidates.get(key).value;
-    if (/^students_batch_\\d+$/.test(key)) value = await migrateLegacyStudentPassportBatch(value, schoolId, userId);
+    if (/^students_batch_\d+$/.test(key)) value = await migrateLegacyStudentPassportBatch(value, schoolId, userId);
     else if (key === 'schoolInfo') value = await migrateLegacySchoolBrandingAssets(value, schoolId);
     else value = await moveLegacyEmbeddedImagesToStorage(value, 'legacy-' + key.toLowerCase());
     if (key === 'formMasters' && Array.isArray(value)) value.forEach(function(master) { if (master) delete master.password; });
