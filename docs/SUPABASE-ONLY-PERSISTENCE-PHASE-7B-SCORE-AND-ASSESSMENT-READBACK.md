@@ -89,12 +89,25 @@ The following checks were completed:
 | Form Master assessment unique key | Confirmed |
 | Result and assessment row counts at audit time | 0 and 0 |
 
-## 7. Live operational test still required
+## 7. Legacy class-arm credential cleanup
+
+A read-only comparison confirmed that all 30 `classArms` entries matched the 30 relational `classes` records by class name. The legacy array contained 30 obsolete generated `password` properties; the active application has no use for `arm.password` other than deleting it.
+
+The obsolete properties were removed from the `classArms` JSON array in one guarded database update. The update preserved the array length and all non-password JSON fields, set the updater to the active Administrator profile, and performed an immediate read-back comparison against the expected transformed JSON. The verification query returned:
+
+- Legacy class-arm records: 30.
+- Relational class records: 30.
+- Matching class names: 30.
+- Remaining class-arm password properties: 0.
+
+No class-arm records were deleted, and no relational class records were changed.
+
+## 8. Live operational test still required
 
 A live authenticated save and read-back has not yet been performed. The database currently contains no result or Form Master assessment rows, and this audit did not fabricate a student, assignment or assessment to create a test result.
 
 For final acceptance, an authorised school operator should use a designated test student and active assignment/configuration, save a draft, reload the sheet, and confirm the exact values in Supabase. Then test the corresponding denied actions with an unauthorised role. Do not use a real learner's record for an artificial test.
 
-## 8. Release rule
+## 9. Release rule
 
 Do not declare the migration complete until the authenticated end-to-end test succeeds for Subject Teacher, Form Master and Administrator/Sub Administrator workflows. Keep legacy browser data until all unresolved keys and files are reconciled. No result, student, passport, signature or configuration record should be deleted merely to make counts appear consistent.
