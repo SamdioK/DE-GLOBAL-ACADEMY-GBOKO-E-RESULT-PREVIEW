@@ -533,3 +533,40 @@ The frontend no longer loads `subAdministrators` from `cloudStorage`, writes tha
 ### 22.7 Edge Function deployment correction
 
 After reviewing the deployed TypeScript sources, both list endpoints were adjusted to construct explicitly typed Maps rather than relying on tuple inference. The corrected functions are now deployed and ACTIVE: `manage-profile-permissions` version 4 and `manage-sub-administrator` version 2. Their matching GitHub source files were updated. JWT verification remains enabled on both functions. `change-sub-administrator-password` remains ACTIVE at version 1.
+
+
+## 23. Progressive student result release foundation and portal endpoint — 9 November 2026
+
+### 23.1 Separate release-stage records
+
+Created `student_result_release_stages`, uniquely scoped to school, student, academic session and term. The stage range is constrained to 0–4: no release, first CA, second CA, third CA and final result. This is separate from `results.status`, which continues to represent the independent draft, submitted, approved and published workflow.
+
+Created `student_result_release_stage_audit` and a database trigger. Stage insertions and actual stage changes are recorded with old stage, new stage, student/session/term scope and the authenticated administrator profile recorded as actor. Both tables have RLS enabled; `anon` and `authenticated` have no direct table privileges. The trusted server-side service role is the only direct application access path.
+
+### 23.2 Server-side release management
+
+Deployed `manage-student-result-release` with JWT verification enabled. It verifies an active School Administrator from the live `profiles` row and derives school scope from that profile. It lists official active enrolments, returns release metadata for the selected session and term, and allows one-stage-at-a-time advancement or revocation to stage 0. Advancement is refused unless at least one subject result for the student/session/term has already reached `published`. The endpoint does not approve or publish result rows.
+
+### 23.3 Stage-filtered student result endpoint
+
+Deployed `student-results-portal` with JWT verification enabled. It requires an active `student` profile and a matching `students.profile_id` record in the same school. It reads only the student's own stage records and published subject results, then constructs a reduced response:
+- Stage 1: subject and CA1 only.
+- Stage 2: subject, CA1 and CA2.
+- Stage 3: subject, CA1, CA2 and CA3.
+- Stage 4: subject, all assessment components, total, grade and remark.
+
+The endpoint does not return unreleased columns in earlier-stage responses. Student authentication is based on the linked Supabase profile, not an admission-number-only filter or a browser-held student password.
+
+### 23.4 Frontend cutover and remaining security gate
+
+The administrator release screen now loads classes, sessions and terms from Supabase and invokes the server-side release manager. It no longer changes the legacy browser `students` array or calls `saveAllData()` to advance a release stage. The student result screen now invokes the stage-filtered endpoint and renders only the fields returned for that stage.
+
+**Important:** the existing direct RLS policy allowing a student to SELECT their own published `results` row has deliberately not yet been removed. Removing it before the new portal is confirmed on the live hosted frontend could interrupt student access; leaving it in place means a technically capable student could still query the published row directly and bypass progressive column hiding. The next cutover gate is to verify the new frontend is deployed and test a real linked student account, then remove the direct student SELECT policy and verify that the endpoint remains functional while direct table SELECT is denied. No student stage records or result rows have been created during this implementation pass.
+
+### 23.5 Verification and limits
+
+- Both release tables exist, have RLS enabled, and have no `anon` or `authenticated` SELECT privilege.
+- `manage-student-result-release` and `student-results-portal` are ACTIVE with JWT verification enabled.
+- Frontend code was committed to the repository. Hosted GitHub Pages deployment and authenticated acceptance tests are not yet confirmed.
+- Existing result table count remains 0, so there are currently no published result rows available to release.
+- The legacy browser backup remains untouched. The administrator's aggregate result-entry workflow and Form Master assessment persistence are still separate migration work and are not declared complete.
