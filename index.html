@@ -1912,6 +1912,21 @@ async function loadSchoolData() {
   var loadedPrefects = await cloudStorage.load('prefects');
   var loadedDutyRoster = await cloudStorage.load('dutyRoster');
   var loadedPortalSettings = await cloudStorage.load('portalSettings');
+  var storageRole = String(authenticatedProfile && authenticatedProfile.role || '').toLowerCase();
+  if (!['administrator','portal_developer'].includes(storageRole)) {
+    var schoolPortalSettingsResult = await supabaseClient.from('school_portal_settings')
+      .select('portal_enabled,welcome_enabled,welcome_text,term_weeks')
+      .eq('school_id', authenticatedProfile.school_id).maybeSingle();
+    if (schoolPortalSettingsResult.error) throw schoolPortalSettingsResult.error;
+    if (schoolPortalSettingsResult.data) {
+      portalSettings = Object.assign({}, portalSettings, {
+        portalEnabled: schoolPortalSettingsResult.data.portal_enabled,
+        welcomeEnabled: schoolPortalSettingsResult.data.welcome_enabled,
+        welcomeText: schoolPortalSettingsResult.data.welcome_text || '',
+        termWeeks: schoolPortalSettingsResult.data.term_weeks || 12
+      });
+    }
+  }
 
   if (loadedArms) classArms = loadedArms; else generateArms();
   if (loadedMasters) formMasters = Array.isArray(loadedMasters) ? loadedMasters : [];
@@ -1996,12 +2011,14 @@ async function loadSchoolData() {
     migrated = true;
   }
 
-  var resetFlag = await cloudStorage.load('activationResetV3');
-  if (!resetFlag) {
-    classArms.forEach(function(a) { a.activated = false; });
-    subjectAssignments.forEach(function(a) { a.activated = false; });
-    await cloudStorage.save('activationResetV3', true);
-    migrated = true;
+  if (['administrator','portal_developer'].includes(storageRole)) {
+    var resetFlag = await cloudStorage.load('activationResetV3');
+    if (!resetFlag) {
+      classArms.forEach(function(a) { a.activated = false; });
+      subjectAssignments.forEach(function(a) { a.activated = false; });
+      await cloudStorage.save('activationResetV3', true);
+      migrated = true;
+    }
   }
 
   if (migrated) { await saveAllData(); }
