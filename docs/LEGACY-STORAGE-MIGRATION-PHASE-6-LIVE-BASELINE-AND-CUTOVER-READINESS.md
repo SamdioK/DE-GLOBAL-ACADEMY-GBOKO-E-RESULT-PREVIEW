@@ -570,3 +570,58 @@ The administrator release screen now loads classes, sessions and terms from Supa
 - Frontend code was committed to the repository. Hosted GitHub Pages deployment and authenticated acceptance tests are not yet confirmed.
 - Existing result table count remains 0, so there are currently no published result rows available to release.
 - The legacy browser backup remains untouched. The administrator's aggregate result-entry workflow and Form Master assessment persistence are still separate migration work and are not declared complete.
+
+## 23. Progressive student result release moved to Supabase — 9 November 2026
+
+### 23.1 Separate release-stage data model
+
+Created `public.student_result_release_stages`, scoped by school, official student UUID, academic session and term. The stage is constrained to 0–4:
+
+- 0 — no result release;
+- 1 — first CA;
+- 2 — first and second CA;
+- 3 — first, second and third CA;
+- 4 — final result.
+
+A unique constraint prevents duplicate stage records for the same student/session/term. The table has RLS enabled and direct table privileges are revoked from `anon` and `authenticated`; access is through trusted server-side functions. A separate `student_result_release_audit` table records the previous and new stage, action, actor and timestamp. A database trigger writes the audit event in the same transaction as a stage change. No stage or audit rows were created during deployment.
+
+The approval workflow remains separate. Stages 1–3 require at least one approved or published result row. Stage 4 requires at least one published result row. Advancing is one stage at a time; an administrator may reset a student's release to stage 0. The release action does not approve or publish a result row.
+
+### 23.2 Trusted release management endpoint
+
+Deployed `manage-student-result-release` with JWT verification enabled. It verifies the caller against the active School Administrator profile, derives the school scope from that profile, validates the session, term, student and active enrolment, and records stage changes through the audited table. Its list action returns official enrolment identities, class labels, current stages and eligible result-row counts. The browser cannot directly write release-stage records.
+
+### 23.3 Student result response is stage-filtered on the server
+
+Deployed `get-student-result-release` with JWT verification enabled. It requires an active Student profile and resolves the official student record through `students.profile_id = auth.uid()`. It does not use an admission-number-only lookup.
+
+The endpoint returns only the permitted fields:
+- Stage 1: subject and first CA;
+- Stage 2: adds second CA;
+- Stage 3: adds third CA;
+- Stage 4: adds examination, total, grade and remark, and only for published result rows.
+
+The endpoint does not return hidden score columns, result status, or another student's records. The student-facing result screen now calls this endpoint and no longer reads the legacy aggregate result batches for result display. The old browser backup remains preserved.
+
+### 23.4 Frontend changes and deployment boundary
+
+The administrator Release Results screen now loads sessions, terms, classes and active enrolments from Supabase. It offers per-student, one-stage-at-a-time release and displays the current stage and eligible result-row count. The student result screen groups the server-filtered response by session and term.
+
+The frontend change was committed to `main` as `6dfbaa3987273132e6f9fa42cff0cf298d06ecc2`. The associated GitHub Pages workflow was still in progress at the time of this report update; the live site has not yet been confirmed. The existing direct student SELECT policy on `public.results` remains in place temporarily so the old deployment is not cut off before the new frontend is live and tested. This is an explicit security cutover gate: after the new site is confirmed live and the authenticated student endpoint passes acceptance tests, remove the direct student SELECT policy so clients cannot bypass stage filtering by querying the full result row.
+
+### 23.5 Verification and remaining acceptance tests
+
+Live verification confirmed:
+- both new release tables exist with RLS enabled;
+- neither table grants direct table privileges to `anon` or `authenticated`;
+- the service-role server path has the required table privileges;
+- the release-stage and audit tables contain zero rows;
+- `manage-student-result-release` is ACTIVE at version 5 with JWT verification;
+- `get-student-result-release` is ACTIVE at version 2 with JWT verification;
+- the school still has zero result rows, so no result data was changed.
+
+No student, staff, enrolment, result or legacy browser record was modified. No test account was created. Because there are currently no result rows and no authorised test student session was used, positive and negative authenticated stage tests remain outstanding. Before removing the direct student SELECT policy, test the student endpoint with a real linked student account at stages 0, 1, 2, 3 and 4, including a cross-student denial and a direct Data API denial after policy removal. Also verify that stage 4 excludes approved-but-not-published rows.
+
+### 23.6 Next implementation boundary
+
+The administrator/sub-administrator aggregate `saveStudent()` workflow is still not migrated. It must be replaced with a trusted Supabase result writer that maps subject scores to `results`, Form Master assessment values to `form_master_student_assessments`, and preserves official identity/enrolment in their existing tables. Server-side validation must enforce active profile, school/session/term/class/subject/enrolment, assessment maxima and draft-only writes. Do not retire the legacy result backup until administrator entry, submission, approval, publication, progressive release and student cross-device retrieval all pass acceptance tests.
