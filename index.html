@@ -3024,42 +3024,15 @@ async function updateIdCardPermission(allowed) {
   var key = String(input.value || '').trim();
   if (!key) { showToast('Enter an account identifier.', 'error'); return; }
   try {
-    var target = null;
-    if (/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(key)) {
-      var byId = await supabaseClient.from('profiles').select('id').eq('id', key)
-        .eq('school_id', authenticatedProfile.school_id).maybeSingle();
-      if (byId.error) throw byId.error;
-      target = byId.data;
-    } else if (key.indexOf('@') !== -1) {
-      var byEmail = await supabaseClient.from('profiles').select('id').eq('school_id', authenticatedProfile.school_id)
-        .ilike('email', key).limit(1).maybeSingle();
-      if (byEmail.error) throw byEmail.error;
-      target = byEmail.data;
-    } else {
-      var byAdmission = await supabaseClient.from('students').select('profile_id').eq('school_id', authenticatedProfile.school_id)
-        .ilike('admission_number', key).limit(1).maybeSingle();
-      if (byAdmission.error) throw byAdmission.error;
-      if (byAdmission.data && byAdmission.data.profile_id) target = { id: byAdmission.data.profile_id };
-      if (!target) {
-        var byUsername = await supabaseClient.from('profiles').select('id').eq('school_id', authenticatedProfile.school_id)
-          .ilike('username', key).limit(1).maybeSingle();
-        if (byUsername.error) throw byUsername.error;
-        target = byUsername.data;
-      }
-    }
-    if (!target || !target.id) throw new Error('No account in this school matches that identifier.');
-    var result = await supabaseClient.from('school_id_card_permissions').upsert({
-      school_id: authenticatedProfile.school_id,
-      account_profile_id: target.id,
-      is_granted: allowed === true,
-      granted_by: authenticatedProfile.id,
-      updated_at: new Date().toISOString()
-    }, { onConflict: 'school_id,account_profile_id' })
-      .select('account_profile_id,is_granted').single();
+    var result = await supabaseClient.rpc('set_school_id_card_permission', {
+      p_identifier: key, p_granted: allowed === true
+    });
     if (result.error) throw result.error;
-    if (!result.data) throw new Error('Supabase did not confirm the card permission change.');
+    if (!result.data || result.data.success !== true || !result.data.account_profile_id) {
+      throw new Error('Supabase did not confirm the card permission change.');
+    }
     schoolIdCardSettings.permissions = schoolIdCardSettings.permissions || {};
-    schoolIdCardSettings.permissions[String(target.id)] = result.data.is_granted === true;
+    schoolIdCardSettings.permissions[String(result.data.account_profile_id)] = result.data.is_granted === true;
     showToast(allowed ? 'Card access granted.' : 'Card access revoked.', 'success');
     renderSchoolIdCardContent();
   } catch (error) {
