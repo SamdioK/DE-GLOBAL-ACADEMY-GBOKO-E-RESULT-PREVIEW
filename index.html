@@ -529,6 +529,52 @@ async function moveLegacyEmbeddedImagesToStorage(value, folder) {
   return value;
 }
 
+async function migrateLegacyStudentPassportBatch(batch, schoolId, userId) {
+  if (!Array.isArray(batch)) return batch;
+  var bucket = supabaseClient.storage.from('student-passports');
+  for (var i = 0; i < batch.length; i++) {
+    var student = batch[i];
+    if (!student || typeof student !== 'object') continue;
+    var imageField = ['passport','passportUrl','passport_url','photo','photoUrl','photo_url'].find(function(field) {
+      return typeof student[field] === 'string' && /^data:image\\/(png|jpeg|webp);base64,/i.test(student[field]);
+    });
+    if (!imageField) continue;
+    var admission = String(student.admNo || student.admissionNumber || student.admission_number || '').trim();
+    if (!admission) continue;
+    var official = await supabaseClient.from('students').select('id').eq('school_id', schoolId)
+      .ilike('admission_number', admission).maybeSingle();
+    if (official.error) throw official.error;
+    if (!official.data || !official.data.id) continue;
+    var match = student[imageField].match(/^data:(image\\/(?:png|jpeg|webp));base64,([A-Za-z0-9+/=]+)$/i);
+    if (!match) continue;
+    var binary = atob(match[2]), bytes = new Uint8Array(binary.length);
+    for (var b = 0; b < binary.length; b++) bytes[b] = binary.charCodeAt(b);
+    var blob = new Blob([bytes], { type: match[1] });
+    var extension = match[1].toLowerCase() === 'image/jpeg' ? 'jpg' : match[1].toLowerCase().split('/')[1];
+    var path = schoolId + '/' + official.data.id + '/' + window.crypto.randomUUID() + '.' + extension;
+    var upload = await bucket.upload(path, blob, { contentType: match[1], cacheControl: '3600', upsert: false });
+    if (upload.error) throw upload.error;
+    var existing = await supabaseClient.from('student_passports').select('storage_path')
+      .eq('school_id', schoolId).eq('student_id', official.data.id).maybeSingle();
+    if (existing.error) { await bucket.remove([path]); throw existing.error; }
+    var saved = await supabaseClient.from('student_passports').upsert({
+      school_id: schoolId, student_id: official.data.id, storage_path: path,
+      updated_by: userId, updated_at: new Date().toISOString()
+    }, { onConflict: 'school_id,student_id' }).select('storage_path').single();
+    if (saved.error || !saved.data) { await bucket.remove([path]); throw saved.error || new Error('Passport migration was not confirmed.'); }
+    if (existing.data && existing.data.storage_path) await bucket.remove([existing.data.storage_path]);
+    var signed = await bucket.createSignedUrl(path, 3600);
+    if (signed.error) throw signed.error;
+    student.passport = signed.data.signedUrl;
+    if (Object.prototype.hasOwnProperty.call(student, 'passportUrl')) student.passportUrl = signed.data.signedUrl;
+    if (Object.prototype.hasOwnProperty.call(student, 'passport_url')) student.passport_url = signed.data.signedUrl;
+    if (Object.prototype.hasOwnProperty.call(student, 'photo')) student.photo = signed.data.signedUrl;
+    if (Object.prototype.hasOwnProperty.call(student, 'photoUrl')) student.photoUrl = signed.data.signedUrl;
+    if (Object.prototype.hasOwnProperty.call(student, 'photo_url')) student.photo_url = signed.data.signedUrl;
+  }
+  return batch;
+}
+
 async function migrateLegacyBrowserStateOnce() {
   if (!supabaseClient || !authenticatedProfile || !authenticatedProfile.school_id ||
       !['administrator','portal_developer'].includes(String(authenticatedProfile.role || '').toLowerCase())) return { imported: 0 };
@@ -616,7 +662,8 @@ async function migrateLegacyBrowserStateOnce() {
   var imported = 0;
   for (var keyIndex = 0; keyIndex < keys.length; keyIndex++) {
     var key = keys[keyIndex], value = candidates.get(key).value;
-    value = await moveLegacyEmbeddedImagesToStorage(value, 'legacy-' + key.toLowerCase());
+    if (/^students_batch_\\d+$/.test(key)) value = await migrateLegacyStudentPassportBatch(value, schoolId, userId);
+    else value = await moveLegacyEmbeddedImagesToStorage(value, 'legacy-' + key.toLowerCase());
     if (key === 'formMasters' && Array.isArray(value)) value.forEach(function(master) { if (master) delete master.password; });
     if (key === 'subjectAssignments' && Array.isArray(value)) value.forEach(function(item) { if (item) { delete item.password; delete item.teacherPassword; } });
     if (!existing.has(key)) {
