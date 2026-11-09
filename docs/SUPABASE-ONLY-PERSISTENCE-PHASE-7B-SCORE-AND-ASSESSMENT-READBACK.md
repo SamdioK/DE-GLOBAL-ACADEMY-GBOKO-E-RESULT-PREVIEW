@@ -111,3 +111,13 @@ For final acceptance, an authorised school operator should use a designated test
 ## 9. Release rule
 
 Do not declare the migration complete until the authenticated end-to-end test succeeds for Subject Teacher, Form Master and Administrator/Sub Administrator workflows. Keep legacy browser data until all unresolved keys and files are reconciled. No result, student, passport, signature or configuration record should be deleted merely to make counts appear consistent.
+
+## 10. Form Master login: blocked shared-state writes
+
+A live account inspection was performed for the Form Master account used in the reported login screen. The profile was active, had the `form_master` role, had one assignment in the current `2026/2027` academic session (BASIC8A), and had `must_change_password = true`. Supabase Auth also recorded a successful sign-in for the account.
+
+The application already denies Form Master and Subject Teacher writes to shared administrator JSON state. The reported message is raised by the shared-state save guard. To prevent an incidental legacy save attempt from interrupting a valid staff login, the guard now logs the blocked storage key, role, profile ID and caller stack to the browser console, then returns `false` without issuing any database write. It does not grant write access or bypass RLS. Staff workflows continue to use their dedicated relational tables and authorised RPCs.
+
+The generic `saveAllData()` path remains read-only for Form Masters, Subject Teachers and Sub Administrators. Administrator-only school configuration remains protected.
+
+**Post-deployment acceptance test:** sign in as the designated Form Master, complete the mandatory password change, confirm access to BASIC8A, then save and reload one authorised Form Master assessment. Confirm that no `school_app_state` row was changed by the Form Master. If the application still reports an error, inspect the browser console for the blocked storage key and caller stack; do not change the role guard or RLS policies to work around it.
