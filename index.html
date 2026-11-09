@@ -451,7 +451,7 @@ async function loadScoreEntryPreferences() {
     .maybeSingle();
   if (result.error) throw result.error;
   return {
-    keyboardStyle: result.data && result.data.keyboard_style || 'smart',
+    keyboardStyle: result.data && result.data.keyboard_style === 'compact' ? 'smart' : (result.data && result.data.keyboard_style || 'smart'),
     direction: result.data && result.data.entry_direction || 'row'
   };
 }
