@@ -2752,10 +2752,51 @@ async function saveFormMasterAssessment() {
       assessed_by: authenticatedProfile.id
     };
     var result = await supabaseClient.from('form_master_student_assessments')
-      .upsert(assessment, { onConflict: 'school_id,student_id,academic_session_id,term_id' });
+      .upsert(assessment, { onConflict: 'school_id,student_id,academic_session_id,term_id' })
+      .select('id,student_id,class_id,academic_session_id,term_id,affective_ratings,psychomotor_ratings,form_master_comment,attendance_days,school_days,next_term_fees,assessed_by')
+      .single();
     if (result.error) throw result.error;
-    if (status) { status.className = 'alert alert-success'; status.textContent = 'Form Master assessment saved. Academic subject scores were not changed.'; }
-    showToast('Form Master assessment saved.', 'success');
+    if (!result.data || !result.data.id) throw new Error('Supabase did not return the saved Form Master assessment.');
+
+    // Confirm the saved assessment can be independently read back under the
+    // Form Master's own RLS permissions before showing a success message.
+    var verification = await supabaseClient.from('form_master_student_assessments')
+      .select('id,student_id,class_id,academic_session_id,term_id,affective_ratings,psychomotor_ratings,form_master_comment,attendance_days,school_days,next_term_fees,assessed_by')
+      .eq('school_id', assessment.school_id).eq('student_id', assessment.student_id)
+      .eq('class_id', assessment.class_id).eq('academic_session_id', assessment.academic_session_id)
+      .eq('term_id', assessment.term_id).maybeSingle();
+    if (verification.error) throw new Error('Assessment was written, but Supabase read-back verification failed: ' + verification.error.message);
+    var savedAssessment = verification.data;
+    if (!savedAssessment || String(savedAssessment.id) !== String(result.data.id)) {
+      throw new Error('Supabase read-back did not confirm the saved Form Master assessment.');
+    }
+    ['affective_ratings','psychomotor_ratings'].forEach(function(field) {
+      var expectedRatings = assessment[field] || {};
+      var actualRatings = savedAssessment[field] || {};
+      var expectedKeys = Object.keys(expectedRatings).sort();
+      var actualKeys = Object.keys(actualRatings).sort();
+      if (JSON.stringify(expectedKeys) !== JSON.stringify(actualKeys)) {
+        throw new Error('Supabase read-back mismatch for ' + field + '.');
+      }
+      expectedKeys.forEach(function(key) {
+        if (Number(actualRatings[key]) !== Number(expectedRatings[key])) {
+          throw new Error('Supabase read-back mismatch for ' + field + '.' + key + '.');
+        }
+      });
+    });
+    ['student_id','class_id','academic_session_id','term_id','form_master_comment','attendance_days','school_days','next_term_fees','assessed_by'].forEach(function(field) {
+      var expectedValue = assessment[field] == null ? null : assessment[field];
+      var actualValue = savedAssessment[field] == null ? null : savedAssessment[field];
+      if (typeof expectedValue === 'number' || typeof actualValue === 'number') {
+        if (expectedValue == null ? actualValue != null : actualValue == null || Number(actualValue) !== Number(expectedValue)) {
+          throw new Error('Supabase read-back mismatch for ' + field + '.');
+        }
+      } else if (String(actualValue == null ? '' : actualValue) !== String(expectedValue == null ? '' : expectedValue)) {
+        throw new Error('Supabase read-back mismatch for ' + field + '.');
+      }
+    });
+    if (status) { status.className = 'alert alert-success'; status.textContent = 'Form Master assessment saved and verified in Supabase. Academic subject scores were not changed.'; }
+    showToast('Form Master assessment saved and verified in Supabase.', 'success');
   } catch (error) {
     fail('Unable to save Form Master assessment: ' + (error && error.message || 'Unknown database error.'));
   } finally {
