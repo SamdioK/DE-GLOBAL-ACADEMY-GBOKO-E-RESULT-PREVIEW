@@ -747,3 +747,8 @@ The administrator result-entry writer is documented in Section 24. The next acce
 ### 25.8 Final-stage eligibility refinement
 
 The release-management endpoint now returns separate approved/published eligibility and published-only counts. The administrator interface uses the approved/published count for CA stages and the published-only count for the final stage. This prevents the interface from offering the final release action when only approved, but not yet published, subject results exist. The **Revoke All** control resets a student's term stage to 0 through the same administrator-authenticated endpoint and records the change in the database audit table.
+
+
+### 25.9 Deployment check
+
+The GitHub Pages workflow for frontend commit `342362f594f1d61618305c21674bf721f3b24794` completed successfully. Both the build and deploy jobs reported success. The live preview deployment therefore includes the progressive release controls, eligibility distinction and revoke-all action. Authenticated operational acceptance remains outstanding because no real stage records or student results have been created.
