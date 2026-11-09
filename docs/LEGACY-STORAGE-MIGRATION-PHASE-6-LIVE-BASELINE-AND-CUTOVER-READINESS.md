@@ -607,7 +607,7 @@ The endpoint does not return hidden score columns, result status, or another stu
 
 The administrator Release Results screen now loads sessions, terms, classes and active enrolments from Supabase. It offers per-student, one-stage-at-a-time release and displays the current stage and eligible result-row count. The student result screen groups the server-filtered response by session and term.
 
-The frontend change was committed to `main` as `6dfbaa3987273132e6f9fa42cff0cf298d06ecc2`, and the associated GitHub Pages workflow completed successfully. Later administrator result-entry changes are recorded in Section 24 and have their own deployment status. The existing direct student SELECT policy on `public.results` remains in place temporarily so the old deployment is not cut off before the new frontend is live and tested. This is an explicit security cutover gate: after the new site is confirmed live and the authenticated student endpoint passes acceptance tests, remove the direct student SELECT policy so clients cannot bypass stage filtering by querying the full result row.
+The frontend change was committed to `main` as `6dfbaa3987273132e6f9fa42cff0cf298d06ecc2`, and the associated GitHub Pages workflow completed successfully. Later administrator result-entry changes are recorded in Section 24 and have their own deployment status. The live `pg_policies` inventory checked after deployment contains no Student SELECT policy on `public.results`. Student result access is therefore not available through a direct results-table SELECT policy; the authenticated student endpoint is the intended retrieval path. The student Data API denial should still be confirmed in the authenticated acceptance test.
 
 ### 23.5 Verification and remaining acceptance tests
 
@@ -620,7 +620,7 @@ Live verification confirmed:
 - `get-student-result-release` is ACTIVE at version 2 with JWT verification;
 - the school still has zero result rows, so no result data was changed.
 
-No student, staff, enrolment, result or legacy browser record was modified. No test account was created. Because there are currently no result rows and no authorised test student session was used, positive and negative authenticated stage tests remain outstanding. Before removing the direct student SELECT policy, test the student endpoint with a real linked student account at stages 0, 1, 2, 3 and 4, including a cross-student denial and a direct Data API denial after policy removal. Also verify that stage 4 excludes approved-but-not-published rows.
+No student, staff, enrolment, result or legacy browser record was modified. No test account was created. Because there are currently no result rows and no authorised test student session was used, positive and negative authenticated stage tests remain outstanding. Before removing the direct student SELECT policy, test the student endpoint with a real linked student account at stages 0, 1, 2, 3 and 4, including a cross-student denial and a direct Data API denial after policy removal. Also verify that stage 4 excludes approved-but-not-published rows and that an authenticated Student cannot SELECT directly from `public.results`.
 
 ### 23.6 Next implementation boundary
 
@@ -666,7 +666,7 @@ Live verification confirmed:
 - the school currently has zero result rows and zero Form Master assessment rows;
 - no student, enrolment, result or legacy browser record was changed during implementation.
 
-The frontend changes were committed to `main` in commits `4dcf808bc70877f2ba7283f5f4acee6deae4d258`, `a936c564783a7d60dbfabd56ce672437c04a6415`, `a978869b18a56f8050ad572c3c5884726728d9c7` and `7ac138dafd9321cbff09f78c7190068d7dba8c8c`. The Pages workflow for the latest class-selector commit was still running when this report section was written. Do not treat the latest manual-entry screen as live until that run succeeds.
+The frontend changes were committed to `main` in commits `4dcf808bc70877f2ba7283f5f4acee6deae4d258`, `a936c564783a7d60dbfabd56ce672437c04a6415`, `a978869b18a56f8050ad572c3c5884726728d9c7`, `7ac138dafd9321cbff09f78c7190068d7dba8c8c` and `2865d06cbdff3d098c535749059f634a1df520b5`. The GitHub Pages workflows for the latest class-selector and roster-reset commits both completed successfully.
 
 No real result entry was performed because the school has no result rows and no authenticated Administrator/Sub Administrator acceptance transaction was run. The function and frontend are structurally deployed/committed, but role-session acceptance remains outstanding. Test a new draft, a repeat save/upsert, assessment maximum rejection, inactive enrolment denial, cross-school denial, Sub Administrator without a grant, Sub Administrator own-draft edit, and denial when attempting to overwrite a submitted/approved/published row.
 
@@ -674,4 +674,4 @@ No real result entry was performed because the school has no result rows and no 
 
 The manual writer now stores the subject result rows and the structured Form Master assessment values, but it does not yet replace every legacy report-card consumer. Continue by migrating result report assembly, class averages/positions, attendance/fees display, comments and signatures to Supabase and private Storage. Then verify submission, administrator approval, final publication, progressive stage visibility and student retrieval on a second device.
 
-The direct student SELECT policy on `public.results` remains a deliberate temporary cutover hold until the progressive student endpoint and live frontend pass authenticated acceptance tests. Once verified, remove that direct policy so the student cannot retrieve hidden score columns through the Data API.
+The current live policy inventory contains no Student SELECT policy on `public.results`; the stage-filtered Edge Function is the student-facing retrieval path. Keep this restriction in place and include a direct Data API denial test in acceptance testing.
