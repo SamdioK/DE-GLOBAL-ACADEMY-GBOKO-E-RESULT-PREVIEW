@@ -9441,7 +9441,7 @@ function renderAdminProfile() {
     if (newPassword && newPassword.length < 6) { showToast('New password must be at least 6 characters', 'error'); return; }
     if (newPassword !== confirmPassword) { showToast('New passwords do not match', 'error'); return; }
     if (logoFile && (!logoFile.type || logoFile.type.indexOf('image/') !== 0)) { showToast('Choose a valid image for the logo', 'error'); return; }
-    var saveProfile = async function(logoData) {
+    var saveProfile = async function() {
       try {
         var authUpdates = {};
         if (newEmail !== currentEmail) authUpdates.email = newEmail;
@@ -9464,10 +9464,6 @@ function renderAdminProfile() {
       currentSchool.phone = newPhone;
       schoolInfo.email = newEmail;
       schoolInfo.phone = newPhone;
-      if (logoData) {
-        currentSchool.portalLogo = logoData;
-        schoolInfo.portalLogo = logoData;
-      }
       currentUser.name = newName;
       await saveAllData();
       setHeaderLogo(schoolInfo.portalLogo || schoolInfo.logo || '');
@@ -9477,11 +9473,16 @@ function renderAdminProfile() {
       renderAdminProfile();
     };
     if (logoFile) {
-      var reader = new FileReader();
-      reader.onload = function(event) { saveProfile(event.target.result); };
-      reader.onerror = function() { showToast('Could not read the selected logo', 'error'); };
-      reader.readAsDataURL(logoFile);
-    } else saveProfile(null);
+      try {
+        await uploadSchoolBrandingAsset('logo', logoFile);
+        await loadSchoolBrandingAssets();
+        schoolInfo.portalLogo = schoolInfo.logo || '';
+        currentSchool.portalLogo = schoolInfo.portalLogo;
+        await saveProfile();
+      } catch (logoError) {
+        showToast(logoError && logoError.message || 'Could not upload the school logo to Supabase Storage.', 'error');
+      }
+    } else await saveProfile();
   });
 }
 
