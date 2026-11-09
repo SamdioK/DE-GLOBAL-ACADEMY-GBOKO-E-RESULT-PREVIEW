@@ -325,121 +325,77 @@ th { background: #f5f5f5; font-weight: 600; }
 
 <script>
 // ===================== STORAGE LAYER =====================
+// Persistent application state is stored only in Supabase Postgres.
+// Browser storage is intentionally not used as a fallback.
 function CloudStorage() {
-  this.schoolId = 'MAIN';
-  this.useCloudStorage = typeof window.storage !== 'undefined';
-  this.db = null;
-  var self = this;
-  try {
-    var request = indexedDB.open('EResultDB', 1);
-    request.onsuccess = function(e) { self.db = e.target.result; };
-    request.onupgradeneeded = function(e) {
-      var db = e.target.result;
-      if (!db.objectStoreNames.contains('data')) db.createObjectStore('data', { keyPath: 'key' });
-    };
-    request.onerror = function() {};
-  } catch (e) {}
+  this.schoolId = null;
 }
-
-CloudStorage.prototype.setSchoolId = function(id) { this.schoolId = id; };
-
-CloudStorage.prototype.idbSave = function(key, data) {
-  var self = this;
-  return new Promise(function(resolve) {
-    if (!self.db) { resolve(false); return; }
-    try {
-      var tx = self.db.transaction(['data'], 'readwrite');
-      var store = tx.objectStore('data');
-      var req = store.put({ key: key, value: data });
-      req.onsuccess = function() { resolve(true); };
-      req.onerror = function() { resolve(false); };
-    } catch (e) { resolve(false); }
-  });
+CloudStorage.prototype.setSchoolId = function(id) { this.schoolId = id ? String(id) : null; };
+CloudStorage.prototype.requireClient = async function() {
+  if (!supabaseClient) throw new Error('Supabase is unavailable. Nothing was saved locally.');
+  var auth = await supabaseClient.auth.getUser();
+  if (auth.error) throw auth.error;
+  if (!auth.data || !auth.data.user) throw new Error('Your session has expired. Please sign in again.');
+  if (!authenticatedProfile || authenticatedProfile.is_active !== true || !authenticatedProfile.school_id) {
+    throw new Error('An active school profile is required for cloud storage.');
+  }
+  if (!this.schoolId) this.schoolId = String(authenticatedProfile.school_id);
+  if (String(this.schoolId) !== String(authenticatedProfile.school_id)) {
+    throw new Error('The requested school does not match your authenticated profile.');
+  }
+  return { user: auth.data.user, profile: authenticatedProfile };
 };
-
-CloudStorage.prototype.idbLoad = function(key) {
-  var self = this;
-  return new Promise(function(resolve) {
-    if (!self.db) { resolve(null); return; }
-    try {
-      var tx = self.db.transaction(['data'], 'readonly');
-      var store = tx.objectStore('data');
-      var req = store.get(key);
-      req.onsuccess = function(e) { resolve(e.target.result ? e.target.result.value : null); };
-      req.onerror = function() { resolve(null); };
-    } catch (e) { resolve(null); }
-  });
-};
-
 CloudStorage.prototype.save = async function(key, data) {
-  var fullKey = this.schoolId + ':' + key;
-  var jsonData = JSON.stringify(data);
-  var successAny = false;
-
-  if (this.useCloudStorage) {
-    try { var r = await window.storage.set(fullKey, jsonData, true); if (r !== null) successAny = true; } catch (e) {}
+  var context = await this.requireClient();
+  var role = String(context.profile.role || '').toLowerCase();
+  if (!['administrator','portal_developer'].includes(role)) {
+    throw new Error('This account can read shared school configuration but cannot overwrite administrator records.');
   }
-  try { var ok = await this.idbSave(fullKey, data); if (ok) successAny = true; } catch (e) {}
-  try { localStorage.setItem(fullKey, jsonData); successAny = true; } catch (e) {}
-
-  return successAny;
+  if (typeof key !== 'string' || !key || key.length > 160) throw new Error('Invalid cloud storage key.');
+  var result = await supabaseClient.from('school_app_state').upsert({
+    school_id: context.profile.school_id,
+    storage_key: key,
+    value: data,
+    updated_by: context.user.id,
+    updated_at: new Date().toISOString()
+  }, { onConflict: 'school_id,storage_key' }).select('storage_key,updated_at').single();
+  if (result.error) throw result.error;
+  if (!result.data || result.data.storage_key !== key) throw new Error('Supabase did not confirm this save.');
+  return true;
 };
-
 CloudStorage.prototype.load = async function(key) {
-  var fullKey = this.schoolId + ':' + key;
-
-  if (this.useCloudStorage) {
-    try {
-      var result = await window.storage.get(fullKey, true);
-      if (result) return JSON.parse(result.value);
-    } catch (e) {}
-  }
-  try {
-    var data = await this.idbLoad(fullKey);
-    if (data !== null && data !== undefined) return data;
-  } catch (e) {}
-  try {
-    var raw = localStorage.getItem(fullKey);
-    if (raw) return JSON.parse(raw);
-  } catch (e) {}
-  return null;
+  await this.requireClient();
+  if (typeof key !== 'string' || !key || key.length > 160) throw new Error('Invalid cloud storage key.');
+  var result = await supabaseClient.from('school_app_state').select('value')
+    .eq('school_id', this.schoolId).eq('storage_key', key).maybeSingle();
+  if (result.error) throw result.error;
+  return result.data ? result.data.value : null;
 };
-
 CloudStorage.prototype.globalSave = async function(key, data) {
-  var jsonData = JSON.stringify(data);
-  var successAny = false;
-
-  if (this.useCloudStorage) {
-    try { var r = await window.storage.set(key, jsonData, true); if (r !== null) successAny = true; } catch (e) {}
+  var context = await this.requireClient();
+  if (String(context.profile.role || '').toLowerCase() !== 'portal_developer' || key !== 'portal:developer') {
+    throw new Error('Only the authorised portal developer can update this global profile.');
   }
-  try { var ok = await this.idbSave(key, data); if (ok) successAny = true; } catch (e) {}
-  try { localStorage.setItem(key, jsonData); successAny = true; } catch (e) {}
-
-  return successAny;
+  var result = await supabaseClient.from('portal_global_state').upsert({
+    storage_key: key, value: data, updated_by: context.user.id, updated_at: new Date().toISOString()
+  }, { onConflict: 'storage_key' }).select('storage_key,updated_at').single();
+  if (result.error) throw result.error;
+  if (!result.data) throw new Error('Supabase did not confirm the global profile save.');
+  return true;
 };
-
 CloudStorage.prototype.globalLoad = async function(key) {
-  if (this.useCloudStorage) {
-    try {
-      var result = await window.storage.get(key, true);
-      if (result) return JSON.parse(result.value);
-    } catch (e) {}
+  var context = await this.requireClient();
+  if (key !== 'portal:developer' || String(context.profile.role || '').toLowerCase() !== 'portal_developer') {
+    throw new Error('This global profile is restricted to the authorised portal developer.');
   }
-  try {
-    var data = await this.idbLoad(key);
-    if (data !== null && data !== undefined) return data;
-  } catch (e) {}
-  try {
-    var raw = localStorage.getItem(key);
-    if (raw) return JSON.parse(raw);
-  } catch (e) {}
-  return null;
+  var result = await supabaseClient.from('portal_global_state').select('value').eq('storage_key', key).maybeSingle();
+  if (result.error) throw result.error;
+  return result.data ? result.data.value : null;
 };
-
 
 var cloudStorage = new CloudStorage();
 
-// Score-entry preferences are account data and must live in Supabase, not on the device.
+// Score-entry preferences are account data// Score-entry preferences are account data and must live in Supabase, not on the device.
 async function loadScoreEntryPreferences() {
   if (!supabaseClient || !authenticatedProfile || !authenticatedProfile.id || !authenticatedProfile.school_id) {
     throw new Error('Sign in is required to load score-entry preferences.');
@@ -588,21 +544,7 @@ async function initApp() {
   if (setupView) setupView.classList.add('hidden');
   if (loginView) loginView.classList.remove('hidden');
 
-  // Read cached school branding only as an optional convenience; never use it
-  // to gate authentication or expose the one-time setup form.
-  try {
-    var existing = await cloudStorage.globalLoad('school:main');
-    if (existing && typeof existing === 'object') {
-      if (Object.prototype.hasOwnProperty.call(existing, 'password')) {
-        delete existing.password;
-        await cloudStorage.globalSave('school:main', existing);
-      }
-      currentSchool = Object.assign({}, currentSchool, existing);
-    }
-  } catch (storageError) {
-    console.warn('Optional local school branding cache is unavailable:', storageError);
-  }
-
+  setupEventListeners();
   setupEventListeners();
 }
 
@@ -1606,27 +1548,31 @@ async function loadSchoolData() {
 }
 
 async function loadStudentPortalData(admissionNumber) {
-  var loadedSchoolInfo = await cloudStorage.load('schoolInfo');
-  var loadedPortalSettings = await cloudStorage.load('portalSettings');
-  schoolInfo = loadedSchoolInfo || {
-    name: currentSchool.schoolName, address: currentSchool.address || '', email: currentSchool.email || '',
-    phone: currentSchool.phone || '', session: currentSchool.session || '', principalName: currentSchool.principalName || '',
-    logo: currentSchool.logo || '', principalSignature: currentSchool.principalSignature || ''
+  // Student-facing identity is read from the authenticated school record.
+  if (!supabaseClient || !authenticatedProfile || !authenticatedProfile.school_id) {
+    throw new Error('A verified Supabase student session is required.');
+  }
+  var schoolResult = await supabaseClient.from('schools')
+    .select('id,name,address,email,phone,logo_url,motto')
+    .eq('id', authenticatedProfile.school_id).maybeSingle();
+  if (schoolResult.error) throw schoolResult.error;
+  if (!schoolResult.data) throw new Error('The school profile could not be loaded from Supabase.');
+  var school = schoolResult.data;
+  schoolInfo = {
+    name: school.name || '', address: school.address || '', email: school.email || '',
+    phone: school.phone || '', motto: school.motto || '', logo: school.logo_url || '',
+    session: '', principalName: '', principalSignature: ''
   };
-  if (loadedPortalSettings && typeof loadedPortalSettings === 'object') portalSettings = Object.assign(portalSettings, loadedPortalSettings);
-
-  // Student result rows are retrieved from the authenticated Supabase release endpoint, never browser batches.\n  students = [];\n\n  var subjects = await cloudStorage.load('signature_subjects');
+  portalSettings = { portalEnabled: true, welcomeEnabled: false, welcomeText: '', termWeeks: 12 };
+  students = [];
   teacherSignatures = {};
-  if (Array.isArray(subjects)) {
-    for (var j = 0; j < subjects.length; j++) {
-      var subject = subjects[j];
-      var signature = await cloudStorage.load('sig_' + subject.replace(/\s+/g, '_'));
-      if (signature) teacherSignatures[subject] = signature;
-    }
+  // Signatures are loaded from the protected Supabase Storage-backed signature module.
+  if (typeof loadTeacherSignaturesFromSupabase === 'function') {
+    await loadTeacherSignaturesFromSupabase();
   }
 }
 
-function migrateOldClassNames() {
+function migrateOldClassNames() {function migrateOldClassNames() {
   var changed = false;
   classArms.forEach(function(arm) {
     if (!Array.isArray(arm.studentNames)) arm.studentNames = [];
@@ -2254,41 +2200,42 @@ async function saveFormMasterAssessment() {
 }
 
 async function saveAllData() {
-  try {
-    removeFormMasterPasswords();
-    removeSubjectAssignmentPasswords(subjectAssignments);
-    var promises = [];
-    promises.push(cloudStorage.save('classArms', classArms));
-    promises.push(cloudStorage.save('formMasters', formMasters));
-    promises.push(cloudStorage.save('subjectAssignments', subjectAssignments));
-    promises.push(cloudStorage.save('schoolInfo', schoolInfo));
-    promises.push(cloudStorage.save('managementStaff', managementStaff));
-    promises.push(cloudStorage.save('portalNews', portalNews));
-    promises.push(cloudStorage.save('schoolStaff', schoolStaff));
-    // Staff Database records are persisted directly to Supabase, not browser storage.
-    promises.push(cloudStorage.save('portalStaffSelections', portalStaffSelections));
-    promises.push(cloudStorage.save('prefects', prefects));
-    promises.push(cloudStorage.save('dutyRoster', dutyRoster));
-    promises.push(cloudStorage.save('portalSettings', portalSettings));
-
-    var batches = [];
-    for (var i = 0; i < students.length; i += 50) batches.push(students.slice(i, i + 50));
-    for (var b = 0; b < batches.length; b++) promises.push(cloudStorage.save('students_batch_' + b, batches[b]));
-    promises.push(cloudStorage.save('students_meta', { totalBatches: batches.length, totalStudents: students.length, lastUpdated: Date.now() }));
-
-    var sigKeys = Object.keys(teacherSignatures);
-    for (var s = 0; s < sigKeys.length; s++) promises.push(cloudStorage.save('sig_' + sigKeys[s].replace(/\s+/g, '_'), teacherSignatures[sigKeys[s]]));
-    promises.push(cloudStorage.save('signature_subjects', sigKeys));
-
-    await Promise.all(promises);
-    return true;
-  } catch (error) {
-    try { await cloudStorage.save('classArms', classArms); await cloudStorage.save('formMasters', formMasters); } catch (e) {}
-    return false;
+  var role = String(authenticatedProfile && authenticatedProfile.role || '').toLowerCase();
+  // Score/result workflows for non-admin staff write to their dedicated relational tables.
+  // They must not attempt to rewrite school-wide administrator configuration.
+  if (['subject_teacher','form_master','sub_administrator'].includes(role)) return true;
+  if (!['administrator','portal_developer'].includes(role)) {
+    throw new Error('This account is not authorised to save school-wide configuration.');
   }
+  if (!supabaseClient || !authenticatedProfile || !authenticatedProfile.school_id) {
+    throw new Error('Supabase authentication is required. No local save fallback is available.');
+  }
+  removeFormMasterPasswords();
+  removeSubjectAssignmentPasswords(subjectAssignments);
+  var tasks = [];
+  tasks.push(cloudStorage.save('classArms', classArms));
+  tasks.push(cloudStorage.save('formMasters', formMasters));
+  tasks.push(cloudStorage.save('subjectAssignments', subjectAssignments));
+  tasks.push(cloudStorage.save('schoolInfo', schoolInfo));
+  tasks.push(cloudStorage.save('managementStaff', managementStaff));
+  tasks.push(cloudStorage.save('portalNews', portalNews));
+  tasks.push(cloudStorage.save('schoolStaff', schoolStaff));
+  tasks.push(cloudStorage.save('portalStaffSelections', portalStaffSelections));
+  tasks.push(cloudStorage.save('prefects', prefects));
+  tasks.push(cloudStorage.save('dutyRoster', dutyRoster));
+  tasks.push(cloudStorage.save('portalSettings', portalSettings));
+  var batches = [];
+  for (var i = 0; i < students.length; i += 50) batches.push(students.slice(i, i + 50));
+  for (var b = 0; b < batches.length; b++) tasks.push(cloudStorage.save('students_batch_' + b, batches[b]));
+  tasks.push(cloudStorage.save('students_meta', { totalBatches: batches.length, totalStudents: students.length, lastUpdated: new Date().toISOString() }));
+  var sigKeys = Object.keys(teacherSignatures);
+  for (var j = 0; j < sigKeys.length; j++) tasks.push(cloudStorage.save('sig_' + sigKeys[j].replace(/\\s+/g, '_'), teacherSignatures[sigKeys[j]]));
+  tasks.push(cloudStorage.save('signature_subjects', sigKeys));
+  await Promise.all(tasks);
+  return true;
 }
 
-/* ================= SCHOOL ID CARD MODULE ================= */
+/* ================= SCHOOL ID CARD MODULE/* ================= SCHOOL ID CARD MODULE ================= */
 
 var schoolIdCardSettings = {
   studentFee: 361.56,
@@ -7064,52 +7011,46 @@ function activatePublicPortalDirectories() {
 
 async function showPublicPortal() {
   var modal = document.getElementById('publicPortalModal');
-  if (!modal) return;
-  cloudStorage.setSchoolId('MAIN');
-  var publicData = await Promise.all([cloudStorage.load('portalNews'), cloudStorage.load('schoolStaff'), cloudStorage.load('prefects'), cloudStorage.load('dutyRoster'), cloudStorage.load('portalSettings'), cloudStorage.load('classArms'), cloudStorage.load('formMasters'), cloudStorage.load('subjectAssignments'), cloudStorage.load('managementStaff'), cloudStorage.load('students_meta'), cloudStorage.load('staffDatabase'), cloudStorage.load('portalStaffSelections')]);
-  portalNews = Array.isArray(publicData[0]) ? publicData[0] : portalNews;
-  schoolStaff = Array.isArray(publicData[1]) ? publicData[1] : schoolStaff;
-  prefects = Array.isArray(publicData[2]) ? publicData[2] : prefects;
-  dutyRoster = Array.isArray(publicData[3]) ? publicData[3] : dutyRoster;
-  if (publicData[4]) portalSettings = Object.assign(portalSettings, publicData[4]);
-  if (Array.isArray(publicData[5])) classArms = publicData[5];
-  if (Array.isArray(publicData[6])) formMasters = publicData[6];
-  if (Array.isArray(publicData[7])) subjectAssignments = publicData[7];
-  if (Array.isArray(publicData[8])) managementStaff = publicData[8];
-  if (Array.isArray(publicData[11])) staffDatabase = publicData[11];
-  if (Array.isArray(publicData[12])) portalStaffSelections = publicData[12];
-  syncStaffDatabaseFromExistingRecords();
-  students = [];
-  var publicStudentMeta = publicData[10];
-  if (publicStudentMeta && publicStudentMeta.totalBatches > 0) {
-    for (var publicBatchIndex = 0; publicBatchIndex < publicStudentMeta.totalBatches; publicBatchIndex++) {
-      var publicBatch = await cloudStorage.load('students_batch_' + publicBatchIndex);
-      if (Array.isArray(publicBatch)) students = students.concat(publicBatch);
-    }
+  if (!modal || !supabaseClient) return;
+  var portalResult = await supabaseClient.rpc('get_public_school_portal_content');
+  if (portalResult.error) {
+    console.error('Public portal content could not be loaded from Supabase:', portalResult.error);
+    document.getElementById('publicPortalContent').innerHTML = '<p class="alert alert-info">The school portal is temporarily unavailable. Please try again later.</p>';
+    modal.classList.remove('hidden');
+    return;
   }
+  var publicData = portalResult.data || {};
+  var settings = publicData.settings || {};
+  portalNews = Array.isArray(publicData.news) ? publicData.news : [];
+  prefects = Array.isArray(publicData.prefects) ? publicData.prefects : [];
+  dutyRoster = Array.isArray(publicData.dutyRoster) ? publicData.dutyRoster : [];
+  portalSettings = {
+    portalEnabled: settings.portalEnabled !== false,
+    welcomeEnabled: settings.welcomeEnabled === true,
+    welcomeText: settings.welcomeText || '',
+    termWeeks: Number(settings.termWeeks) || 12
+  };
   var note = document.getElementById('publicWelcomeNote');
   var noteText = document.getElementById('publicWelcomeText');
-  note.classList.toggle('hidden', !(portalSettings.welcomeEnabled && portalSettings.welcomeText));
-  noteText.textContent = portalSettings.welcomeText || '';
-  var sections = '';
+  if (note) note.classList.toggle('hidden', !(portalSettings.welcomeEnabled && portalSettings.welcomeText));
+  if (noteText) noteText.textContent = portalSettings.welcomeText || '';
   if (portalSettings.portalEnabled === false) {
     document.getElementById('publicPortalContent').innerHTML = '<p class="alert alert-info">This school portal is temporarily unavailable.</p>';
     modal.classList.remove('hidden');
     return;
   }
-  sections += '<section class="card"><h3>News, Advertisements &amp; Announcements</h3>' + (portalNews.length ? portalNews.slice().reverse().map(function(item) { var images = Array.isArray(item.photos) ? item.photos : (item.photo ? [item.photo] : []); return '<article style="padding:12px 0;border-bottom:1px solid #eee"><p><strong>' + escapeManagementText(item.category || 'Announcement') + '</strong></p><h4>' + escapeManagementText(item.title) + '</h4><p style="color:#777;font-size:12px">' + escapeManagementText(item.date || '') + '</p><p>' + escapeManagementText(item.message).replace(/\n/g, '<br>') + '</p>' + (images.length ? '<div class="grid grid-3" style="margin-top:10px">' + images.map(function(photo) { return '<img class="portal-photo" src="' + escapeManagementText(photo) + '" alt="' + escapeManagementText(item.title) + '" style="width:100%;max-height:220px;object-fit:contain;cursor:zoom-in">'; }).join('') + '</div>' : '') + '</article>'; }).join('') : '<p style="color:#999">No announcements at this time.</p>') + '</section>';
+  var sections = '';
+  sections += '<section class="card"><h3>News, Advertisements &amp; Announcements</h3>' + (portalNews.length ? portalNews.map(function(item) {
+    return '<article style="padding:12px 0;border-bottom:1px solid #eee"><p><strong>' + escapeManagementText(item.category || 'Announcement') + '</strong></p><h4>' + escapeManagementText(item.title) + '</h4><p style="color:#777;font-size:12px">' + escapeManagementText(item.date || '') + '</p><p>' + escapeManagementText(item.message).replace(/\\n/g, '<br>') + '</p></article>';
+  }).join('') : '<p style="color:#999">No announcements at this time.</p>') + '</section>';
   var portalStaff = [];
   var portalStaffLoadError = '';
-  if (supabaseClient) {
-    try {
-      var publicStaffResult = await supabaseClient.rpc('get_public_school_staff_directory');
-      if (publicStaffResult.error) throw publicStaffResult.error;
-      portalStaff = Array.isArray(publicStaffResult.data) ? publicStaffResult.data : [];
-    } catch (staffDirectoryError) {
-      console.error('Public staff directory could not be loaded:', staffDirectoryError);
-      portalStaffLoadError = 'The staff directory is temporarily unavailable.';
-    }
-  } else {
+  try {
+    var publicStaffResult = await supabaseClient.rpc('get_public_school_staff_directory');
+    if (publicStaffResult.error) throw publicStaffResult.error;
+    portalStaff = Array.isArray(publicStaffResult.data) ? publicStaffResult.data : [];
+  } catch (staffDirectoryError) {
+    console.error('Public staff directory could not be loaded:', staffDirectoryError);
     portalStaffLoadError = 'The staff directory is temporarily unavailable.';
   }
   sections += '<section class="card"><h3>Staff List</h3>' +
@@ -7123,21 +7064,20 @@ async function showPublicPortal() {
           (record.qualification ? '<p><strong>Qualification:</strong> ' + escapeManagementText(record.qualification) + '</p>' : '') +
           (record.specialisation ? '<p><strong>Specialisation / Subject:</strong> ' + escapeManagementText(record.specialisation) + '</p>' : '') +
           '</div></article>';
-      }).join('') + '</div>' : '<p style="color:#999">No staff profiles are currently published.</p>')) +
-    '</section>';
-  sections += '<section class="card"><h3>Prefect List</h3>' + (prefects.length ? '<div style="overflow-x:auto"><table><thead><tr><th>Name</th><th>Class</th><th>Portfolio</th><th>Photo</th></tr></thead><tbody>' + prefects.map(function(item) { return '<tr><td>' + escapeManagementText(item.name) + '</td><td>' + escapeManagementText(item.className) + '</td><td>' + escapeManagementText(item.portfolio) + '</td><td>' + (item.photo ? '<img class="portal-photo" src="' + escapeManagementText(item.photo) + '" alt="Prefect ' + escapeManagementText(item.name) + '" style="width:55px;height:65px;object-fit:cover;cursor:zoom-in">' : '—') + '</td></tr>'; }).join('') + '</tbody></table></div>' : '<p style="color:#999">No prefects listed.</p>') + '</section>';
-  sections += '<section class="card"><h3>Duty Master Roster</h3><p>Term length: ' + escapeManagementText(portalSettings.termWeeks || 12) + ' weeks</p>' + (dutyRoster.length ? '<div style="overflow-x:auto"><table><thead><tr><th>Week</th><th>Duty Master</th><th>Schedule</th></tr></thead><tbody>' + dutyRoster.slice().sort(function(a,b) { return a.week-b.week; }).map(function(item) { return '<tr><td>Week ' + escapeManagementText(item.week) + '</td><td>' + escapeManagementText(item.name) + '</td><td>' + escapeManagementText(item.schedule) + '</td></tr>'; }).join('') + '</tbody></table></div>' : '<p style="color:#999">Duty roster not published.</p>') + '</section>';
-  cloudStorage.globalLoad('portal:developer').then(function(dev) {
-    var contact = dev || {};
-    sections += '<section class="card"><h3>Portal Developer</h3><div class="management-profile">' + (contact.photo ? '<img class="portal-photo" src="' + escapeManagementText(contact.photo) + '" alt="Portal Developer" style="cursor:zoom-in">' : '') + '<div><p><strong>' + escapeManagementText(contact.name || 'Portal Developer') + '</strong></p>' + (contact.email ? '<p>✉ <a href="mailto:' + encodeURIComponent(contact.email) + '">' + escapeManagementText(contact.email) + '</a></p>' : '') + (contact.phone ? '<p>☎ <a href="tel:' + encodeURIComponent(contact.phone) + '">' + escapeManagementText(contact.phone) + '</a></p>' : '') + (contact.whatsapp ? '<p>🟢 <a target="_blank" rel="noopener" href="https://wa.me/' + escapeManagementText(contact.whatsapp.replace(/\D/g, '')) + '">WhatsApp</a></p>' : '') + '</div></div></section>';
-    document.getElementById('publicPortalContent').innerHTML = sections;
-    activatePublicPortalDirectories();
-    document.querySelectorAll('#publicPortalContent .portal-photo').forEach(function(image) { image.addEventListener('click', function() { window.open(image.src, '_blank', 'noopener'); }); });
-    modal.classList.remove('hidden');
+      }).join('') + '</div>' : '<p style="color:#999">No staff profiles are currently published.</p>')) + '</section>';
+  sections += '<section class="card"><h3>Prefect List</h3>' + (prefects.length ? '<div style="overflow-x:auto"><table><thead><tr><th>Name</th><th>Class</th><th>Portfolio</th><th>Photo</th></tr></thead><tbody>' + prefects.map(function(item) { return '<tr><td>' + escapeManagementText(item.name) + '</td><td>' + escapeManagementText(item.className) + '</td><td>' + escapeManagementText(item.portfolio) + '</td><td>' + (item.photo ? '<img class="portal-photo" src="' + escapeManagementText(item.photo) + '" alt="Prefect" style="width:55px;height:65px;object-fit:cover;cursor:zoom-in">' : '—') + '</td></tr>'; }).join('') + '</tbody></table></div>' : '<p style="color:#999">No prefects listed.</p>') + '</section>';
+  sections += '<section class="card"><h3>Duty Master Roster</h3><p>Term length: ' + escapeManagementText(portalSettings.termWeeks) + ' weeks</p>' + (dutyRoster.length ? '<div style="overflow-x:auto"><table><thead><tr><th>Week</th><th>Duty Master</th><th>Schedule</th></tr></thead><tbody>' + dutyRoster.map(function(item) { return '<tr><td>Week ' + escapeManagementText(item.week) + '</td><td>' + escapeManagementText(item.name) + '</td><td>' + escapeManagementText(item.schedule) + '</td></tr>'; }).join('') + '</tbody></table></div>' : '<p style="color:#999">Duty roster not published.</p>') + '</section>';
+  var contact = publicData.developer || {};
+  sections += '<section class="card"><h3>Portal Developer</h3><div class="management-profile">' + (contact.photo ? '<img class="portal-photo" src="' + escapeManagementText(contact.photo) + '" alt="Portal Developer" style="cursor:zoom-in">' : '') + '<div><p><strong>' + escapeManagementText(contact.name || 'Portal Developer') + '</strong></p>' + (contact.email ? '<p>✉ <a href="mailto:' + encodeURIComponent(contact.email) + '">' + escapeManagementText(contact.email) + '</a></p>' : '') + (contact.phone ? '<p>☎ <a href="tel:' + encodeURIComponent(contact.phone) + '">' + escapeManagementText(contact.phone) + '</a></p>' : '') + (contact.whatsapp ? '<p>🟢 <a target="_blank" rel="noopener" href="https://wa.me/' + escapeManagementText(contact.whatsapp.replace(/\\D/g, '')) + '">WhatsApp</a></p>' : '') + '</div></div></section>';
+  document.getElementById('publicPortalContent').innerHTML = sections;
+  activatePublicPortalDirectories();
+  document.querySelectorAll('#publicPortalContent .portal-photo').forEach(function(image) {
+    image.addEventListener('click', function() { window.open(image.src, '_blank', 'noopener'); });
   });
+  modal.classList.remove('hidden');
 }
 
-function closePublicPortal() { var modal = document.getElementById('publicPortalModal'); if (modal) modal.classList.add('hidden'); }
+function closePublicPortal()function closePublicPortal() { var modal = document.getElementById('publicPortalModal'); if (modal) modal.classList.add('hidden'); }
 
 function renderPortalStaffSelectionCard() {
   var targetCard = Array.from(document.querySelectorAll('#portalContentTab .card')).find(function(card) { var heading = card.querySelector('h3'); return heading && heading.textContent.trim() === 'Staff Directory'; });
