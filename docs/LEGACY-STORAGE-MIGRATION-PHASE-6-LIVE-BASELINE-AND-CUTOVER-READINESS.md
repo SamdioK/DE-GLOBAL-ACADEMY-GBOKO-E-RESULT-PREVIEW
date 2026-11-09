@@ -677,3 +677,68 @@ No real result entry was performed because the school has no result rows and no 
 The manual writer now stores the subject result rows and the structured Form Master assessment values, but it does not yet replace every legacy report-card consumer. Continue by migrating result report assembly, class averages/positions, attendance/fees display, comments and signatures to Supabase and private Storage. Then verify submission, administrator approval, final publication, progressive stage visibility and student retrieval on a second device.
 
 The current live policy inventory contains no Student SELECT policy on `public.results`; the stage-filtered Edge Function is the student-facing retrieval path. Keep this restriction in place and include a direct Data API denial test in acceptance testing.
+
+
+## 25. Progressive Student Result Release — Supabase Stage Control
+
+### 25.1 Purpose and separation of concerns
+
+Progressive result visibility is now represented independently from result approval and publication. The release stages are scoped to one school, student, academic session and term:
+
+| Stage | Student-visible fields |
+|---|---|
+| 0 — Not released | No result rows |
+| 1 — First CA | Subject and CA1 |
+| 2 — Second CA | Subject, CA1 and CA2 |
+| 3 — Third CA | Subject, CA1, CA2 and CA3 |
+| 4 — Final | Subject, all CA scores, examination, total, grade and remark |
+
+Stages must be advanced in order, one stage at a time. The School Administrator can revoke all stages for an individual student and term. This does not change the result's approval or publication status.
+
+### 25.2 Database records and audit
+
+Migration `202611090002_student_result_release_stage.sql` creates:
+- `student_result_release_stages`, uniquely scoped by school, student, session and term, with a stage constraint from 0 to 4;
+- `student_result_release_audit`, recording previous and new stage, action, actor and timestamp;
+- a database trigger that writes an audit record whenever a stage is created or changed.
+
+Both tables have RLS enabled and no direct `anon` or `authenticated` table grants. The service role is used only from JWT-authenticated Edge Functions after the caller's profile, role, active status and school scope have been verified. The audit table is append-only from the application path.
+
+### 25.3 Roles and permissions
+
+- Only an active School Administrator can list students for release, advance a stage or revoke all stages.
+- Sub Administrators do not receive release-stage control through their individual permission grants.
+- Students cannot query the release tables or the full result table directly.
+- The student retrieval endpoint derives the student from the authenticated profile and the official `students.profile_id` link. It does not accept an admission number or student ID as an authority selector.
+
+### 25.4 Administrator operation
+
+1. Sign in as the School Administrator and open **Release Results**.
+2. Select the academic session, term and optionally a class arm.
+3. Review each student's official active enrolment, result eligibility count and current release stage.
+4. Select **Release 1st CA**, then repeat for the next stages when ready.
+5. The endpoint requires approved or published result rows for stages 1–3. Stage 4 requires published rows.
+6. To withdraw visibility, select **Revoke All** and confirm. The stage is reset to 0 and the audit trigger records the change.
+
+The server checks school ownership, active enrolment, session and term scope, stage order and result status. UI button state is only a convenience; server validation remains authoritative.
+
+### 25.5 Student retrieval and field filtering
+
+The active `student-results-portal` Edge Function is deployed with JWT verification. It verifies the active Student profile and linked official student record, reads that student's release stages, and returns only the permitted fields. For stages 1–3, approved or published rows may be returned with only the CA fields allowed at that stage. Stage 4 returns only published rows and includes the examination, total, grade and remark.
+
+The student screen continues to use this established endpoint and its grouped response format. It does not read the browser's legacy aggregate result objects. The direct `results` table policy inventory contains no Student SELECT policy, so the student cannot bypass field filtering through the Data API.
+
+### 25.6 Verification and outstanding acceptance
+
+- The release-stage migration applied successfully.
+- `manage-student-result-release` is ACTIVE with JWT verification and administrator-only role checks.
+- `student-results-portal` is ACTIVE at version 3 with JWT verification and stage-aware field filtering.
+- The administrator release UI reads eligibility counts from the release function and includes a revoke-all control.
+- No stage rows or audit rows existed at the time of the live baseline check; no student results were fabricated or changed.
+- No real student account test was performed. The school must complete authenticated Administrator release and Student retrieval tests after deployment, including all five stages, stage reset, unauthorised role denial, cross-school denial and direct Data API denial.
+
+A separate experimental endpoint, `get-student-result-release`, was deployed during the reconnection attempt but is not called by the current frontend. The production student portal remains `student-results-portal`; do not switch clients to the experimental endpoint without a separate compatibility review.
+
+### 25.7 Remaining work
+
+The administrator result-entry writer is documented in Section 24. The next acceptance work is a positive authenticated draft save/upsert and the full workflow from submission through approval, publication, progressive release and student retrieval. Then complete the report-card and class summary consumers using Supabase result rows and structured Form Master assessments. Preserve the legacy browser backup until those workflows pass on an authenticated account and a second device.
