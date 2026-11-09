@@ -28,7 +28,7 @@ export default {
       const termIds = [...new Set(stages.map((x: { term_id: string }) => x.term_id))];
       const { data: rows, error: resultError } = await ctx.supabaseAdmin.from("results")
         .select("id,school_id,student_id,class_id,subject_id,academic_session_id,term_id,ca1,ca2,ca3,examination,total,grade,remark,status")
-        .eq("school_id", profile.school_id).eq("student_id", student.id).eq("status", "published")
+        .eq("school_id", profile.school_id).eq("student_id", student.id).in("status", ["approved","published"])
         .in("academic_session_id", sessionIds).in("term_id", termIds);
       if (resultError) throw resultError;
 
@@ -59,6 +59,7 @@ export default {
       for (const row of rows || []) {
         const stage = stageMap.get(row.academic_session_id + ":" + row.term_id) || 0;
         if (stage < 1) continue;
+        if (stage === 4 && row.status !== "published") continue;
         const key = row.academic_session_id + ":" + row.term_id;
         if (!grouped.has(key)) {
           const term = termMap.get(row.term_id);
