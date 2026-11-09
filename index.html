@@ -424,6 +424,30 @@ async function uploadSchoolPublicAsset(file, folder) {
 // One-time bridge: import recognised legacy records into Supabase, then remove
 // their local copies only after a cloud row is confirmed. This is not a runtime
 // fallback; all normal reads and writes below use Supabase exclusively.
+async function moveLegacyEmbeddedImagesToStorage(value, folder) {
+  if (typeof value === 'string') {
+    var match = value.match(/^data:(image\\/(?:png|jpeg|webp));base64,([A-Za-z0-9+/=]+)$/i);
+    if (!match) return value;
+    var binary = atob(match[2]);
+    var bytes = new Uint8Array(binary.length);
+    for (var i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+    var blob = new Blob([bytes], { type: match[1] });
+    return await uploadSchoolPublicAsset(blob, folder || 'legacy-migrated');
+  }
+  if (Array.isArray(value)) {
+    var convertedArray = [];
+    for (var a = 0; a < value.length; a++) convertedArray.push(await moveLegacyEmbeddedImagesToStorage(value[a], folder));
+    return convertedArray;
+  }
+  if (value && typeof value === 'object') {
+    var convertedObject = {};
+    var fields = Object.keys(value);
+    for (var b = 0; b < fields.length; b++) convertedObject[fields[b]] = await moveLegacyEmbeddedImagesToStorage(value[fields[b]], folder);
+    return convertedObject;
+  }
+  return value;
+}
+
 async function migrateLegacyBrowserStateOnce() {
   if (!supabaseClient || !authenticatedProfile || !authenticatedProfile.school_id ||
       !['administrator','portal_developer'].includes(String(authenticatedProfile.role || '').toLowerCase())) return { imported: 0 };
@@ -511,6 +535,7 @@ async function migrateLegacyBrowserStateOnce() {
   var imported = 0;
   for (var keyIndex = 0; keyIndex < keys.length; keyIndex++) {
     var key = keys[keyIndex], value = candidates.get(key).value;
+    value = await moveLegacyEmbeddedImagesToStorage(value, 'legacy-' + key.toLowerCase());
     if (key === 'formMasters' && Array.isArray(value)) value.forEach(function(master) { if (master) delete master.password; });
     if (key === 'subjectAssignments' && Array.isArray(value)) value.forEach(function(item) { if (item) { delete item.password; delete item.teacherPassword; } });
     if (!existing.has(key)) {
