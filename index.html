@@ -9269,7 +9269,23 @@ async function loadAdminResultRoster(className) {
   select.innerHTML = '<option value="">Loading official enrolments…</option>';
   window.__adminResultRoster = [];
   window.__adminResultSelectedStudentId = '';
-  var classRecord = await resolveSupabaseClass(className);
+  var classLookup = await supabaseClient.from('classes').select('id,class_name,level')
+    .eq('school_id', authenticatedProfile.school_id).eq('class_name', className).maybeSingle();
+  if (classLookup.error) throw classLookup.error;
+  if (!classLookup.data) throw new Error('Class arm "' + className + '" was not found in Supabase.');
+  var classRecord = classLookup.data;
+  var section = String(classRecord.level || '').toUpperCase().indexOf('BASIC') === 0 ? 'basic' : 'senior';
+  var subjectCatalogResult = await supabaseClient.from('subjects')
+    .select('id,name,section,subject_group,is_trade,is_optional')
+    .eq('school_id', authenticatedProfile.school_id).eq('section', section).eq('is_active', true).order('name');
+  if (subjectCatalogResult.error) throw subjectCatalogResult.error;
+  window.__adminResultSubjectCatalog = subjectCatalogResult.data || [];
+  var tradeSelect = document.getElementById('tradeSubjectSelect');
+  if (tradeSelect) tradeSelect.innerHTML = '<option value="">Select a trade course</option>' +
+    window.__adminResultSubjectCatalog.filter(function(x) { return x.is_trade === true; }).map(function(x) {
+      return '<option value="' + escapeManagementText(x.name) + '">' + escapeManagementText(x.name) + '</option>';
+    }).join('');
+  renderSubjectList();
   var enrolmentResult = await supabaseClient.from('student_enrolments')
     .select('student_id,register_number,sid,class_id')
     .eq('school_id', authenticatedProfile.school_id)
@@ -9454,8 +9470,11 @@ function renderSubjectList() {
   var searchInput = document.getElementById('subjectSearch');
   var search = searchInput ? searchInput.value.toLowerCase() : '';
   var subjectClass = currentUser.type === 'subadmin' ? window.__subAdminInputArm : currentUser.arm;
-  var subj = getSubjectsForClassName(subjectClass);
-  var filtered = subj.core.filter(function(s) { return s.toLowerCase().indexOf(search) !== -1; });
+  var officialCatalog = Array.isArray(window.__adminResultSubjectCatalog) ? window.__adminResultSubjectCatalog : null;
+  var coreSubjects = officialCatalog
+    ? officialCatalog.filter(function(item) { return item.is_trade !== true; }).map(function(item) { return item.name; })
+    : getSubjectsForClassName(subjectClass).core;
+  var filtered = coreSubjects.filter(function(s) { return s.toLowerCase().indexOf(search) !== -1; });
   var listDiv = document.getElementById('subjectList');
   if (!listDiv) return;
   listDiv.innerHTML = '';
