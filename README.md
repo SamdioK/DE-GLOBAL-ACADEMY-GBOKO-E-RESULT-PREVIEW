@@ -8,3 +8,5 @@ All modules must pass the policy's release completion checklist before being mar
 - [Phase 6 — Live Supabase Baseline and Legacy Storage Cutover Readiness](docs/LEGACY-STORAGE-MIGRATION-PHASE-6-LIVE-BASELINE-AND-CUTOVER-READINESS.md) — current live storage inventory, legacy snapshot findings, migration decisions and safety gates.
 
 - [Phase 7A — Supabase Persistence Implementation and Verification Manual](docs/SUPABASE-ONLY-PERSISTENCE-PHASE-7A-IMPLEMENTATION-AND-VERIFICATION-MANUAL.md) — active Supabase persistence paths, legacy migration safeguards, live verification results and outstanding release gates.
+
+- [Phase 7B — Score and Assessment Read-Back Verification](docs/SUPABASE-ONLY-PERSISTENCE-PHASE-7B-SCORE-AND-ASSESSMENT-READBACK.md) — verified result and Form Master assessment persistence, administrator batch read-back, and passport conflict protection.
