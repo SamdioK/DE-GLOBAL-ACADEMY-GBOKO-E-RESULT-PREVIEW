@@ -1033,7 +1033,7 @@ function generateArms() {
   classes.forEach(function(cls) {
     letters.forEach(function(letter) {
       var className = cls + letter;
-      classArms.push({ id: id++, name: className, formMaster: '', formMasterEmail: '', password: cls.toLowerCase() + letter.toLowerCase(), studentNames: Array(100).fill(''), studentSexes: Array(100).fill(''), activated: false });
+      classArms.push({ id: id++, name: className, formMaster: '', formMasterEmail: '', studentNames: Array(100).fill(''), studentSexes: Array(100).fill(''), activated: false });
     });
   });
 }
@@ -1919,6 +1919,15 @@ function removeFormMasterPasswords() {
   formMasters.forEach(function(master) {
     if (master && Object.prototype.hasOwnProperty.call(master, 'password')) {
       delete master.password;
+      removed = true;
+    }
+  });
+  // Older class-arm records carried predictable, generated passwords. They are
+  // not used by the Supabase Auth login path and must not be persisted.
+  if (!Array.isArray(classArms)) classArms = [];
+  classArms.forEach(function(arm) {
+    if (arm && Object.prototype.hasOwnProperty.call(arm, 'password')) {
+      delete arm.password;
       removed = true;
     }
   });
