@@ -3338,24 +3338,54 @@ function renderReleaseResults() {
   renderList();
 }
 
-function renderStudentResults() {
-  var results = students.filter(function(s) { return String(s.admNo || '').trim().toLowerCase() === String(currentUser.admission || '').trim().toLowerCase() && getStudentReleaseStage(s) > 0; });
+async function renderStudentResults() {
   var container = document.getElementById('studentResultsTab');
-  if (!results.length) { container.innerHTML = '<div class="card"><h2>Result unavailable</h2><p>No results are currently published for this account. Contact the school administrator.</p></div>'; return; }
-  container.innerHTML = results.map(function(student) {
-    var stage = getStudentReleaseStage(student);
-    var rows = (student.subjects || []).map(function(sub) {
-      var stats = getSubjectPerformanceStats(student, sub.name);
-      return '<tr><td>' + escapeManagementText(sub.name) + '</td><td>' + sub.ca1 + '</td>' +
-        (stage >= 2 ? '<td>' + sub.ca2 + '</td>' : '') +
-        (stage >= 3 ? '<td>' + sub.ca3 + '</td>' : '') +
-        (stage >= 4 ? '<td>' + sub.exam + '</td><td>' + sub.total + '</td><td>' + stats.average.toFixed(1) + '</td><td>' + getOrdinalPosition(stats.position) + '</td><td>' + stats.highest + '</td><td>' + stats.lowest + '</td><td>' + escapeManagementText(sub.grade) + '</td><td>' + escapeManagementText(sub.remark) + '</td><td>' + (teacherSignatures[sub.name] ? '<img src="' + escapeManagementText(teacherSignatures[sub.name]) + '" alt="Teacher signature" style="max-width:70px;max-height:32px;object-fit:contain;">' : '') + '</td>' : '') + '</tr>';
+  if (!container) return;
+  container.innerHTML = '<div class="card"><p>Loading your released results securely…</p></div>';
+  if (!supabaseClient) {
+    container.innerHTML = '<div class="card"><h2>Result unavailable</h2><p>Secure result service is not available. Please sign in again.</p></div>';
+    return;
+  }
+  try {
+    var response = await supabaseClient.functions.invoke('student-results-portal', { body: {} });
+    if (response.error) throw response.error;
+    var payload = response.data || {};
+    if (!payload.success) throw new Error(payload.error || 'Unable to load results.');
+    var released = Array.isArray(payload.results) ? payload.results : [];
+    if (!released.length) {
+      container.innerHTML = '<div class="card"><h2>Result unavailable</h2><p>No results have been released for this account. Contact the school administrator.</p></div>';
+      return;
+    }
+    var student = payload.student || {};
+    container.innerHTML = released.map(function(result) {
+      var stage = Number(result.release_stage) || 0;
+      var subjects = Array.isArray(result.subjects) ? result.subjects : [];
+      var headers = '<th>Subject</th><th>1st CA</th>' +
+        (stage >= 2 ? '<th>2nd CA</th>' : '') +
+        (stage >= 3 ? '<th>3rd CA</th>' : '') +
+        (stage >= 4 ? '<th>Examination</th><th>Total</th><th>Grade</th><th>Remark</th>' : '');
+      var rows = subjects.map(function(subject) {
+        return '<tr><td>' + escapeManagementText(subject.subject || '') + '</td>' +
+          '<td>' + escapeManagementText(subject.ca1 == null ? '—' : subject.ca1) + '</td>' +
+          (stage >= 2 ? '<td>' + escapeManagementText(subject.ca2 == null ? '—' : subject.ca2) + '</td>' : '') +
+          (stage >= 3 ? '<td>' + escapeManagementText(subject.ca3 == null ? '—' : subject.ca3) + '</td>' : '') +
+          (stage >= 4 ? '<td>' + escapeManagementText(subject.examination == null ? '—' : subject.examination) + '</td><td>' + escapeManagementText(subject.total == null ? '—' : subject.total) + '</td><td>' + escapeManagementText(subject.grade || '') + '</td><td>' + escapeManagementText(subject.remark || '') + '</td>' : '') +
+          '</tr>';
+      }).join('');
+      var stageLabels = {1:'First Continuous Assessment',2:'Second Continuous Assessment',3:'Third Continuous Assessment',4:'Final Result'};
+      return '<div class="card"><h2>' + escapeManagementText(schoolInfo.name || currentSchool.schoolName || 'School') + ' — Student Result</h2>' +
+        '<p style="margin:12px 0;"><strong>Student:</strong> ' + escapeManagementText(student.full_name || '') +
+        ' &nbsp; <strong>Admission No:</strong> ' + escapeManagementText(student.admission_number || '') +
+        ' &nbsp; <strong>Class:</strong> ' + escapeManagementText(result.class_name || '') +
+        ' &nbsp; <strong>Term:</strong> ' + escapeManagementText(result.term || '') +
+        ' &nbsp; <strong>Session:</strong> ' + escapeManagementText(result.session || '') + '</p>' +
+        '<p style="margin-bottom:10px;color:#5568d3;"><strong>Released through:</strong> ' + stageLabels[stage] + '</p>' +
+        '<div style="overflow-x:auto;"><table><thead><tr>' + headers + '</tr></thead><tbody>' + rows + '</tbody></table></div></div>';
     }).join('');
-    var headers = '<th>Subject</th><th>1st CA</th>' + (stage >= 2 ? '<th>2nd CA</th>' : '') + (stage >= 3 ? '<th>3rd CA</th>' : '') + (stage >= 4 ? '<th>Exam</th><th>Total</th><th>Class Average</th><th>Position in Class</th><th>Highest in Class</th><th>Lowest in Class</th><th>Grade</th><th>Remark</th><th>Sign</th>' : '');
-    var feesAmount = student.nextTermFees == null || student.nextTermFees === '' ? '—' : Number(student.nextTermFees).toLocaleString();
-    var finalSummary = '<p style="margin-top:14px;"><strong>Attendance:</strong> ' + Number(student.attendanceDays || 0) + ' out of ' + Number(student.schoolDays || ((Number(portalSettings.termWeeks) || 12) * 5)) + ' school days</p><div style="display:grid;grid-template-columns:1fr 1fr;border:1px solid #333;margin-top:8px;"><div style="padding:8px;border-right:1px solid #333;"><strong>Next Term School Fees</strong></div><div style="padding:8px;">' + escapeManagementText(feesAmount) + '</div></div>' + (stage >= 4 ? '<p><strong>Average:</strong> ' + Number(student.averageScore || 0).toFixed(1) + '% &nbsp; <strong>Position:</strong> ' + getOrdinalPosition(student.position) + ' out of ' + (student.positionOf || '-') + ' Candidates</p>' : '');
-    return '<div class="card"><h2>' + escapeManagementText(schoolInfo.name || currentSchool.schoolName) + ' — Student Result</h2><p style="margin:12px 0;"><strong>Student:</strong> ' + escapeManagementText(student.studentName) + ' &nbsp; <strong>Admission No:</strong> ' + escapeManagementText(student.admNo) + ' &nbsp; <strong>Class:</strong> ' + escapeManagementText(student.className) + ' &nbsp; <strong>Term:</strong> ' + escapeManagementText(student.term) + ' &nbsp; <strong>Session:</strong> ' + escapeManagementText(student.session || schoolInfo.session || '') + '</p><p style="margin-bottom:10px; color:#5568d3;"><strong>Released through:</strong> ' + getReleaseStageLabel(stage) + '</p><div style="overflow-x:auto;"><table><thead><tr>' + headers + '</tr></thead><tbody>' + rows + '</tbody></table></div>' + finalSummary + '</div>';
-  }).join('');
+  } catch (error) {
+    console.error('Secure student result load failed:', error);
+    container.innerHTML = '<div class="card"><h2>Result unavailable</h2><p>' + escapeManagementText(error && error.message ? error.message : 'The result service could not be reached. Please try again later.') + '</p></div>';
+  }
 }
 
 // ===================== SUPABASE STUDENT DATABASE =====================
