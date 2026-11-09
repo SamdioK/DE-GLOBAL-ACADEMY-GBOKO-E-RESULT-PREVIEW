@@ -2457,7 +2457,7 @@ async function loadSchoolIdCardSettings() {
   if (settingsResult.error) throw settingsResult.error;
   var saved = settingsResult.data || {};
   var logoUrl = saved.logo_path || '';
-  if (logoUrl && !/^https?:\\/\\//i.test(logoUrl)) {
+  if (logoUrl && !/^https?:\/\//i.test(logoUrl)) {
     var publicLogo = supabaseClient.storage.from('school-public-assets').getPublicUrl(logoUrl);
     logoUrl = publicLogo && publicLogo.data && publicLogo.data.publicUrl || '';
   }
