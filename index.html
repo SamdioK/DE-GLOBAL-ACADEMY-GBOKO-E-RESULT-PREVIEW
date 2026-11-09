@@ -436,7 +436,43 @@ CloudStorage.prototype.globalLoad = async function(key) {
   return null;
 };
 
+
 var cloudStorage = new CloudStorage();
+
+// Score-entry preferences are account data and must live in Supabase, not on the device.
+async function loadScoreEntryPreferences() {
+  if (!supabaseClient || !authenticatedProfile || !authenticatedProfile.id || !authenticatedProfile.school_id) {
+    throw new Error('Sign in is required to load score-entry preferences.');
+  }
+  var result = await supabaseClient.from('score_entry_preferences')
+    .select('keyboard_style,entry_direction')
+    .eq('profile_id', authenticatedProfile.id)
+    .eq('school_id', authenticatedProfile.school_id)
+    .maybeSingle();
+  if (result.error) throw result.error;
+  return {
+    keyboardStyle: result.data && result.data.keyboard_style || 'classic',
+    direction: result.data && result.data.entry_direction || 'row'
+  };
+}
+
+async function saveScoreEntryPreferences(keyboardStyle, direction) {
+  if (!supabaseClient || !authenticatedProfile || !authenticatedProfile.id || !authenticatedProfile.school_id) {
+    throw new Error('Sign in is required to save score-entry preferences.');
+  }
+  var payload = {
+    profile_id: authenticatedProfile.id,
+    school_id: authenticatedProfile.school_id,
+    keyboard_style: keyboardStyle || 'classic',
+    entry_direction: direction || 'row',
+    updated_at: new Date().toISOString()
+  };
+  var result = await supabaseClient.from('score_entry_preferences')
+    .upsert(payload, { onConflict: 'profile_id' });
+  if (result.error) throw result.error;
+  return true;
+}
+
 
 // Supabase browser access must use the project's anon/publishable key, never a service-role key.
 var SUPABASE_URL = 'https://rvmcqvfuioxmbtvgdptb.supabase.co';
@@ -10640,7 +10676,7 @@ function printMultipleResults(list, label) {
 }
 
 // Legacy local-storage score sheet; superseded by the Supabase-backed implementation below.
-function renderSubjectTeacherInputLegacy() {
+async function renderSubjectTeacherInputLegacy() {
   if (!window.ScoreEntryEngine) { showToast('Score entry engine is unavailable. Reload the page.', 'error'); return; }
   var className = currentUser.arm;
   var subject = currentUser.subject;
@@ -10655,7 +10691,13 @@ function renderSubjectTeacherInputLegacy() {
   var directionKey = 'scoreEntryDirection:' + userKey;
   var keyboardStyle = 'classic';
   var direction = 'row';
-  try { keyboardStyle = localStorage.getItem(styleKey) || keyboardStyle; direction = localStorage.getItem(directionKey) || direction; } catch (storageError) {}
+  try {
+    var savedScorePreferences = await loadScoreEntryPreferences();
+    keyboardStyle = savedScorePreferences.keyboardStyle;
+    direction = savedScorePreferences.direction;
+  } catch (preferenceError) {
+    showToast(preferenceError.message || 'Could not load score-entry preferences from Supabase.', 'error');
+  }
   var activeRow = Math.max(0, Math.min(classStudents.length - 1, Number(window.__scoreEntryActiveRow) || 0));
   var activeColumn = Math.max(0, Math.min(3, Number(window.__scoreEntryActiveColumn) || 0));
   var draftValue = null;
@@ -10799,8 +10841,9 @@ function renderSubjectTeacherInputLegacy() {
   }
   function setStyle(value) {
     keyboardStyle = value;
-    try { localStorage.setItem(styleKey, value); } catch (storageError) {}
-    if (typeof cloudStorage !== 'undefined') cloudStorage.save('keyboardStyle:' + userKey, value);
+    saveScoreEntryPreferences(value, direction).catch(function(error) {
+      showToast(error.message || 'Could not save keyboard preference to Supabase.', 'error');
+    });
     document.querySelectorAll('.score-entry-cell').forEach(function(input) { input.readOnly = value !== 'classic'; input.setAttribute('inputmode', value === 'classic' ? 'numeric' : 'none'); });
     renderPanel(); setActive(activeRow, activeColumn, false);
   }
@@ -10853,12 +10896,16 @@ function renderSubjectTeacherInputLegacy() {
     var dialog = document.createElement('div'); dialog.className = 'score-direction-dialog'; dialog.id = 'scoreDirectionDialog'; dialog.setAttribute('role','dialog'); dialog.setAttribute('aria-modal','true');
     dialog.innerHTML = '<div><h3>How do you want to enter scores?</h3><p style="margin:10px 0">A) Across the row, student by student: CA1, CA2, CA3, Exams, then the next student.</p><p style="margin:10px 0">B) Down the column, one assessment at a time: CA1 for all students, then CA2 for all students, and so on.</p><div style="display:flex;gap:10px;justify-content:flex-end;margin-top:16px"><button type="button" class="btn btn-primary" data-direction="row">Across the row</button><button type="button" class="btn btn-primary" data-direction="col">Down the column</button></div></div>';
     document.body.appendChild(dialog);
-    dialog.querySelectorAll('[data-direction]').forEach(function(button) { button.addEventListener('click', function() { direction = button.dataset.direction; try { localStorage.setItem(directionKey, direction); } catch (storageError) {} cloudStorage.save('scoreEntryDirection:' + userKey, direction); document.querySelector('input[name="scoreDirection"][value="' + direction + '"]').checked = true; dialog.remove(); }); });
+    dialog.querySelectorAll('[data-direction]').forEach(function(button) { button.addEventListener('click', function() { direction = button.dataset.direction; saveScoreEntryPreferences(keyboardStyle, direction).catch(function(error) {
+      showToast(error.message || 'Could not save score-entry direction to Supabase.', 'error');
+    }); document.querySelector('input[name="scoreDirection"][value="' + direction + '"]').checked = true; dialog.remove(); }); });
   }
 
   document.getElementById('stTermSelect').addEventListener('change', function() { reloadForSelectedTerm(this.value); });
   document.getElementById('scoreKeyboardStyle').addEventListener('change', function() { setStyle(this.value); });
-  document.querySelectorAll('input[name="scoreDirection"]').forEach(function(input) { input.addEventListener('change', function() { direction = this.value; try { localStorage.setItem(directionKey, direction); } catch (storageError) {} cloudStorage.save('scoreEntryDirection:' + userKey, direction); renderPanel(); }); });
+  document.querySelectorAll('input[name="scoreDirection"]').forEach(function(input) { input.addEventListener('change', function() { direction = this.value; saveScoreEntryPreferences(keyboardStyle, direction).catch(function(error) {
+      showToast(error.message || 'Could not save score-entry direction to Supabase.', 'error');
+    }); renderPanel(); }); });
   document.getElementById('changeScoreDirectionBtn').addEventListener('click', showDirectionDialog);
   document.querySelectorAll('.score-entry-cell').forEach(function(input) {
     input.addEventListener('focus', function() { setActive(Number(this.dataset.scoreRow), Number(this.dataset.scoreCol), false); });
