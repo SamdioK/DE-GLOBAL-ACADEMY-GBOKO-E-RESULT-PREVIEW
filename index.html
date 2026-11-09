@@ -9259,13 +9259,78 @@ function renderTeacherSignatures() {
 }
 
 // ===================== INPUT (MANUAL + EXCEL BULK) =====================
+async function loadAdminResultRoster(className) {
+  var select = document.getElementById('studentName');
+  if (!select) return;
+  if (!supabaseClient || !authenticatedProfile || !activeAcademicSession) {
+    select.innerHTML = '<option value="">Supabase session is not ready</option>';
+    return;
+  }
+  select.innerHTML = '<option value="">Loading official enrolments…</option>';
+  window.__adminResultRoster = [];
+  window.__adminResultSelectedStudentId = '';
+  var classRecord = await resolveSupabaseClass(className);
+  var enrolmentResult = await supabaseClient.from('student_enrolments')
+    .select('student_id,register_number,sid,class_id')
+    .eq('school_id', authenticatedProfile.school_id)
+    .eq('academic_session_id', activeAcademicSession.id)
+    .eq('class_id', classRecord.id)
+    .is('archived_at', null)
+    .order('register_number', { ascending: true });
+  if (enrolmentResult.error) throw enrolmentResult.error;
+  var enrolments = enrolmentResult.data || [];
+  var ids = enrolments.map(function(x) { return x.student_id; }).filter(Boolean);
+  if (!ids.length) {
+    select.innerHTML = '<option value="">No active official enrolments in this class</option>';
+    window.__adminResultClassId = classRecord.id;
+    return;
+  }
+  var studentResult = await supabaseClient.from('students')
+    .select('id,admission_number,first_name,middle_name,last_name,gender,date_of_birth')
+    .eq('school_id', authenticatedProfile.school_id).in('id', ids);
+  if (studentResult.error) throw studentResult.error;
+  var byId = {};
+  (studentResult.data || []).forEach(function(student) { byId[String(student.id)] = student; });
+  window.__adminResultRoster = enrolments.map(function(enrolment) {
+    var student = byId[String(enrolment.student_id)];
+    if (!student) return null;
+    return { enrolment: enrolment, student: student, full_name: [student.first_name,student.middle_name,student.last_name].filter(Boolean).join(' ') };
+  }).filter(Boolean);
+  window.__adminResultClassId = classRecord.id;
+  select.innerHTML = '<option value="">Select an officially enrolled student</option>' + window.__adminResultRoster.map(function(item) {
+    var register = item.enrolment.register_number == null ? '' : String(item.enrolment.register_number).padStart(3,'0');
+    return '<option value="' + item.student.id + '" data-register="' + escapeManagementText(item.enrolment.register_number == null ? '' : item.enrolment.register_number) +
+      '" data-name="' + escapeManagementText(item.full_name) + '" data-admission="' + escapeManagementText(item.student.admission_number || '') + '">' +
+      register + ' — ' + escapeManagementText(item.full_name) + ' (' + escapeManagementText(item.student.admission_number || '') + ')</option>';
+  }).join('');
+}
+
+function setAdminResultStudent(studentId) {
+  var item = (window.__adminResultRoster || []).find(function(x) { return String(x.student.id) === String(studentId); });
+  window.__adminResultSelectedStudentId = item ? item.student.id : '';
+  var admission = document.getElementById('admNo');
+  var dob = document.getElementById('studentDob');
+  var sex = document.getElementById('sex');
+  if (!item) {
+    if (admission) admission.value = '';
+    if (dob) dob.value = '';
+    if (sex) sex.value = '';
+    var age = document.getElementById('age'); if (age) age.value = '';
+    return;
+  }
+  if (admission) admission.value = item.student.admission_number || '';
+  if (dob) dob.value = studentDbIsoDate(item.student.date_of_birth);
+  if (sex) sex.value = item.student.gender || '';
+  calculateAge();
+}
+
 function renderInput() {
   if (currentUser.type === 'formmaster') { renderFormMasterInput(); return; }
   if (currentUser.type === 'subjectteacher') { renderSubjectTeacherInput(); return; }
 
   var selectedClass = currentUser.type === 'subadmin' ? (window.__subAdminInputArm || (classArms[0] && classArms[0].name)) : currentUser.arm;
   var arm = classArms.find(function(a) { return a.name === selectedClass; });
-  var studentNames = arm ? arm.studentNames : [];
+  var studentNames = [];
   var config = assessmentConfig[selectedClass] || { ca1: 0, ca2: 0, ca3: 0, exam: 0 };
 
   selectedSubjects = []; subjectScores = {}; selectedTradeSubject = '';
@@ -9273,7 +9338,7 @@ function renderInput() {
   psychomotorDomains.forEach(function(d) { psychomotorRatings[d] = 5; });
 
   var classSelector = currentUser.type === 'subadmin' ? '<div class="input-group" style="max-width:260px;"><label>Class Arm</label><select id="subadminInputArm">' + classArms.map(function(a) { return '<option value="' + a.name + '"' + (a.name === selectedClass ? ' selected' : '') + '>' + a.name + '</option>'; }).join('') + '</select></div>' : '';
-  var manualForm = '<div class="card"><h2>' + selectedClass + ' - Enter Results (Manual Entry)</h2>' + classSelector + '<p id="manualScoreLimits" style="background: #e3f2fd; padding: 10px; border-radius: 5px; margin: 15px 0; font-size: 12px;"><strong>Score Limits:</strong> ' + (getAssessmentConfiguration(selectedClass) ? 'CA1 (0-' + config.ca1 + '), CA2 (0-' + config.ca2 + '), CA3 (0-' + config.ca3 + '), Exam (0-' + config.exam + ')' : 'Assessment configuration has not yet been set for ' + escapeManagementText(normalizeAssessmentLevel(assessmentLevelForArm(selectedClass)) || selectedClass) + ' for the selected session and term.') + '</p><div class="grid grid-2"><div class="input-group"><label>Search Register (serial number or first 3 surname characters)</label><input type="search" id="studentSearch" placeholder="e.g. 01 or Man" autocomplete="off"></div><div class="input-group"><label>Student Name * — Register No.</label><select id="studentName"><option value="">Select</option>' + studentNames.map(function(n, i) { return n ? '<option value="' + escapeManagementText(n) + '" data-register="' + (i + 1) + '">' + String(i + 1).padStart(3, '0') + ' — ' + escapeManagementText(n) + '</option>' : ''; }).join('') + '</select></div><div class="input-group"><label>Admission Number (generated automatically)</label><input type="text" id="admNo" readonly style="background:#f0f0f0;"></div><div class="input-group"><label>Date of Birth *</label><div class="dob-selectors"><select id="dobDay"><option value="">Day</option>' + Array.from({length: 31}, function(_, i) { return '<option value="' + (i+1) + '">' + (i+1) + '</option>'; }).join('') + '</select><select id="dobMonth"><option value="">Month</option><option value="1">January</option><option value="2">February</option><option value="3">March</option><option value="4">April</option><option value="5">May</option><option value="6">June</option><option value="7">July</option><option value="8">August</option><option value="9">September</option><option value="10">October</option><option value="11">November</option><option value="12">December</option></select><select id="dobYear"><option value="">Year</option>' + Array.from({length: 56}, function(_, i) { return '<option value="' + (2015-i) + '">' + (2015-i) + '</option>'; }).join('') + '</select></div></div><div class="input-group"><label>Age</label><input type="text" id="age" disabled style="background: #f0f0f0;"></div><div class="input-group"><label>Sex *</label><select id="sex"><option value="">Select</option><option value="Male">Male</option><option value="Female">Female</option></select></div><div class="input-group"><label>Term *</label><select id="term"><option value="">Select</option><option value="1"' + (activeAssessmentTerm && Number(activeAssessmentTerm.term_number) === 1 ? ' selected' : '') + '>Term 1</option><option value="2"' + (activeAssessmentTerm && Number(activeAssessmentTerm.term_number) === 2 ? ' selected' : '') + '>Term 2</option><option value="3"' + (activeAssessmentTerm && Number(activeAssessmentTerm.term_number) === 3 ? ' selected' : '') + '>Term 3</option></select></div><div class="input-group"><label>Days Present (out of ' + ((Number(portalSettings.termWeeks) || 12) * 5) + ' school days)</label><input type="number" id="attendanceDays" min="0" max="' + ((Number(portalSettings.termWeeks) || 12) * 5) + '" value=""></div><div class="input-group"><label>Next Term School Fees Amount</label><input type="number" id="nextTermFees" min="0" step="0.01" placeholder="Enter amount"></div></div><div class="input-group"><label>Student Passport Photo (select a student to upload)</label><input type="file" id="studentPassport" accept="image/*"></div><div class="input-group"><label>Select Subjects</label><input type="text" id="subjectSearch" placeholder="Search subjects..." style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; margin-bottom: 10px;"><div class="subject-selector" id="subjectList"></div><div class="input-group" style="margin-top:10px;"><label for="tradeSubjectSelect">Trade Course (optional)</label><select id="tradeSubjectSelect"><option value="">Select a trade course</option>' + getSubjectsForClassName(selectedClass).trade.map(function(subject) { return '<option value="' + escapeManagementText(subject) + '">' + escapeManagementText(subject) + '</option>'; }).join('') + '</select></div><div class="selected-subjects" id="selectedSubjects"></div></div><div id="scoresSection" style="margin-top: 20px;"><h3>Enter Scores</h3><div id="scoreInputs"></div></div><h3 style="margin-top: 25px;">Affective Domain</h3><div id="affectiveSection" style="background: #f9f9f9; padding: 15px; border-radius: 8px; margin-bottom: 20px;"></div><h3>Psychomotor Domain</h3><div id="psychomotorSection" style="background: #f9f9f9; padding: 15px; border-radius: 8px; margin-bottom: 20px;"></div><div class="grid grid-2"><div class="input-group"><label>Form Master Comment</label><textarea id="formMasterComment" rows="3"></textarea></div><div class="input-group"><label>Form Master Signature</label><input type="file" id="formMasterSig" accept="image/*"></div></div><div style="display: flex; gap: 10px; margin-top: 20px;"><button class="btn btn-success" id="saveStudentBtn">Save Student</button><button class="btn btn-danger" id="clearFormBtn">Clear</button></div></div>';
+  var manualForm = '<div class="card"><h2>' + selectedClass + ' - Enter Results (Manual Entry)</h2>' + classSelector + '<p id="manualScoreLimits" style="background: #e3f2fd; padding: 10px; border-radius: 5px; margin: 15px 0; font-size: 12px;"><strong>Score Limits:</strong> ' + (getAssessmentConfiguration(selectedClass) ? 'CA1 (0-' + config.ca1 + '), CA2 (0-' + config.ca2 + '), CA3 (0-' + config.ca3 + '), Exam (0-' + config.exam + ')' : 'Assessment configuration has not yet been set for ' + escapeManagementText(normalizeAssessmentLevel(assessmentLevelForArm(selectedClass)) || selectedClass) + ' for the selected session and term.') + '</p><div class="grid grid-2"><div class="input-group"><label>Search Register (serial number or first 3 surname characters)</label><input type="search" id="studentSearch" placeholder="e.g. 01 or Man" autocomplete="off"></div><div class="input-group"><label>Student Name * — Register No.</label><select id="studentName"><option value="">Select</option>' + studentNames.map(function(n, i) { return n ? '<option value="' + escapeManagementText(n) + '" data-register="' + (i + 1) + '">' + String(i + 1).padStart(3, '0') + ' — ' + escapeManagementText(n) + '</option>' : ''; }).join('') + '</select></div><div class="input-group"><label>Admission Number (generated automatically)</label><input type="text" id="admNo" readonly style="background:#f0f0f0;"></div><div class="input-group"><label>Date of Birth *</label><div class="dob-selectors"><select id="dobDay"><option value="">Day</option>' + Array.from({length: 31}, function(_, i) { return '<option value="' + (i+1) + '">' + (i+1) + '</option>'; }).join('') + '</select><select id="dobMonth"><option value="">Month</option><option value="1">January</option><option value="2">February</option><option value="3">March</option><option value="4">April</option><option value="5">May</option><option value="6">June</option><option value="7">July</option><option value="8">August</option><option value="9">September</option><option value="10">October</option><option value="11">November</option><option value="12">December</option></select><select id="dobYear"><option value="">Year</option>' + Array.from({length: 56}, function(_, i) { return '<option value="' + (2015-i) + '">' + (2015-i) + '</option>'; }).join('') + '</select></div></div><div class="input-group"><label>Age</label><input type="text" id="age" disabled style="background: #f0f0f0;"></div><div class="input-group"><label>Sex *</label><select id="sex"><option value="">Select</option><option value="Male">Male</option><option value="Female">Female</option></select></div><div class="input-group"><label>Term *</label><select id="term"><option value="">Select</option><option value="1"' + (activeAssessmentTerm && Number(activeAssessmentTerm.term_number) === 1 ? ' selected' : '') + '>Term 1</option><option value="2"' + (activeAssessmentTerm && Number(activeAssessmentTerm.term_number) === 2 ? ' selected' : '') + '>Term 2</option><option value="3"' + (activeAssessmentTerm && Number(activeAssessmentTerm.term_number) === 3 ? ' selected' : '') + '>Term 3</option></select></div><div class="input-group"><label>Days Present (out of ' + ((Number(portalSettings.termWeeks) || 12) * 5) + ' school days)</label><input type="number" id="attendanceDays" min="0" max="' + ((Number(portalSettings.termWeeks) || 12) * 5) + '" value=""></div><div class="input-group"><label>Next Term School Fees Amount</label><input type="number" id="nextTermFees" min="0" step="0.01" placeholder="Enter amount"></div></div><p class="alert alert-info">Student passport photos and staff signatures are managed separately in the official profile and private asset workflows. They are not embedded in result records.</p><div class="input-group"><label>Select Subjects</label><input type="text" id="subjectSearch" placeholder="Search subjects..." style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; margin-bottom: 10px;"><div class="subject-selector" id="subjectList"></div><div class="input-group" style="margin-top:10px;"><label for="tradeSubjectSelect">Trade Course (optional)</label><select id="tradeSubjectSelect"><option value="">Select a trade course</option>' + getSubjectsForClassName(selectedClass).trade.map(function(subject) { return '<option value="' + escapeManagementText(subject) + '">' + escapeManagementText(subject) + '</option>'; }).join('') + '</select></div><div class="selected-subjects" id="selectedSubjects"></div></div><div id="scoresSection" style="margin-top: 20px;"><h3>Enter Scores</h3><div id="scoreInputs"></div></div><h3 style="margin-top: 25px;">Affective Domain</h3><div id="affectiveSection" style="background: #f9f9f9; padding: 15px; border-radius: 8px; margin-bottom: 20px;"></div><h3>Psychomotor Domain</h3><div id="psychomotorSection" style="background: #f9f9f9; padding: 15px; border-radius: 8px; margin-bottom: 20px;"></div><div class="grid grid-2"><div class="input-group"><label>Form Master Comment</label><textarea id="formMasterComment" rows="3"></textarea></div></div><div style="display: flex; gap: 10px; margin-top: 20px;"><button class="btn btn-success" id="saveStudentBtn">Save Scores to Supabase</button><button class="btn btn-danger" id="clearFormBtn">Clear</button></div></div>';
 
   var canManageRoster = currentUser.type === 'formmaster' || (currentUser.type === 'subadmin' && hasSubAdminPermission('manageStudents'));
   var rosterCard = canManageRoster ? '<div class="card dashed-box"><h2 style="margin-bottom: 10px;">📋 Import Student Names</h2><p style="color:#555; margin-bottom:15px; font-size:13px;">Download the roster template and enter each student\'s register serial number, name and sex (Male or Female). Serial numbers determine the displayed register order and admission number for <strong>' + selectedClass + '</strong>.</p><div class="input-group"><label>Student Names Spreadsheet</label><input type="file" id="studentNamesFile" accept=".xlsx,.xls,.csv"><small style="display:block;color:#666;margin-top:5px;">Upload the student list only. Add each student’s passport manually when selecting their name during result entry.</small></div><button class="btn btn-primary" id="downloadNamesTemplateBtn">⬇ Download Student Names Template</button> <button class="btn btn-success" id="importStudentNamesBtn">Upload Student Names</button><p id="studentNamesImportStatus" style="margin-top:10px; font-size:12px; color:#666;"></p></div>' : '';
@@ -9300,34 +9365,18 @@ function renderInput() {
   if (subadminArmSelect) subadminArmSelect.addEventListener('change', function() { window.__subAdminInputArm = this.value; renderInput(); });
 
   renderSubjectList(); renderAffective(); renderPsychomotor();
+  loadAdminResultRoster(selectedClass).catch(function(error) {
+    var select = document.getElementById('studentName');
+    if (select) select.innerHTML = '<option value="">Official roster unavailable</option>';
+    showToast(error.message || 'Could not load the official class register.', 'error');
+  });
+
 
   var studentSearchInput = document.getElementById('studentSearch');
   if (studentSearchInput) studentSearchInput.addEventListener('input', filterStudentNameOptions);
   var studentNameSelect = document.getElementById('studentName');
   if (studentNameSelect) studentNameSelect.addEventListener('change', function() {
-    updateAdmissionNumber();
-    var selectedOption = this.options[this.selectedIndex];
-    var registerNo = selectedOption && parseInt(selectedOption.getAttribute('data-register'), 10);
-    var rosterClass = currentUser.type === 'subadmin' ? window.__subAdminInputArm : currentUser.arm;
-    var rosterArm = classArms.find(function(item) { return item.name === rosterClass; });
-    var rosterSex = rosterArm && registerNo ? rosterArm.studentSexes && rosterArm.studentSexes[registerNo - 1] : '';
-    document.getElementById('sex').value = rosterSex || '';
-    if (currentUser.type === 'formmaster') {
-      var selectedStudentName = this.value;
-      var passportPreview = document.getElementById('formMasterPassportPreview');
-      if (!selectedStudentName) {
-        showFormMasterStudentPassport(null);
-      } else if (passportPreview) {
-        passportPreview.innerHTML = '<p>Loading registered student record…</p>';
-        window.__formMasterPassportLookup = (window.__formMasterPassportLookup || 0) + 1;
-        var lookupVersion = window.__formMasterPassportLookup;
-        resolveFormMasterPassportStudentId(rosterClass, selectedStudentName).then(function(studentId) {
-          if (lookupVersion !== window.__formMasterPassportLookup) return;
-          if (studentId) showFormMasterStudentPassport(studentId);
-          else passportPreview.innerHTML = '<p class="alert alert-info">The selected student could not be matched to an official enrolment for the active session.</p>';
-        });
-      }
-    }
+    setAdminResultStudent(this.value);
   });
   document.getElementById('term').addEventListener('change', async function() {
     var selectedTerm = availableAssessmentTerms.find(function(item) { return String(item.term_number) === this.value; }.bind(this));
@@ -9369,18 +9418,16 @@ function filterStudentNameOptions() {
   var previousValue = select.value;
   Array.from(select.options).forEach(function(option, index) {
     if (index === 0) return;
-    var name = option.value.trim();
-    var registerNo = option.getAttribute('data-register') || '';
-    var paddedRegisterNo = String(registerNo).padStart(3, '0');
-    var surname = name.split(/\\s+/).pop().toLowerCase();
-    var matches = !query || registerNo.indexOf(query) !== -1 || paddedRegisterNo.indexOf(query) !== -1 || (query.length >= 3 && surname.indexOf(query) === 0);
-    option.hidden = !matches;
+    var name = String(option.getAttribute('data-name') || '').toLowerCase();
+    var registerNo = String(option.getAttribute('data-register') || '');
+    var padded = registerNo ? registerNo.padStart(3,'0') : '';
+    option.hidden = !!query && registerNo.indexOf(query) === -1 && padded.indexOf(query) === -1 && name.indexOf(query) === -1;
   });
   if (previousValue && Array.from(select.options).some(function(option) { return option.value === previousValue && !option.hidden; })) {
     select.value = previousValue;
-  } else {
+  } else if (previousValue) {
     select.value = '';
-    document.getElementById('admNo').value = '';
+    setAdminResultStudent('');
   }
 }
 
@@ -9389,15 +9436,7 @@ function updateAdmissionNumber() {
   var admissionInput = document.getElementById('admNo');
   if (!select || !admissionInput) return;
   var option = select.options[select.selectedIndex];
-  var registerNo = option && option.getAttribute('data-register');
-  var className = currentUser.type === 'subadmin' ? window.__subAdminInputArm : currentUser.arm;
-  var armMatch = String(className || '').match(/^(BASIC[7-9]|SS[1-3])([A-E])$/);
-  if (!registerNo || !armMatch) {
-    admissionInput.value = '';
-    return;
-  }
-  var classCode = armMatch[1].indexOf('BASIC') === 0 ? 'B' + armMatch[1].slice(-1) : armMatch[1];
-  admissionInput.value = 'D-GC/' + classCode + '/' + armMatch[2] + '/' + String(registerNo).padStart(3, '0');
+  admissionInput.value = option ? option.getAttribute('data-admission') || '' : '';
 }
 
 function calculateAge() {
@@ -9557,100 +9596,98 @@ function renderPsychomotor() {
 }
 
 async function saveStudent() {
-  if (currentUser.type === 'subadmin' && !hasSubAdminPermission('enterResults') && !hasSubAdminPermission('editResults')) { showToast('You do not have permission to enter results', 'error'); return; }
-  var studentName = document.getElementById('studentName').value;
-  var admNo = document.getElementById('admNo').value;
-  var dob = document.getElementById('studentDob').value;
-  var age = document.getElementById('age').value;
-  if (studentDbDobIsFuture(dob)) { showToast('Date of Birth cannot be in the future.', 'error'); return; }
-  var sex = document.getElementById('sex').value;
-  var term = document.getElementById('term').value;
-  var formMasterComment = document.getElementById('formMasterComment').value;
-  var attendanceDays = Math.max(0, parseInt(document.getElementById('attendanceDays').value, 10) || 0);
-  var nextTermFeesInput = document.getElementById('nextTermFees').value.trim();
-  var nextTermFees = nextTermFeesInput === '' ? '' : Number(nextTermFeesInput);
-  var schoolDays = (Number(portalSettings.termWeeks) || 12) * 5;
-
-  if (attendanceDays > schoolDays) { showToast('Attendance cannot exceed ' + schoolDays + ' school days', 'error'); return; }
-  if (nextTermFeesInput !== '' && (!isFinite(nextTermFees) || nextTermFees < 0)) { showToast('Enter a valid non-negative school fees amount', 'error'); return; }
-  if (!studentName || !admNo || !age || !sex || !term) { showToast('Fill all required fields', 'error'); return; }
-  if (selectedSubjects.length === 0) { showToast('Select at least one subject', 'error'); return; }
-  var selectedClassForSave = currentUser.type === 'subadmin' ? window.__subAdminInputArm : currentUser.arm;
-  if (!activeAssessmentTerm || String(activeAssessmentTerm.term_number) !== String(term)) {
-    showToast('Assessment settings for the selected term are still loading. Select the term again and retry.', 'error'); return;
+  if (!currentUser || (currentUser.type !== 'admin' && currentUser.type !== 'subadmin')) {
+    showToast('Only an authorised Administrator or Sub Administrator can save these results.', 'error');
+    return;
   }
-  var saveConfig = getAssessmentConfiguration(selectedClassForSave);
-  if (!saveConfig) {
-    showToast('Assessment configuration has not yet been set for ' + (normalizeAssessmentLevel(assessmentLevelForArm(selectedClassForSave)) || selectedClassForSave) + ' for the selected session and term.', 'error'); return;
+  if (!supabaseClient || !authenticatedProfile || !activeAcademicSession || !activeAssessmentTerm) {
+    showToast('Your authenticated Supabase session, academic session and term are required.', 'error');
+    return;
   }
-  var scoreLimits = { ca1: Number(saveConfig.ca1), ca2: Number(saveConfig.ca2), ca3: Number(saveConfig.ca3), exam: Number(saveConfig.exam) };
-  var invalidScore = selectedSubjects.some(function(subject) {
-    var scores = subjectScores[subject] || {};
-    return Object.keys(scoreLimits).some(function(field) { return !isFinite(Number(scores[field])) || Number(scores[field]) < 0 || Number(scores[field]) > scoreLimits[field]; });
-  });
-  if (invalidScore) { showToast('One or more scores exceed the configured assessment limits.', 'error'); return; }
-
-  var passportFile = document.getElementById('studentPassport').files[0];
-  var formMasterSigFile = document.getElementById('formMasterSig').files[0];
-
-  var processStudent = async function(passportData, formMasterSigData) {
-    var totalScore = 0, totalObtainable = 0, subjects = [];
-    selectedSubjects.forEach(function(subject) {
-      var scores = subjectScores[subject];
-      var total = scores.ca1 + scores.ca2 + scores.ca3 + scores.exam;
-      totalScore += total; totalObtainable += 100;
-      var grade = 'E', remark = 'Poor';
-      if (total >= 75) { grade = 'A'; remark = 'Excellent'; } else if (total >= 65) { grade = 'B'; remark = 'Very Good'; } else if (total >= 55) { grade = 'C'; remark = 'Good'; } else if (total >= 40) { grade = 'D'; remark = 'Fair'; }
-      subjects.push({ name: subject, ca1: scores.ca1, ca2: scores.ca2, ca3: scores.ca3, exam: scores.exam, total: total, grade: grade, remark: remark });
-    });
-    var avgScore = (totalScore / totalObtainable) * 100;
-    var selectedClass = currentUser.type === 'subadmin' ? window.__subAdminInputArm : currentUser.arm;
-    var arm = classArms.find(function(a) { return a.name === selectedClass; });
-    var currentSession = schoolInfo.session || currentSchool.session || '';
-    var formMasterGender = currentUser.type === 'formmaster' && authenticatedProfile ? authenticatedProfile.gender || '' : (arm && arm.formMasterGender || '');
-    var newStudent = { id: Date.now(), studentName: studentName, admNo: admNo, dob: dob, age: age, sex: sex, term: term, session: currentSession, className: selectedClass, subjects: subjects, averageScore: avgScore, totalObtained: totalScore, totalObtainable: totalObtainable, position: null, positionOf: null, passport: passportData || null, formMaster: arm ? arm.formMaster : currentUser.name, formMasterGender: formMasterGender, formMasterComment: formMasterComment, formMasterSignature: formMasterSigData, attendanceDays: attendanceDays, schoolDays: schoolDays, nextTermFees: nextTermFees, affective: JSON.parse(JSON.stringify(affectiveRatings)), psychomotor: JSON.parse(JSON.stringify(psychomotorRatings)) };
-    var canUpdateExisting = currentUser.type !== 'subadmin' || hasSubAdminPermission('editResults');
-    var existingStudent = canUpdateExisting ? students.find(function(s) { return s.admNo === admNo && s.className === selectedClass && String(s.term) === String(term) && String(s.session || currentSession) === String(currentSession); }) : null;
-    if (existingStudent) {
-      newStudent.id = existingStudent.id; newStudent.studentPassword = existingStudent.studentPassword; newStudent.published = existingStudent.published; newStudent.releaseStage = existingStudent.releaseStage;
-      newStudent.formMasterGender = newStudent.formMasterGender || existingStudent.formMasterGender || '';
-      if (!document.getElementById('attendanceDays').value) { newStudent.attendanceDays = existingStudent.attendanceDays || 0; newStudent.schoolDays = existingStudent.schoolDays || schoolDays; }
-      if (nextTermFeesInput === '') newStudent.nextTermFees = existingStudent.nextTermFees == null ? '' : existingStudent.nextTermFees;
-      newStudent.passport = passportData || existingStudent.passport;
-      newStudent.formMasterSignature = formMasterSigData || existingStudent.formMasterSignature;
-      newStudent.subjects.forEach(function(sub) {
-        var previous = (existingStudent.subjects || []).find(function(oldSub) { return oldSub.name === sub.name; });
-        if (previous) {
-          ['ca1', 'ca2', 'ca3', 'exam'].forEach(function(field) { if (!sub[field]) sub[field] = previous[field] || 0; });
-          sub.total = sub.ca1 + sub.ca2 + sub.ca3 + sub.exam;
-          if (sub.total >= 75) { sub.grade = 'A'; sub.remark = 'Excellent'; } else if (sub.total >= 65) { sub.grade = 'B'; sub.remark = 'Very Good'; } else if (sub.total >= 55) { sub.grade = 'C'; sub.remark = 'Good'; } else if (sub.total >= 40) { sub.grade = 'D'; sub.remark = 'Fair'; } else { sub.grade = 'E'; sub.remark = 'Poor'; }
-        }
-      });
-      newStudent.totalObtained = newStudent.subjects.reduce(function(sum, sub) { return sum + sub.total; }, 0);
-      newStudent.totalObtainable = newStudent.subjects.length * 100;
-      newStudent.averageScore = newStudent.totalObtainable ? (newStudent.totalObtained / newStudent.totalObtainable) * 100 : 0;
-      students[students.indexOf(existingStudent)] = newStudent;
-    } else {
-      students.push(newStudent);
+  var selectedClass = currentUser.type === 'subadmin' ? window.__subAdminInputArm : currentUser.arm;
+  var officialStudentId = window.__adminResultSelectedStudentId;
+  var selectedStudent = (window.__adminResultRoster || []).find(function(x) { return String(x.student.id) === String(officialStudentId); });
+  var classId = window.__adminResultClassId;
+  if (!selectedStudent || !classId) {
+    showToast('Select a student from the official Supabase class register.', 'error');
+    return;
+  }
+  if (selectedSubjects.length === 0) {
+    showToast('Select at least one subject.', 'error');
+    return;
+  }
+  var termNumber = String(document.getElementById('term').value || '');
+  if (!termNumber || String(activeAssessmentTerm.term_number) !== termNumber) {
+    showToast('Select the configured term before saving.', 'error');
+    return;
+  }
+  var config = getAssessmentConfiguration(selectedClass);
+  if (!config) {
+    showToast('Assessment configuration is missing for this class, session and term.', 'error');
+    return;
+  }
+  var scoreLimits = { ca1: Number(config.ca1), ca2: Number(config.ca2), ca3: Number(config.ca3), exam: Number(config.exam) };
+  var scores = [];
+  for (var i = 0; i < selectedSubjects.length; i++) {
+    var subjectName = selectedSubjects[i];
+    var value = subjectScores[subjectName] || {};
+    var score = { ca1: Number(value.ca1), ca2: Number(value.ca2), ca3: Number(value.ca3), exam: Number(value.exam) };
+    if (Object.keys(score).some(function(key) { return !Number.isFinite(score[key]) || score[key] < 0 || score[key] > scoreLimits[key]; })) {
+      showToast('Check the score limits for ' + subjectName + '.', 'error');
+      return;
     }
-    await saveAllData();
-    logActivity(existingStudent ? 'Edited student result' : 'Entered student result', studentName + ' / ' + selectedClass + ' / Term ' + term);
-    showToast('✓ Student saved successfully!', 'success');
-    clearForm();
+    scores.push({ subject_name: subjectName, ca1: score.ca1, ca2: score.ca2, ca3: score.ca3, examination: score.exam });
+  }
+  var attendanceInput = document.getElementById('attendanceDays').value.trim();
+  var attendanceDays = attendanceInput === '' ? null : Number(attendanceInput);
+  var schoolDays = (Number(portalSettings.termWeeks) || 12) * 5;
+  var feesInput = document.getElementById('nextTermFees').value.trim();
+  var nextTermFees = feesInput === '' ? null : Number(feesInput);
+  if (attendanceDays !== null && (!Number.isInteger(attendanceDays) || attendanceDays < 0 || attendanceDays > schoolDays)) {
+    showToast('Attendance must be a whole number from 0 to ' + schoolDays + '.', 'error'); return;
+  }
+  if (nextTermFees !== null && (!Number.isFinite(nextTermFees) || nextTermFees < 0)) {
+    showToast('Enter a valid non-negative next-term fees amount.', 'error'); return;
+  }
+  var payload = {
+    student_id: officialStudentId,
+    class_id: classId,
+    academic_session_id: activeAcademicSession.id,
+    term_id: activeAssessmentTerm.id,
+    scores: scores,
+    form_assessment: {
+      affective_ratings: JSON.parse(JSON.stringify(affectiveRatings)),
+      psychomotor_ratings: JSON.parse(JSON.stringify(psychomotorRatings)),
+      form_master_comment: document.getElementById('formMasterComment').value.trim(),
+      attendance_days: attendanceDays,
+      school_days: schoolDays,
+      next_term_fees: nextTermFees
+    }
   };
-
-  if (passportFile || formMasterSigFile) {
-    var passportData = null, formMasterSigData = null, filesRead = 0;
-    var totalFiles = (passportFile ? 1 : 0) + (formMasterSigFile ? 1 : 0);
-    if (passportFile) { var r1 = new FileReader(); r1.onload = function(e) { passportData = e.target.result; filesRead++; if (filesRead === totalFiles) processStudent(passportData, formMasterSigData); }; r1.readAsDataURL(passportFile); }
-    if (formMasterSigFile) { var r2 = new FileReader(); r2.onload = function(e) { formMasterSigData = e.target.result; filesRead++; if (filesRead === totalFiles) processStudent(passportData, formMasterSigData); }; r2.readAsDataURL(formMasterSigFile); }
-  } else {
-    await processStudent(null, null);
+  var button = document.getElementById('saveStudentBtn');
+  if (button) { button.disabled = true; button.textContent = 'Saving to Supabase…'; }
+  try {
+    var result = await supabaseClient.functions.invoke('save-admin-student-results', { body: payload });
+    if (result.error) {
+      var message = result.error.message || 'The result could not be saved.';
+      if (result.error.context && typeof result.error.context.json === 'function') {
+        try { var body = await result.error.context.json(); if (body && body.error) message = body.error; } catch (e) {}
+      }
+      throw new Error(message);
+    }
+    if (!result.data || result.data.success !== true) throw new Error(result.data && result.data.message || 'The result could not be saved.');
+    logActivity('Saved draft student results to Supabase', selectedStudent.full_name + ' / ' + selectedClass + ' / ' + activeAssessmentTerm.name);
+    showToast(result.data.saved_count + ' subject result(s) saved to Supabase as drafts.', 'success');
+    clearForm();
+  } catch (error) {
+    showToast(error.message || 'Unable to save results to Supabase.', 'error');
+  } finally {
+    if (button) { button.disabled = false; button.textContent = 'Save Scores to Supabase'; }
   }
 }
 
 function clearForm() {
-  document.getElementById('studentName').value = '';
+  document.getElementById('studentName').value = '';\n  window.__adminResultSelectedStudentId = '';\n  setAdminResultStudent('');
   document.getElementById('admNo').value = '';
   document.getElementById('studentDob').value = '';
   document.getElementById('age').value = '';
