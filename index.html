@@ -395,6 +395,87 @@ CloudStorage.prototype.globalLoad = async function(key) {
 
 var cloudStorage = new CloudStorage();
 
+async function saveStudentPassportToSupabase(student, file) {
+  var role = String(authenticatedProfile && authenticatedProfile.role || '').toLowerCase();
+  if (!supabaseClient || !authenticatedProfile || !['administrator','form_master'].includes(role)) {
+    throw new Error('An authorised School Administrator or assigned Form Master is required.');
+  }
+  if (!file || !/^image\\/(png|jpeg|webp)$/i.test(file.type || '') || file.size > 5 * 1024 * 1024) {
+    throw new Error('Choose a PNG, JPG or WEBP passport image up to 5 MB.');
+  }
+  var official = null;
+  var studentId = String(student && student.id || '');
+  if (/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(studentId)) {
+    var byId = await supabaseClient.from('students').select('id,admission_number')
+      .eq('school_id', authenticatedProfile.school_id).eq('id', studentId).maybeSingle();
+    if (byId.error) throw byId.error;
+    official = byId.data;
+  }
+  if (!official) {
+    var admission = String(student && (student.admNo || student.admissionNumber || student.admission_number) || '').trim();
+    if (!admission) throw new Error('The student admission number could not be verified.');
+    var byAdmission = await supabaseClient.from('students').select('id,admission_number')
+      .eq('school_id', authenticatedProfile.school_id).ilike('admission_number', admission).maybeSingle();
+    if (byAdmission.error) throw byAdmission.error;
+    official = byAdmission.data;
+  }
+  if (!official || !official.id) throw new Error('The student is not registered in the official Supabase student register.');
+  var prior = await supabaseClient.from('student_passports').select('storage_path')
+    .eq('school_id', authenticatedProfile.school_id).eq('student_id', official.id).maybeSingle();
+  if (prior.error) throw prior.error;
+  var extension = file.type.toLowerCase() === 'image/jpeg' ? 'jpg' : file.type.toLowerCase().split('/')[1];
+  var path = authenticatedProfile.school_id + '/' + official.id + '/' + window.crypto.randomUUID() + '.' + extension;
+  var bucket = supabaseClient.storage.from('student-passports');
+  var uploaded = await bucket.upload(path, file, { contentType: file.type, cacheControl: '3600', upsert: false });
+  if (uploaded.error) throw uploaded.error;
+  var saved = await supabaseClient.from('student_passports').upsert({
+    school_id: authenticatedProfile.school_id, student_id: official.id,
+    storage_path: path, updated_by: authenticatedProfile.id, updated_at: new Date().toISOString()
+  }, { onConflict: 'school_id,student_id' }).select('storage_path').single();
+  if (saved.error || !saved.data) {
+    await bucket.remove([path]);
+    throw saved.error || new Error('Supabase did not confirm the passport record.');
+  }
+  if (prior.data && prior.data.storage_path && prior.data.storage_path !== path) {
+    var removed = await bucket.remove([prior.data.storage_path]);
+    if (removed.error) console.warn('Old passport asset cleanup failed:', removed.error);
+  }
+  var signed = await bucket.createSignedUrl(path, 3600);
+  if (signed.error) throw signed.error;
+  return signed.data.signedUrl;
+}
+
+async function loadStudentPassportsFromSupabase() {
+  var role = String(authenticatedProfile && authenticatedProfile.role || '').toLowerCase();
+  if (!supabaseClient || !authenticatedProfile || !['administrator','form_master'].includes(role)) return;
+  var rows = await supabaseClient.from('student_passports').select('student_id,storage_path')
+    .eq('school_id', authenticatedProfile.school_id);
+  if (rows.error) throw rows.error;
+  var official = await supabaseClient.from('students').select('id,admission_number')
+    .eq('school_id', authenticatedProfile.school_id);
+  if (official.error) throw official.error;
+  var officialById = new Map(), officialByAdmission = new Map();
+  (official.data || []).forEach(function(item) {
+    officialById.set(String(item.id), item);
+    officialByAdmission.set(String(item.admission_number || '').trim().toLowerCase(), item);
+  });
+  for (var i = 0; i < (rows.data || []).length; i++) {
+    var row = rows.data[i];
+    var signed = await supabaseClient.storage.from('student-passports').createSignedUrl(row.storage_path, 3600);
+    if (signed.error) { console.warn('Could not sign student passport URL:', signed.error); continue; }
+    var record = officialById.get(String(row.student_id));
+    if (!record) continue;
+    var admissionKey = String(record.admission_number || '').trim().toLowerCase();
+    students.forEach(function(legacy) {
+      var legacyAdmission = String(legacy.admNo || legacy.admissionNumber || legacy.admission_number || '').trim().toLowerCase();
+      if (String(legacy.id) === String(row.student_id) || (admissionKey && legacyAdmission === admissionKey)) {
+        legacy.passport = signed.data.signedUrl;
+        legacy.passportUrl = signed.data.signedUrl;
+      }
+    });
+  }
+}
+
 async function uploadSchoolPublicAsset(file, folder) {
   if (!supabaseClient || !authenticatedProfile || !authenticatedProfile.school_id) {
     throw new Error('An authenticated school account is required to upload this file.');
@@ -1678,6 +1759,7 @@ async function loadSchoolData() {
       if (batch) students = students.concat(batch);
     }
   }
+  await loadStudentPassportsFromSupabase();
 
   teacherSignatures = {};
 
@@ -10445,22 +10527,21 @@ function renderView() {
   }
   document.getElementById('viewTab').innerHTML = html;
   document.querySelectorAll('.passport-upload').forEach(function(input) {
-    input.addEventListener('change', function() {
+    input.addEventListener('change', async function() {
       var file = input.files && input.files[0];
       if (!file) return;
-      if (!file.type || file.type.indexOf('image/') !== 0) { showToast('Please choose a valid passport image', 'error'); return; }
-      var reader = new FileReader();
-      reader.onload = async function(event) {
-        var student = students.find(function(item) { return String(item.id) === input.getAttribute('data-student-id'); });
-        if (!student) { showToast('Student record not found', 'error'); return; }
-        student.passport = event.target.result;
-        await saveAllData();
-        logActivity('Uploaded / updated student passport photo', student.studentName + ' / ' + student.admNo);
-        showToast('Passport photo saved. It will appear on the next result print.', 'success');
+      var student = students.find(function(item) { return String(item.id) === input.getAttribute('data-student-id'); });
+      if (!student) { showToast('Student record not found', 'error'); return; }
+      input.disabled = true;
+      try {
+        student.passport = await saveStudentPassportToSupabase(student, file);
+        student.passportUrl = student.passport;
+        logActivity('Uploaded / updated student passport photo', (student.studentName || student.fullName || '') + ' / ' + (student.admNo || student.admissionNumber || ''));
+        showToast('Passport photo uploaded to Supabase Storage.', 'success');
         renderView();
-      };
-      reader.onerror = function() { showToast('Could not read the selected photo', 'error'); };
-      reader.readAsDataURL(file);
+      } catch (error) {
+        showToast(error && error.message || 'Could not save the passport photo.', 'error');
+      } finally { input.disabled = false; }
     });
   });
 }
