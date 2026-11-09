@@ -661,6 +661,8 @@ Passport photos and Form Master signature images are not embedded in result rows
 
 Live verification confirmed:
 - `save_admin_student_result_batch` exists as a SECURITY DEFINER function with a fixed search path;
+- migrations `202611090004_harden_admin_result_score_validation.sql` and `202611090005_fix_admin_result_subject_uuid_lookup.sql` hardened required score values, duplicate subject detection and the subject UUID lookup;
+- a controlled negative database test used an existing official BASIC7A enrolment and an over-limit CA1 value; the writer rejected the request before writing, and the school result-row count remained zero;
 - `anon` and `authenticated` do not have EXECUTE permission; `service_role` does;
 - `save-admin-student-results` is ACTIVE at version 1 with JWT verification enabled;
 - the school currently has zero result rows and zero Form Master assessment rows;
@@ -668,7 +670,7 @@ Live verification confirmed:
 
 The frontend changes were committed to `main` in commits `4dcf808bc70877f2ba7283f5f4acee6deae4d258`, `a936c564783a7d60dbfabd56ce672437c04a6415`, `a978869b18a56f8050ad572c3c5884726728d9c7`, `7ac138dafd9321cbff09f78c7190068d7dba8c8c` and `2865d06cbdff3d098c535749059f634a1df520b5`. The GitHub Pages workflows for the latest class-selector and roster-reset commits both completed successfully.
 
-No real result entry was performed because the school has no result rows and no authenticated Administrator/Sub Administrator acceptance transaction was run. The function and frontend are structurally deployed/committed, but role-session acceptance remains outstanding. Test a new draft, a repeat save/upsert, assessment maximum rejection, inactive enrolment denial, cross-school denial, Sub Administrator without a grant, Sub Administrator own-draft edit, and denial when attempting to overwrite a submitted/approved/published row.
+No real result entry was performed because the school has no result rows and no authenticated Administrator/Sub Administrator acceptance transaction was run. The negative validation test is not a substitute for a positive save/upsert test. The function and frontend are structurally deployed/committed, but role-session acceptance remains outstanding. Test a new draft, a repeat save/upsert, assessment maximum rejection, inactive enrolment denial, cross-school denial, Sub Administrator without a grant, Sub Administrator own-draft edit, and denial when attempting to overwrite a submitted/approved/published row.
 
 ### 24.5 Remaining result lifecycle work
 
