@@ -790,12 +790,26 @@ async function migrateLegacyBrowserStateOnce() {
     else value = await moveLegacyEmbeddedImagesToStorage(value, 'legacy-' + key.toLowerCase());
     if (key === 'formMasters' && Array.isArray(value)) value.forEach(function(master) { if (master) delete master.password; });
     if (key === 'subjectAssignments' && Array.isArray(value)) value.forEach(function(item) { if (item) { delete item.password; delete item.teacherPassword; } });
-    if (!existing.has(key)) {
-      var saved = await supabaseClient.from('school_app_state').insert({ school_id: schoolId, storage_key: key, value: value, updated_by: userId }).select('storage_key').single();
-      if (saved.error) throw saved.error;
-      if (!saved.data || saved.data.storage_key !== key) throw new Error('Supabase did not confirm migration of ' + key + '.');
-      imported++;
+    // Never remove a legacy source merely because a destination key exists.
+    // An existing Supabase row may contain different/newer data. Preserve the source
+    // until an explicit reconciliation proves equivalence.
+    if (existing.has(key)) {
+      continue;
     }
+    var saved = await supabaseClient.from('school_app_state').insert({
+      school_id: schoolId, storage_key: key, value: value, updated_by: userId
+    }).select('storage_key').single();
+    if (saved.error) throw saved.error;
+    if (!saved.data || saved.data.storage_key !== key) {
+      throw new Error('Supabase did not confirm migration of ' + key + '. The legacy copy has been retained.');
+    }
+    var verified = await supabaseClient.from('school_app_state').select('storage_key')
+      .eq('school_id', schoolId).eq('storage_key', key).maybeSingle();
+    if (verified.error) throw verified.error;
+    if (!verified.data || verified.data.storage_key !== key) {
+      throw new Error('Supabase read-back verification failed for ' + key + '. The legacy copy has been retained.');
+    }
+    imported++;
     sourceRows.filter(function(row) { return row.key === key; }).forEach(function(row) {
       if (row.source === 'localstorage') {
         try { prefixes.forEach(function(prefix) { localStorage.removeItem(prefix + key); }); } catch (removeError) {}
@@ -834,6 +848,7 @@ async function migrateLegacyBrowserStateOnce() {
     if (legacyDeveloper && typeof legacyDeveloper === 'object') {
       var existingDeveloper = await supabaseClient.from('portal_global_state').select('storage_key').eq('storage_key','portal:developer').maybeSingle();
       if (existingDeveloper.error) throw existingDeveloper.error;
+      var developerDestinationVerified = false;
       if (!existingDeveloper.data) {
         legacyDeveloper = await moveLegacyEmbeddedImagesToStorage(legacyDeveloper, 'legacy-portal-developer');
         var savedDeveloper = await supabaseClient.from('portal_global_state').insert({
@@ -841,9 +856,16 @@ async function migrateLegacyBrowserStateOnce() {
         }).select('storage_key').single();
         if (savedDeveloper.error) throw savedDeveloper.error;
         if (!savedDeveloper.data) throw new Error('Supabase did not confirm the legacy developer profile migration.');
+        var verifyDeveloper = await supabaseClient.from('portal_global_state').select('storage_key')
+          .eq('storage_key', 'portal:developer').maybeSingle();
+        if (verifyDeveloper.error) throw verifyDeveloper.error;
+        developerDestinationVerified = !!(verifyDeveloper.data && verifyDeveloper.data.storage_key === 'portal:developer');
+        if (!developerDestinationVerified) throw new Error('Developer profile read-back verification failed. The legacy copy has been retained.');
         imported++;
       }
-      try {
+      // If the destination existed before this run, its contents have not been
+      // reconciled against the legacy source. Keep the legacy source untouched.
+      if (developerDestinationVerified) try {
         if (developerSource === 'localstorage') localStorage.removeItem('portal:developer');
         else if (developerSource === 'indexeddb' && legacyDb) legacyDb.transaction(['data'], 'readwrite').objectStore('data').delete('portal:developer');
         else if (developerSource === 'host' && window.storage && typeof window.storage.delete === 'function') window.storage.delete('portal:developer', true);
