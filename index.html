@@ -426,7 +426,7 @@ async function uploadSchoolPublicAsset(file, folder) {
 // fallback; all normal reads and writes below use Supabase exclusively.
 async function moveLegacyEmbeddedImagesToStorage(value, folder) {
   if (typeof value === 'string') {
-    var match = value.match(/^data:(image\\/(?:png|jpeg|webp));base64,([A-Za-z0-9+/=]+)$/i);
+    var match = value.match(/^data:(image\/(?:png|jpeg|webp));base64,([A-Za-z0-9+/=]+)$/i);
     if (!match) return value;
     var binary = atob(match[2]);
     var bytes = new Uint8Array(binary.length);
