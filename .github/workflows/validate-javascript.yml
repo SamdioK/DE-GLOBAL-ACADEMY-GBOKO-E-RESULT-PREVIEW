@@ -10,7 +10,32 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Check inline application JavaScript
+      - name: Extract and check inline application JavaScript
         run: |
-          sed -n '14,11218p' index.html | sed '1d;$d' > /tmp/app.js
+          python3 - <<'PY'
+          from html.parser import HTMLParser
+          class Scripts(HTMLParser):
+              def __init__(self):
+                  super().__init__()
+                  self.capture = False
+                  self.parts = []
+                  self.scripts = []
+              def handle_starttag(self, tag, attrs):
+                  if tag == "script" and not dict(attrs).get("src"):
+                      self.capture = True
+                      self.parts = []
+              def handle_data(self, data):
+                  if self.capture:
+                      self.parts.append(data)
+              def handle_endtag(self, tag):
+                  if tag == "script" and self.capture:
+                      self.scripts.append("".join(self.parts))
+                      self.capture = False
+          parser = Scripts()
+          with open("index.html", encoding="utf-8") as f:
+              parser.feed(f.read())
+          if not parser.scripts:
+              raise SystemExit("No inline application script found")
+          open("/tmp/app.js", "w", encoding="utf-8").write(parser.scripts[-1])
+          PY
           node --check /tmp/app.js
