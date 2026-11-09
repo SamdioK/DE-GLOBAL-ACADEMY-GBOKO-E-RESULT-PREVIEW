@@ -400,7 +400,7 @@ async function saveStudentPassportToSupabase(student, file) {
   if (!supabaseClient || !authenticatedProfile || !['administrator','form_master'].includes(role)) {
     throw new Error('An authorised School Administrator or assigned Form Master is required.');
   }
-  if (!file || !/^image\\/(png|jpeg|webp)$/i.test(file.type || '') || file.size > 5 * 1024 * 1024) {
+  if (!file || !/^image\/(png|jpeg|webp)$/i.test(file.type || '') || file.size > 5 * 1024 * 1024) {
     throw new Error('Choose a PNG, JPG or WEBP passport image up to 5 MB.');
   }
   var official = null;
