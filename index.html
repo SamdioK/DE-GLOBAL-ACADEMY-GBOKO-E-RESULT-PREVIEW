@@ -1823,6 +1823,13 @@ async function loadSchoolData() {
   var loadedMasters = await cloudStorage.load('formMasters');
   var loadedAssignments = await cloudStorage.load('subjectAssignments');
   var loadedSchoolInfo = await cloudStorage.load('schoolInfo');
+  if (loadedSchoolInfo && String(authenticatedProfile && authenticatedProfile.role || '').toLowerCase() === 'administrator') {
+    var migratedBrandingState = await migrateLegacySchoolBrandingAssets(loadedSchoolInfo, authenticatedProfile.school_id);
+    if (JSON.stringify(migratedBrandingState) !== JSON.stringify(loadedSchoolInfo)) {
+      loadedSchoolInfo = migratedBrandingState;
+      await cloudStorage.save('schoolInfo', loadedSchoolInfo);
+    }
+  }
   var loadedManagementStaff = await cloudStorage.load('managementStaff');
   var loadedPortalNews = await cloudStorage.load('portalNews');
   var loadedStaff = await cloudStorage.load('schoolStaff');
