@@ -785,7 +785,7 @@ async function migrateLegacyBrowserStateOnce() {
   var existing = new Set((existingResult.data || []).map(function(row) { return row.storage_key; }));
   for (var keyIndex = 0; keyIndex < keys.length; keyIndex++) {
     var key = keys[keyIndex], value = candidates.get(key).value;
-    if (/^students_batch_\d+$/.test(key)) value = await migrateLegacyStudentPassportBatch(value, schoolId, userId);
+    if (/^students_batch_\d+$/.test(key) && String(authenticatedProfile.role || '').toLowerCase() === 'administrator') value = await migrateLegacyStudentPassportBatch(value, schoolId, userId);
     else if (key === 'schoolInfo') value = await migrateLegacySchoolBrandingAssets(value, schoolId);
     else value = await moveLegacyEmbeddedImagesToStorage(value, 'legacy-' + key.toLowerCase());
     if (key === 'formMasters' && Array.isArray(value)) value.forEach(function(master) { if (master) delete master.password; });
@@ -1949,7 +1949,16 @@ async function loadSchoolData() {
   if (meta && meta.totalBatches > 0) {
     for (var i = 0; i < meta.totalBatches; i++) {
       var batch = await cloudStorage.load('students_batch_' + i);
-      if (batch) students = students.concat(batch);
+      if (batch) {
+        if (storageRole === 'administrator') {
+          var migratedPassportBatch = await migrateLegacyStudentPassportBatch(batch, authenticatedProfile.school_id, authenticatedProfile.id);
+          if (JSON.stringify(migratedPassportBatch) !== JSON.stringify(batch)) {
+            batch = migratedPassportBatch;
+            await cloudStorage.save('students_batch_' + i, batch);
+          }
+        }
+        students = students.concat(batch);
+      }
     }
   }
   await loadStudentPassportsFromSupabase();
