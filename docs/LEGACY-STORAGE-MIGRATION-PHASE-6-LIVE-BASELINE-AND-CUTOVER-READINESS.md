@@ -607,7 +607,7 @@ The endpoint does not return hidden score columns, result status, or another stu
 
 The administrator Release Results screen now loads sessions, terms, classes and active enrolments from Supabase. It offers per-student, one-stage-at-a-time release and displays the current stage and eligible result-row count. The student result screen groups the server-filtered response by session and term.
 
-The frontend change was committed to `main` as `6dfbaa3987273132e6f9fa42cff0cf298d06ecc2`. The associated GitHub Pages workflow was still in progress at the time of this report update; the live site has not yet been confirmed. The existing direct student SELECT policy on `public.results` remains in place temporarily so the old deployment is not cut off before the new frontend is live and tested. This is an explicit security cutover gate: after the new site is confirmed live and the authenticated student endpoint passes acceptance tests, remove the direct student SELECT policy so clients cannot bypass stage filtering by querying the full result row.
+The frontend change was committed to `main` as `6dfbaa3987273132e6f9fa42cff0cf298d06ecc2`, and the associated GitHub Pages workflow completed successfully. Later administrator result-entry changes are recorded in Section 24 and have their own deployment status. The existing direct student SELECT policy on `public.results` remains in place temporarily so the old deployment is not cut off before the new frontend is live and tested. This is an explicit security cutover gate: after the new site is confirmed live and the authenticated student endpoint passes acceptance tests, remove the direct student SELECT policy so clients cannot bypass stage filtering by querying the full result row.
 
 ### 23.5 Verification and remaining acceptance tests
 
@@ -632,3 +632,46 @@ The administrator/sub-administrator aggregate `saveStudent()` workflow is still 
 Removed the RLS policy `Students can view their own published results`. This closes the direct Data API route that would otherwise expose every column of a published result row regardless of progressive stage. The stage-filtered `student-results-portal` Edge Function is now the student-facing result retrieval route. The table remains accessible to the other authorised roles through their separate RLS policies; this change did not remove administrator, Form Master, Subject Teacher or individually authorised Sub Administrator access.
 
 Live structural verification returned zero policies with the former student policy name. The school still has zero result rows and zero release-stage rows, so no student data was affected. An authenticated student-session test is still required to confirm the full live experience and verify direct student SELECT is denied.
+
+## 24. Administrator result entry moved to official Supabase records — 9 November 2026
+
+### 24.1 Atomic, server-validated result writer
+
+Created `public.save_admin_student_result_batch` as a transaction-scoped database function and exposed it only through the JWT-verified `save-admin-student-results` Edge Function. The database function is SECURITY DEFINER with a fixed search path. Execution is revoked from `PUBLIC`, `anon` and `authenticated`; only `service_role` can execute it. The Edge Function derives the actor from the verified JWT and supplies that actor ID to the database function.
+
+The database function checks the active profile and school, requires the Administrator role or an active Sub Administrator with the individual `enter_results` or `edit_results` grant, validates the official student, active enrolment, class, academic session, term and active assessment configuration, resolves each subject against the active subject catalogue for the class section, validates every score against the configured CA/examination maxima, and writes draft result rows. A Sub Administrator can create new rows only with `enter_results`; editing an existing row requires `edit_results` and the row must be that Sub Administrator's own draft. Submitted, approved or published rows cannot be overwritten by this entry endpoint.
+
+Subject result rows are upserted using the unique student/subject/session/term key. The operation also supports saving the Form Master assessment fields to `form_master_student_assessments` in the same database transaction. It does not approve, submit or publish results.
+
+### 24.2 Official student and subject selection
+
+The Administrator/Sub Administrator manual entry screen now loads the student register from active `student_enrolments` joined to official `students` records for the selected Supabase class and active session. The student UUID, admission number, date of birth and gender come from those official records. The screen no longer generates the selected student's identity from a browser-held register number or student-name array.
+
+Subject choices now load from the active Supabase `subjects` catalogue using the class section (`basic` or `senior`). Trade subjects are populated from the same catalogue. The server independently resolves and validates the subject name and section, so browser-supplied labels are not trusted as subject identity.
+
+The administrator now has an explicit class-arm selector. Scores are sent to `save-admin-student-results` and stored as `draft` rows in `public.results`; the frontend no longer calls `saveAllData()` to persist the entered aggregate result.
+
+### 24.3 Grade-scale reconciliation
+
+The legacy administrator aggregate entry code used thresholds of 75/65/55/40 and labelled the lowest band E. The existing Supabase Subject Teacher score sheet uses 80/70/60/50 and labels the lowest band F. To prevent two active entry paths from assigning different grades to the same score, the new administrator writer and its score preview use the existing Supabase Subject Teacher scale: A (80+), B (70+), C (60+), D (50+), F (below 50). This is a deliberate alignment of the new Supabase writer; the old browser aggregate remains preserved as a rollback reference and is not imported.
+
+Passport photos and Form Master signature images are not embedded in result rows. The new manual score-entry screen directs those assets to their separate official profile/private-storage workflows. The Form Master comment, affective and psychomotor ratings, attendance, school days and next-term fees are sent as structured data to the Form Master assessment table.
+
+### 24.4 Verification and deployment boundary
+
+Live verification confirmed:
+- `save_admin_student_result_batch` exists as a SECURITY DEFINER function with a fixed search path;
+- `anon` and `authenticated` do not have EXECUTE permission; `service_role` does;
+- `save-admin-student-results` is ACTIVE at version 1 with JWT verification enabled;
+- the school currently has zero result rows and zero Form Master assessment rows;
+- no student, enrolment, result or legacy browser record was changed during implementation.
+
+The frontend changes were committed to `main` in commits `4dcf808bc70877f2ba7283f5f4acee6deae4d258`, `a936c564783a7d60dbfabd56ce672437c04a6415`, `a978869b18a56f8050ad572c3c5884726728d9c7` and `7ac138dafd9321cbff09f78c7190068d7dba8c8c`. The Pages workflow for the latest class-selector commit was still running when this report section was written. Do not treat the latest manual-entry screen as live until that run succeeds.
+
+No real result entry was performed because the school has no result rows and no authenticated Administrator/Sub Administrator acceptance transaction was run. The function and frontend are structurally deployed/committed, but role-session acceptance remains outstanding. Test a new draft, a repeat save/upsert, assessment maximum rejection, inactive enrolment denial, cross-school denial, Sub Administrator without a grant, Sub Administrator own-draft edit, and denial when attempting to overwrite a submitted/approved/published row.
+
+### 24.5 Remaining result lifecycle work
+
+The manual writer now stores the subject result rows and the structured Form Master assessment values, but it does not yet replace every legacy report-card consumer. Continue by migrating result report assembly, class averages/positions, attendance/fees display, comments and signatures to Supabase and private Storage. Then verify submission, administrator approval, final publication, progressive stage visibility and student retrieval on a second device.
+
+The direct student SELECT policy on `public.results` remains a deliberate temporary cutover hold until the progressive student endpoint and live frontend pass authenticated acceptance tests. Once verified, remove that direct policy so the student cannot retrieve hidden score columns through the Data API.
