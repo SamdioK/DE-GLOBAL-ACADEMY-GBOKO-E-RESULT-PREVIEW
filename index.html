@@ -627,7 +627,8 @@ async function migrateLegacyStudentPassportBatch(batch, schoolId, userId) {
 async function migrateLegacyTeacherSignatures(candidates, sourceRows, prefixes, legacyDb, schoolId, userId) {
   var meta = candidates.get('signature_subjects');
   if (!meta || !Array.isArray(meta.value)) return 0;
-  var migrated = 0, bucket = supabaseClient.storage.from('school-private-assets');
+  var migrated = 0, allResolved = true;
+  var bucket = supabaseClient.storage.from('school-private-assets');
   async function cleanup(key) {
     sourceRows.filter(function(row) { return row.key === key; }).forEach(function(row) {
       if (row.source === 'localstorage') {
@@ -642,21 +643,22 @@ async function migrateLegacyTeacherSignatures(candidates, sourceRows, prefixes, 
   for (var i = 0; i < meta.value.length; i++) {
     var subject = String(meta.value[i] || '').trim();
     if (!subject) continue;
-    var key = 'sig_' + subject.replace(/\\s+/g, '_');
+    var key = 'sig_' + subject.replace(/ /g, '_');
     var item = candidates.get(key);
-    if (!item) continue;
+    if (!item) { allResolved = false; continue; }
     var existing = await supabaseClient.from('school_teacher_signatures').select('storage_path')
       .eq('school_id', schoolId).eq('subject_name', subject).maybeSingle();
     if (existing.error) throw existing.error;
     if (!existing.data) {
-      var match = String(item.value || '').match(/^data:(image\\/(?:png|jpeg|webp));base64,([A-Za-z0-9+/=]+)$/i);
-      if (!match) continue;
+      var match = String(item.value || '').match(new RegExp('^data:image/(png|jpeg|webp);base64,([A-Za-z0-9+/=]+)$','i'));
+      if (!match) { allResolved = false; continue; }
       var binary = atob(match[2]), bytes = new Uint8Array(binary.length);
       for (var b = 0; b < binary.length; b++) bytes[b] = binary.charCodeAt(b);
-      var blob = new Blob([bytes], { type: match[1] });
-      var extension = match[1].toLowerCase() === 'image/jpeg' ? 'jpg' : match[1].toLowerCase().split('/')[1];
+      var mime = 'image/' + match[1].toLowerCase();
+      var blob = new Blob([bytes], { type: mime });
+      var extension = match[1].toLowerCase() === 'jpeg' ? 'jpg' : match[1].toLowerCase();
       var path = schoolId + '/teacher-signatures/' + window.crypto.randomUUID() + '.' + extension;
-      var uploaded = await bucket.upload(path, blob, { contentType: match[1], cacheControl: '3600', upsert: false });
+      var uploaded = await bucket.upload(path, blob, { contentType: mime, cacheControl: '3600', upsert: false });
       if (uploaded.error) throw uploaded.error;
       var saved = await supabaseClient.from('school_teacher_signatures').insert({
         school_id: schoolId, subject_name: subject, storage_path: path,
@@ -668,8 +670,10 @@ async function migrateLegacyTeacherSignatures(candidates, sourceRows, prefixes, 
     await cleanup(key);
     candidates.delete(key);
   }
-  await cleanup('signature_subjects');
-  candidates.delete('signature_subjects');
+  if (allResolved) {
+    await cleanup('signature_subjects');
+    candidates.delete('signature_subjects');
+  }
   return migrated;
 }
 
@@ -767,17 +771,18 @@ async function migrateLegacyBrowserStateOnce() {
       }
     }
   }
+  var imported = 0;
   if (String(authenticatedProfile.role || '').toLowerCase() === 'administrator') {
-    imported = await migrateLegacyTeacherSignatures(candidates, sourceRows, prefixes, legacyDb, schoolId, userId);
+    imported += await migrateLegacyTeacherSignatures(candidates, sourceRows, prefixes, legacyDb, schoolId, userId);
   }
   if (!candidates.size) { if (legacyDb) legacyDb.close(); return { imported: imported }; }
   var keys = Array.from(candidates.keys()).filter(function(key) {
     return key !== 'signature_subjects' && !/^sig_.+$/.test(key);
   });
+  if (!keys.length) { if (legacyDb) legacyDb.close(); return { imported: imported, checked: 0 }; }
   var existingResult = await supabaseClient.from('school_app_state').select('storage_key').eq('school_id', schoolId).in('storage_key', keys);
   if (existingResult.error) throw existingResult.error;
   var existing = new Set((existingResult.data || []).map(function(row) { return row.storage_key; }));
-  var imported = 0;
   for (var keyIndex = 0; keyIndex < keys.length; keyIndex++) {
     var key = keys[keyIndex], value = candidates.get(key).value;
     if (/^students_batch_\\d+$/.test(key)) value = await migrateLegacyStudentPassportBatch(value, schoolId, userId);
