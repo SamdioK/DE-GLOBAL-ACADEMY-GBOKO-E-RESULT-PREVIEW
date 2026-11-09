@@ -1846,9 +1846,30 @@ async function loadStudentPortalData(admissionNumber) {
     session: '', principalName: '', principalSignature: ''
   };
   portalSettings = { portalEnabled: true, welcomeEnabled: false, welcomeText: '', termWeeks: 12 };
-  students = [];
+  var ownStudentResult = await supabaseClient.from('students')
+    .select('id,admission_number,first_name,middle_name,last_name,guardian_phone')
+    .eq('school_id', authenticatedProfile.school_id)
+    .eq('profile_id', authenticatedProfile.id).maybeSingle();
+  if (ownStudentResult.error) throw ownStudentResult.error;
+  if (!ownStudentResult.data) throw new Error('Your official student record could not be loaded from Supabase.');
+  var ownStudent = ownStudentResult.data;
+  var passportResult = await supabaseClient.from('student_passports').select('storage_path')
+    .eq('school_id', authenticatedProfile.school_id).eq('student_id', ownStudent.id).maybeSingle();
+  if (passportResult.error) throw passportResult.error;
+  var ownPassportUrl = '';
+  if (passportResult.data && passportResult.data.storage_path) {
+    var ownPassportSigned = await supabaseClient.storage.from('student-passports')
+      .createSignedUrl(passportResult.data.storage_path, 3600);
+    if (ownPassportSigned.error) throw ownPassportSigned.error;
+    ownPassportUrl = ownPassportSigned.data.signedUrl;
+  }
+  var ownStudentName = [ownStudent.first_name, ownStudent.middle_name, ownStudent.last_name].filter(Boolean).join(' ');
+  students = [{
+    id: ownStudent.id, admNo: ownStudent.admission_number, admissionNumber: ownStudent.admission_number,
+    studentName: ownStudentName, fullName: ownStudentName, guardianPhone: ownStudent.guardian_phone || '',
+    passport: ownPassportUrl, passportUrl: ownPassportUrl
+  }];
   teacherSignatures = {};
-  // Signatures are loaded from the protected Supabase Storage-backed signature module.
   if (typeof loadTeacherSignaturesFromSupabase === 'function') {
     await loadTeacherSignaturesFromSupabase();
   }
