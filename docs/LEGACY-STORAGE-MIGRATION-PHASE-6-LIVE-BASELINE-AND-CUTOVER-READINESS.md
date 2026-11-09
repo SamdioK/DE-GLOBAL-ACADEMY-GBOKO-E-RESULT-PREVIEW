@@ -742,3 +742,8 @@ A separate experimental endpoint, `get-student-result-release`, was deployed dur
 ### 25.7 Remaining work
 
 The administrator result-entry writer is documented in Section 24. The next acceptance work is a positive authenticated draft save/upsert and the full workflow from submission through approval, publication, progressive release and student retrieval. Then complete the report-card and class summary consumers using Supabase result rows and structured Form Master assessments. Preserve the legacy browser backup until those workflows pass on an authenticated account and a second device.
+
+
+### 25.8 Final-stage eligibility refinement
+
+The release-management endpoint now returns separate approved/published eligibility and published-only counts. The administrator interface uses the approved/published count for CA stages and the published-only count for the final stage. This prevents the interface from offering the final release action when only approved, but not yet published, subject results exist. The **Revoke All** control resets a student's term stage to 0 through the same administrator-authenticated endpoint and records the change in the database audit table.
