@@ -561,7 +561,7 @@ The endpoint does not return unreleased columns in earlier-stage responses. Stud
 
 The administrator release screen now loads classes, sessions and terms from Supabase and invokes the server-side release manager. It no longer changes the legacy browser `students` array or calls `saveAllData()` to advance a release stage. The student result screen now invokes the stage-filtered endpoint and renders only the fields returned for that stage.
 
-**Important:** the existing direct RLS policy allowing a student to SELECT their own published `results` row has deliberately not yet been removed. Removing it before the new portal is confirmed on the live hosted frontend could interrupt student access; leaving it in place means a technically capable student could still query the published row directly and bypass progressive column hiding. The next cutover gate is to verify the new frontend is deployed and test a real linked student account, then remove the direct student SELECT policy and verify that the endpoint remains functional while direct table SELECT is denied. No student stage records or result rows have been created during this implementation pass.
+**Security cutover completed:** after the stage-filtered student renderer was committed and the GitHub Pages workflow succeeded, the direct RLS policy `Students can view their own published results` was removed. Student result delivery now routes through `student-results-portal`, which returns only the fields allowed by the student's stage. Other role-specific result SELECT policies remain in place. Structural verification confirmed that the student policy count is zero. A real authenticated student acceptance test is still outstanding; do not mark the student portal fully accepted until a linked student account is tested against both the Edge Function and direct Data API access. No student stage records or result rows have been created during this implementation pass.
 
 ### 23.5 Verification and limits
 
@@ -625,3 +625,10 @@ No student, staff, enrolment, result or legacy browser record was modified. No t
 ### 23.6 Next implementation boundary
 
 The administrator/sub-administrator aggregate `saveStudent()` workflow is still not migrated. It must be replaced with a trusted Supabase result writer that maps subject scores to `results`, Form Master assessment values to `form_master_student_assessments`, and preserves official identity/enrolment in their existing tables. Server-side validation must enforce active profile, school/session/term/class/subject/enrolment, assessment maxima and draft-only writes. Do not retire the legacy result backup until administrator entry, submission, approval, publication, progressive release and student cross-device retrieval all pass acceptance tests.
+
+
+### 23.6 Direct student result-table access closed — 9 November 2026
+
+Removed the RLS policy `Students can view their own published results`. This closes the direct Data API route that would otherwise expose every column of a published result row regardless of progressive stage. The stage-filtered `student-results-portal` Edge Function is now the student-facing result retrieval route. The table remains accessible to the other authorised roles through their separate RLS policies; this change did not remove administrator, Form Master, Subject Teacher or individually authorised Sub Administrator access.
+
+Live structural verification returned zero policies with the former student policy name. The school still has zero result rows and zero release-stage rows, so no student data was affected. An authenticated student-session test is still required to confirm the full live experience and verify direct student SELECT is denied.
