@@ -9345,6 +9345,8 @@ function renderInput() {
   if (currentUser.type === 'subjectteacher') { renderSubjectTeacherInput(); return; }
 
   var selectedClass = currentUser.type === 'subadmin' ? (window.__subAdminInputArm || (classArms[0] && classArms[0].name)) : (window.__adminInputArm || currentUser.arm || (classArms[0] && classArms[0].name));
+  window.__adminResultSubjectCatalog = null;
+  window.__adminResultSelectedStudentId = '';
   var arm = classArms.find(function(a) { return a.name === selectedClass; });
   var studentNames = [];
   var config = assessmentConfig[selectedClass] || { ca1: 0, ca2: 0, ca3: 0, exam: 0 };
