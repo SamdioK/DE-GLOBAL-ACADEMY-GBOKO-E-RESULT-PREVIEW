@@ -3265,7 +3265,7 @@ function getSubjectPerformanceStats(student, subjectName) {
   };
 }
 
-async async function renderReleaseResults() {
+async function renderReleaseResults() {
   var root = document.getElementById('releaseTab');
   if (!root || (currentUser.type !== 'admin' && currentUser.type !== 'subadmin')) return;
   if (currentUser.type !== 'admin') {
@@ -3314,9 +3314,9 @@ async async function renderReleaseResults() {
           var stage = Number(stageRecord && stageRecord.release_stage || 0);
           var labels = ['Not released','1st CA','2nd CA','3rd CA','Final'];
           var next = stage + 1;
-          var disabled = stage >= 4 || Number(student.eligible_result_count || 0) < 1;
+          var disabled = stage >= 4 || Number(student.published_result_count || 0) < 1;
           var actionLabel = stage >= 4 ? 'Fully released' : 'Release ' + labels[next];
-          return '<tr><td>' + escapeManagementText(student.full_name || '') + '</td><td>' + escapeManagementText(student.admission_number || '') + '</td><td>' + escapeManagementText(student.class_name || '') + '</td><td>' + Number(student.eligible_result_count || 0) + '</td><td>' + labels[stage] + '</td><td><button class="btn btn-success release-stage-one" data-student="' + student.student_id + '" data-stage="' + next + '"' + (disabled ? ' disabled' : '') + '>' + actionLabel + '</button></td></tr>';
+          return '<tr><td>' + escapeManagementText(student.full_name || '') + '</td><td>' + escapeManagementText(student.admission_number || '') + '</td><td>' + escapeManagementText(student.class_name || '') + '</td><td>' + Number(student.published_result_count || 0) + '</td><td>' + labels[stage] + '</td><td><button class="btn btn-success release-stage-one" data-student="' + student.student_id + '" data-stage="' + next + '"' + (disabled ? ' disabled' : '') + '>' + actionLabel + '</button></td></tr>';
         }).join('') + '</tbody></table></div>';
       rowsRoot.querySelectorAll('.release-stage-one').forEach(function(button) {
         button.addEventListener('click', async function() {
@@ -3353,44 +3353,49 @@ async async function renderReleaseResults() {
 async function renderStudentResults() {
   var container = document.getElementById('studentResultsTab');
   if (!container) return;
-  if (!supabaseClient || !currentUser || currentUser.type !== 'student' || !currentUser.studentId) {
+  if (!supabaseClient || !currentUser || currentUser.type !== 'student') {
     container.innerHTML = '<div class="card"><h2>Result unavailable</h2><p>Sign in with your official student account to view released results.</p></div>';
     return;
   }
   container.innerHTML = '<div class="card"><h2>Student Results</h2><p>Retrieving your released results securely from Supabase…</p></div>';
   try {
-    var result = await supabaseClient.functions.invoke('get-student-result-release', { body: {} });
-    if (result.error) throw result.error;
-    if (!result.data || result.data.success !== true) throw new Error(result.data && result.data.error || 'Your result could not be retrieved.');
-    var student = result.data.student || {};
-    var released = result.data.results || [];
+    var response = await supabaseClient.functions.invoke('student-results-portal', { body: {} });
+    if (response.error) throw response.error;
+    if (!response.data || response.data.success !== true) throw new Error(response.data && response.data.error || 'Your result could not be retrieved.');
+    var student = response.data.student || {};
+    var released = Array.isArray(response.data.results) ? response.data.results : [];
     if (!released.length) {
       container.innerHTML = '<div class="card"><h2>Result unavailable</h2><p>No result stage has been released for this account yet. Contact the School Administrator.</p></div>';
       return;
     }
-    var groups = {};
-    released.forEach(function(item) {
-      var row = item.row || {};
-      var key = String(row.academic_session_id || '') + ':' + String(row.term_id || '');
-      if (!groups[key]) groups[key] = { session: row.session || '', term: row.term || '', stage: Number(item.stage || 0), rows: [] };
-      groups[key].rows.push(row);
-      groups[key].stage = Math.max(groups[key].stage, Number(item.stage || 0));
-    });
     var labels = ['Not released','1st CA','2nd CA','3rd CA','Final'];
-    container.innerHTML = Object.keys(groups).map(function(key) {
-      var group = groups[key];
-      var stage = Math.max(0, Math.min(4, group.stage));
-      var headers = '<th>Subject</th><th>1st CA</th>' + (stage >= 2 ? '<th>2nd CA</th>' : '') + (stage >= 3 ? '<th>3rd CA</th>' : '') + (stage >= 4 ? '<th>Examination</th><th>Total</th><th>Grade</th><th>Remark</th>' : '');
-      var rows = group.rows.map(function(row) {
-        return '<tr><td>' + escapeManagementText(row.subject || '') + '</td><td>' + escapeManagementText(row.ca1 == null ? '—' : row.ca1) + '</td>' +
-          (stage >= 2 ? '<td>' + escapeManagementText(row.ca2 == null ? '—' : row.ca2) + '</td>' : '') +
-          (stage >= 3 ? '<td>' + escapeManagementText(row.ca3 == null ? '—' : row.ca3) + '</td>' : '') +
-          (stage >= 4 ? '<td>' + escapeManagementText(row.examination == null ? '—' : row.examination) + '</td><td>' + escapeManagementText(row.total == null ? '—' : row.total) + '</td><td>' + escapeManagementText(row.grade || '—') + '</td><td>' + escapeManagementText(row.remark || '—') + '</td>' : '') + '</tr>';
+    container.innerHTML = released.map(function(group) {
+      var stage = Math.max(0, Math.min(4, Number(group.release_stage || 0)));
+      var subjects = Array.isArray(group.subjects) ? group.subjects : [];
+      var headers = '<th>Subject</th><th>1st CA</th>' +
+        (stage >= 2 ? '<th>2nd CA</th>' : '') +
+        (stage >= 3 ? '<th>3rd CA</th>' : '') +
+        (stage >= 4 ? '<th>Examination</th><th>Total</th><th>Grade</th><th>Remark</th>' : '');
+      var rows = subjects.map(function(item) {
+        return '<tr><td>' + escapeManagementText(item.subject || '') + '</td>' +
+          '<td>' + escapeManagementText(item.ca1 == null ? '—' : item.ca1) + '</td>' +
+          (stage >= 2 ? '<td>' + escapeManagementText(item.ca2 == null ? '—' : item.ca2) + '</td>' : '') +
+          (stage >= 3 ? '<td>' + escapeManagementText(item.ca3 == null ? '—' : item.ca3) + '</td>' : '') +
+          (stage >= 4 ? '<td>' + escapeManagementText(item.examination == null ? '—' : item.examination) + '</td><td>' + escapeManagementText(item.total == null ? '—' : item.total) + '</td><td>' + escapeManagementText(item.grade || '') + '</td><td>' + escapeManagementText(item.remark || '') + '</td>' : '') +
+          '</tr>';
       }).join('');
-      return '<div class="card"><h2>Student Result</h2><p><strong>Student:</strong> ' + escapeManagementText(student.full_name || currentUser.name || '') + ' &nbsp; <strong>Admission No:</strong> ' + escapeManagementText(student.admission_number || currentUser.admission || '') + '</p><p><strong>Session:</strong> ' + escapeManagementText(group.session) + ' &nbsp; <strong>Term:</strong> ' + escapeManagementText(group.term) + '</p><p style="color:#5568d3"><strong>Released through:</strong> ' + labels[stage] + '</p><div style="overflow-x:auto"><table><thead><tr>' + headers + '</tr></thead><tbody>' + rows + '</tbody></table></div></div>';
+      return '<div class="card"><h2>' + escapeManagementText(schoolInfo.name || currentSchool.schoolName || 'School') + ' — Student Result</h2>' +
+        '<p style="margin:12px 0;"><strong>Student:</strong> ' + escapeManagementText(student.full_name || '') +
+        ' &nbsp; <strong>Admission No:</strong> ' + escapeManagementText(student.admission_number || '') +
+        ' &nbsp; <strong>Class:</strong> ' + escapeManagementText(group.class_name || '') +
+        ' &nbsp; <strong>Term:</strong> ' + escapeManagementText(group.term || '') +
+        ' &nbsp; <strong>Session:</strong> ' + escapeManagementText(group.session || '') + '</p>' +
+        '<p style="margin-bottom:10px;color:#5568d3;"><strong>Released through:</strong> ' + labels[stage] + '</p>' +
+        '<div style="overflow-x:auto;"><table><thead><tr>' + headers + '</tr></thead><tbody>' + rows + '</tbody></table></div></div>';
     }).join('');
   } catch (error) {
-    container.innerHTML = '<div class="card"><h2>Result temporarily unavailable</h2><p>' + escapeManagementText(error.message || 'Please refresh and try again.') + '</p></div>';
+    console.error('Secure student result load failed:', error);
+    container.innerHTML = '<div class="card"><h2>Result unavailable</h2><p>' + escapeManagementText(error && error.message ? error.message : 'The result service could not be reached. Please try again later.') + '</p></div>';
   }
 }
 
