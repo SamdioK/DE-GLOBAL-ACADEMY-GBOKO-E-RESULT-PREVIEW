@@ -3314,7 +3314,8 @@ async function renderReleaseResults() {
           var stage = Number(stageRecord && stageRecord.release_stage || 0);
           var labels = ['Not released','1st CA','2nd CA','3rd CA','Final'];
           var next = stage + 1;
-          var disabled = stage >= 4 || Number(student.eligible_result_count || 0) < 1;
+          var eligibleCount = next === 4 ? Number(student.published_result_count || 0) : Number(student.eligible_result_count || 0);
+          var disabled = stage >= 4 || eligibleCount < 1;
           var actionLabel = stage >= 4 ? 'Fully released' : 'Release ' + labels[next];
           return '<tr><td>' + escapeManagementText(student.full_name || '') + '</td><td>' + escapeManagementText(student.admission_number || '') + '</td><td>' + escapeManagementText(student.class_name || '') + '</td><td>' + Number(student.eligible_result_count || 0) + '</td><td>' + labels[stage] + '</td><td><button class="btn btn-success release-stage-one" data-student="' + student.student_id + '" data-stage="' + next + '"' + (disabled ? ' disabled' : '') + '>' + actionLabel + '</button>' + (stage > 0 ? ' <button class="btn btn-danger release-stage-reset" data-student="' + student.student_id + '">Revoke All</button>' : '') + '</td></tr>';
         }).join('') + '</tbody></table></div>';
