@@ -554,6 +554,50 @@ async function migrateLegacyBrowserStateOnce() {
       }
     });
   }
+  var role = String(authenticatedProfile.role || '').toLowerCase();
+  if (role === 'portal_developer') {
+    var legacyDeveloper = null, developerSource = null;
+    try {
+      if (window.storage && typeof window.storage.get === 'function') {
+        var hostDeveloper = await window.storage.get('portal:developer', true);
+        if (hostDeveloper && hostDeveloper.value != null) { legacyDeveloper = JSON.parse(hostDeveloper.value); developerSource = 'host'; }
+      }
+    } catch (developerHostError) {}
+    if (!legacyDeveloper && legacyDb && legacyDb.objectStoreNames.contains('data')) {
+      try {
+        var idbDeveloper = await new Promise(function(resolve) {
+          var request = legacyDb.transaction(['data'], 'readonly').objectStore('data').get('portal:developer');
+          request.onsuccess = function() { resolve(request.result || null); };
+          request.onerror = function() { resolve(null); };
+        });
+        if (idbDeveloper && idbDeveloper.value) { legacyDeveloper = idbDeveloper.value; developerSource = 'indexeddb'; }
+      } catch (developerIdbError) {}
+    }
+    if (!legacyDeveloper) {
+      try {
+        var rawDeveloper = localStorage.getItem('portal:developer');
+        if (rawDeveloper) { legacyDeveloper = JSON.parse(rawDeveloper); developerSource = 'localstorage'; }
+      } catch (developerLocalError) {}
+    }
+    if (legacyDeveloper && typeof legacyDeveloper === 'object') {
+      var existingDeveloper = await supabaseClient.from('portal_global_state').select('storage_key').eq('storage_key','portal:developer').maybeSingle();
+      if (existingDeveloper.error) throw existingDeveloper.error;
+      if (!existingDeveloper.data) {
+        legacyDeveloper = await moveLegacyEmbeddedImagesToStorage(legacyDeveloper, 'legacy-portal-developer');
+        var savedDeveloper = await supabaseClient.from('portal_global_state').insert({
+          storage_key: 'portal:developer', value: legacyDeveloper, updated_by: userId
+        }).select('storage_key').single();
+        if (savedDeveloper.error) throw savedDeveloper.error;
+        if (!savedDeveloper.data) throw new Error('Supabase did not confirm the legacy developer profile migration.');
+        imported++;
+      }
+      try {
+        if (developerSource === 'localstorage') localStorage.removeItem('portal:developer');
+        else if (developerSource === 'indexeddb' && legacyDb) legacyDb.transaction(['data'], 'readwrite').objectStore('data').delete('portal:developer');
+        else if (developerSource === 'host' && window.storage && typeof window.storage.delete === 'function') window.storage.delete('portal:developer', true);
+      } catch (developerCleanupError) {}
+    }
+  }
   if (legacyDb) { try { legacyDb.close(); } catch (closeError) {} }
   return { imported: imported, checked: keys.length };
 }
