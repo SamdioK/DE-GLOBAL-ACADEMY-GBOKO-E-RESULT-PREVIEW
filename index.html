@@ -349,7 +349,17 @@ CloudStorage.prototype.save = async function(key, data) {
   var context = await this.requireClient();
   var role = String(context.profile.role || '').toLowerCase();
   if (!['administrator','portal_developer'].includes(role)) {
-    throw new Error('This account can read shared school configuration but cannot overwrite administrator records.');
+    // Staff roles are intentionally read-only for shared administrator JSON state.
+    // Do not let an incidental legacy save attempt interrupt an otherwise valid staff login.
+    // The write remains denied; Form Master and Subject Teacher workflows must use their
+    // dedicated, role-scoped relational tables and RPCs instead.
+    console.warn('[Supabase persistence] Blocked shared administrator-state write.', {
+      storageKey: key,
+      role: role,
+      profileId: context.profile.id,
+      caller: new Error('Blocked shared-state write caller').stack
+    });
+    return false;
   }
   if (typeof key !== 'string' || !key || key.length > 160) throw new Error('Invalid cloud storage key.');
   var result = await supabaseClient.from('school_app_state').upsert({
