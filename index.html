@@ -9237,7 +9237,7 @@ async function renderMasters() {
     select.innerHTML = '<option value="">Select a class</option>' + availableSupabaseClasses.map(function(item) {
       return '<option value="' + escapeManagementText(item.id) + '">' + escapeManagementText(item.class_name) + '</option>';
     }).join('');
-    renderStSubjectOptions();
+    await loadRegisteredSubjectsForClass(select.value);
   }
   var registeredSubjectIdsForSelectedClass = new Set();
   async function loadRegisteredSubjectsForClass(classId) {
