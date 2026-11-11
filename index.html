@@ -9501,6 +9501,8 @@ async function renderMasters() {
       document.getElementById('existingStaffFields').classList.toggle('hidden', isNew);
       document.getElementById('newSubjectTeacherFields').classList.toggle('hidden', !isNew);
       document.getElementById('addStBtn').textContent = isNew ? 'Create Subject Teacher Account' : 'Assign Subject Teacher';
+      selectedStClassArmIds = new Set();
+      renderStClassArmChoices();
     });
   });
   document.getElementById('existingStaffSearch').addEventListener('input', renderExistingStaffOptions);
@@ -9519,6 +9521,7 @@ async function renderMasters() {
       document.getElementById('newStUsername').focus();
       document.getElementById('addStBtn').textContent = 'Create Subject Teacher Account';
     }
+    renderStClassArmChoices();
   });
   populateExistingStaffOptions();
   loadSubjectTeacherAllocationOptions().catch(function(error) {
@@ -9651,7 +9654,7 @@ async function renderMasters() {
       addStBtn.disabled = false;
       addStBtn.textContent = 'Assign Subject Teacher';
     }
-  });;
+  });
 }
 
 window.toggleAssignmentActivation = async function(id) {
