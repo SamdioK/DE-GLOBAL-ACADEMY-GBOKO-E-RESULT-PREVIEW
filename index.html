@@ -9086,6 +9086,13 @@ async function renderMasters() {
     '<p id="subjectTeacherSessionInfo" class="alert alert-info" style="margin-top:12px">Academic Session: ' + escapeManagementText(activeAcademicSession ? activeAcademicSession.name : 'Unavailable') + ' · Term: ' + escapeManagementText(activeAssessmentTerm ? activeAssessmentTerm.name : 'Unavailable') + '. Only subjects saved in the Form Master Subject Registration for the selected class and term are available here.</p>' +
     '<button class="btn btn-success" id="addStBtn" style="margin-top: 10px;">Assign Subject Teacher</button></div>';
 
+  html += '<section id="subjectTeacherAllocationManager" style="margin-top:22px;">' +
+    '<div style="display:flex;justify-content:space-between;align-items:flex-end;gap:12px;flex-wrap:wrap;margin-bottom:14px;">' +
+    '<div><h3 style="margin:0;color:#26365f;font-size:18px;">Subject Teacher Allocation Management</h3>' +
+    '<p style="margin:5px 0 0;color:#64748b;font-size:12px;">View each teacher by subject, review all assigned class arms, and manage individual allocations.</p></div>' +
+    '<span style="padding:7px 11px;border-radius:20px;background:#eaf0ff;color:#3449a1;font-size:12px;font-weight:700;">' + subjectAssignments.length + ' active-session slot(s)</span></div>' +
+    '<div class="input-group"><label for="subjectAllocationSearch">Find teacher, subject or class arm</label><input type="search" id="subjectAllocationSearch" placeholder="Search by teacher name, subject or class arm…"></div>' +
+    '<div id="subjectAllocationGroups" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,340px),1fr));gap:12px;margin:14px 0;"></div></section>';
   if (subjectAssignments.length === 0) {
     html += '<p class="alert alert-info">No Subject Teacher assignments are recorded in Supabase for this academic session.</p>';
   } else {
@@ -9099,6 +9106,67 @@ async function renderMasters() {
 
   document.getElementById('mastersTab').innerHTML = html;
   renderFormMasterManagement(document.getElementById('formMasterManagementPanel'));
+
+  function renderSubjectAllocationGroups(filterText) {
+    var root = document.getElementById('subjectAllocationGroups');
+    if (!root) return;
+    var query = String(filterText || '').trim().toLowerCase();
+    var groups = {};
+    subjectAssignments.forEach(function(item) {
+      var key = String(item.teacherId) + '|' + String(item.subjectId);
+      if (!groups[key]) groups[key] = { teacherId:item.teacherId, teacherName:item.teacherName, email:item.teacherEmail, subject:item.subject, rows:[] };
+      groups[key].rows.push(item);
+    });
+    var cards = Object.keys(groups).map(function(key) { return groups[key]; }).filter(function(group) {
+      var haystack = [group.teacherName,group.email,group.subject].concat(group.rows.map(function(row){return row.className;})).join(' ').toLowerCase();
+      return !query || haystack.includes(query);
+    }).sort(function(a,b){return a.teacherName.localeCompare(b.teacherName) || a.subject.localeCompare(b.subject);});
+    if (!cards.length) {
+      root.innerHTML = '<p style="grid-column:1/-1;color:#64748b;font-size:13px;padding:12px;">No allocations match this search.</p>';
+      return;
+    }
+    root.innerHTML = cards.map(function(group) {
+      var activeCount = group.rows.filter(function(row){return row.activated;}).length;
+      var chips = group.rows.slice().sort(function(a,b){return a.className.localeCompare(b.className);}).map(function(row) {
+        return '<span style="display:inline-flex;align-items:center;gap:5px;padding:6px 9px;border-radius:8px;background:' +
+          (row.activated ? '#e9f8ef' : '#f1f3f6') + ';color:' + (row.activated ? '#176b3a' : '#586174') +
+          ';font-size:11px;font-weight:700;border:1px solid ' + (row.activated ? '#c9ecd5' : '#e2e6ed') + ';">' +
+          escapeManagementText(row.className) + (row.activated ? ' ✓' : ' · Inactive') + '</span>';
+      }).join('');
+      return '<article style="background:#fff;border:1px solid #e2e8f0;border-radius:13px;padding:15px;box-shadow:0 3px 12px rgba(25,40,75,.045);">' +
+        '<div style="display:flex;justify-content:space-between;gap:10px;align-items:flex-start;">' +
+        '<div style="min-width:0;"><div style="font-size:10px;text-transform:uppercase;letter-spacing:.07em;color:#6876a0;font-weight:800;margin-bottom:5px;">' +
+        escapeManagementText(group.subject) + '</div><h4 style="margin:0;color:#24345b;font-size:15px;overflow-wrap:anywhere;">' +
+        escapeManagementText(group.teacherName) + '</h4><p style="margin:4px 0 0;color:#718096;font-size:11px;">' +
+        escapeManagementText(group.email || 'No email on record') + '</p></div>' +
+        '<span style="white-space:nowrap;padding:5px 8px;border-radius:18px;background:#f0f3ff;color:#3d50a0;font-size:10px;font-weight:700;">' +
+        group.rows.length + ' arm(s)</span></div>' +
+        '<div style="display:flex;flex-wrap:wrap;gap:7px;margin:13px 0 10px;">' + chips + '</div>' +
+        '<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;border-top:1px solid #edf0f5;padding-top:10px;">' +
+        '<small style="color:#64748b;">' + activeCount + ' of ' + group.rows.length + ' active</small>' +
+        '<button type="button" class="btn btn-primary allocation-manage-add" data-teacher-id="' + escapeManagementText(group.teacherId) +
+        '" data-subject-id="' + escapeManagementText(group.subjectId) + '" style="font-size:11px;padding:6px 10px;">Add class arms</button></div></article>';
+    }).join('');
+    root.querySelectorAll('.allocation-manage-add').forEach(function(button) {
+      button.addEventListener('click', function() {
+        var mode = document.querySelector('input[name="subjectTeacherAccountType"][value="existing"]');
+        if (mode) mode.checked = true;
+        document.getElementById('existingStaffFields').classList.remove('hidden');
+        document.getElementById('newSubjectTeacherFields').classList.add('hidden');
+        document.getElementById('addStBtn').textContent = 'Assign Subject Teacher';
+        var staffSelect = document.getElementById('existingStaffProfile');
+        staffSelect.value = button.getAttribute('data-teacher-id');
+        updateExistingStaffDetails();
+        document.getElementById('newStSubject').value = button.getAttribute('data-subject-id');
+        selectedStClassArmIds = new Set();
+        renderStClassArmChoices();
+        document.getElementById('stClassArmAllocationPanel').scrollIntoView({behavior:'smooth',block:'center'});
+      });
+    });
+  }
+  renderSubjectAllocationGroups('');
+  var allocationSearch = document.getElementById('subjectAllocationSearch');
+  if (allocationSearch) allocationSearch.addEventListener('input', function(){renderSubjectAllocationGroups(this.value);});
 
   document.querySelectorAll('.subject-assignment-toggle').forEach(function(button) {
     button.addEventListener('click', async function() {
