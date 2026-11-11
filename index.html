@@ -9337,6 +9337,16 @@ async function renderMasters() {
           var emailMatches = emailKey ? (profilesByEmail[emailKey] || []) : [];
           if (emailMatches.length === 1) linked = emailMatches[0];
         }
+        // Some older Staff Database rows were created before profile_id was
+        // consistently saved. Recover the existing login by an exact,
+        // normalised full-name match only when it is unique within this school.
+        if (!linked) {
+          var staffNameKey = String(staff.full_name || '').trim().replace(/\\s+/g, ' ').toLowerCase();
+          var nameMatches = staffNameKey ? profiles.filter(function(candidate) {
+            return String(candidate.full_name || '').trim().replace(/\\s+/g, ' ').toLowerCase() === staffNameKey;
+          }) : [];
+          if (nameMatches.length === 1) linked = nameMatches[0];
+        }
         var responsibilities = linked ? [linked.role].concat(rolesByProfile[String(linked.id)] || []).filter(function(role, index, all) { return role && all.indexOf(role) === index; }) : [];
         var syntheticId = linked ? String(linked.id) : 'staff:' + String(staff.id);
         if (linked) usedProfileIds[String(linked.id)] = true;
