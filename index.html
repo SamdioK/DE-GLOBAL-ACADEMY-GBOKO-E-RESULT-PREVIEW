@@ -9311,26 +9311,88 @@ async function renderMasters() {
   async function loadRegisteredSubjectsForClass(classId) {
     registeredSubjectIdsForSelectedClass = new Set();
     var subjSelect = document.getElementById('newStSubject');
-    if (!classId || !activeAcademicSession || !activeAcademicSession.id || !activeAssessmentTerm || !activeAssessmentTerm.id) {
-      if (subjSelect) subjSelect.innerHTML = '<option value="">Select a class and ensure the active term is configured</option>';
+    if (!classId) {
+      if (subjSelect) subjSelect.innerHTML = '<option value="">Select a class first</option>';
+      if (subjSelect) subjSelect.disabled = true;
       return;
     }
-    if (subjSelect) subjSelect.innerHTML = '<option value="">Loading registered class subjects…</option>';
-    var registrationResult = await supabaseClient.from('class_subject_registrations').select('id')
-      .eq('school_id', authenticatedProfile.school_id)
-      .eq('academic_session_id', activeAcademicSession.id)
-      .eq('term_id', activeAssessmentTerm.id)
-      .eq('class_id', classId).maybeSingle();
-    if (registrationResult.error) throw registrationResult.error;
-    if (!registrationResult.data) {
+    if (subjSelect) {
+      subjSelect.innerHTML = '<option value="">Checking current subject registration…</option>';
+      subjSelect.disabled = true;
+    }
+
+    // Resolve the current session and term from Supabase itself. The cached
+    // page-level values can be stale after a session/term change or a long-lived
+    // admin session, which previously caused valid registrations to look absent.
+    var schoolId = authenticatedProfile.school_id;
+    var currentResults = await Promise.all([
+      supabaseClient.from('academic_sessions')
+        .select('id,name,is_current').eq('school_id', schoolId)
+        .eq('is_current', true).limit(1).maybeSingle(),
+      supabaseClient.from('terms')
+        .select('id,name,term_number,is_current').eq('school_id', schoolId)
+        .eq('is_current', true).limit(1).maybeSingle()
+    ]);
+    if (currentResults[0].error) throw currentResults[0].error;
+    if (currentResults[1].error) throw currentResults[1].error;
+
+    var sessionCandidates = [];
+    var termCandidates = [];
+    if (currentResults[0].data) sessionCandidates.push(currentResults[0].data);
+    if (activeAcademicSession && activeAcademicSession.id &&
+        !sessionCandidates.some(function(item) { return String(item.id) === String(activeAcademicSession.id); })) {
+      sessionCandidates.push(activeAcademicSession);
+    }
+    if (currentResults[1].data) termCandidates.push(currentResults[1].data);
+    if (activeAssessmentTerm && activeAssessmentTerm.id &&
+        !termCandidates.some(function(item) { return String(item.id) === String(activeAssessmentTerm.id); })) {
+      termCandidates.push(activeAssessmentTerm);
+    }
+    if (!sessionCandidates.length || !termCandidates.length) {
+      throw new Error('The current academic session or term is not configured in Supabase.');
+    }
+
+    var registration = null;
+    var matchedSession = null;
+    var matchedTerm = null;
+    for (var si = 0; si < sessionCandidates.length && !registration; si++) {
+      for (var ti = 0; ti < termCandidates.length && !registration; ti++) {
+        var registrationResult = await supabaseClient.from('class_subject_registrations')
+          .select('id')
+          .eq('school_id', schoolId)
+          .eq('academic_session_id', sessionCandidates[si].id)
+          .eq('term_id', termCandidates[ti].id)
+          .eq('class_id', classId)
+          .order('updated_at', { ascending: false })
+          .limit(1)
+          .maybeSingle();
+        if (registrationResult.error) throw registrationResult.error;
+        if (registrationResult.data) {
+          registration = registrationResult.data;
+          matchedSession = sessionCandidates[si];
+          matchedTerm = termCandidates[ti];
+        }
+      }
+    }
+
+    if (!registration) {
       renderStSubjectOptions();
       return;
     }
-    var itemsResult = await supabaseClient.from('class_subject_registration_items').select('subject_id')
-      .eq('school_id', authenticatedProfile.school_id)
-      .eq('registration_id', registrationResult.data.id);
+
+    var itemsResult = await supabaseClient.from('class_subject_registration_items')
+      .select('subject_id')
+      .eq('school_id', schoolId)
+      .eq('registration_id', registration.id);
     if (itemsResult.error) throw itemsResult.error;
-    registeredSubjectIdsForSelectedClass = new Set((itemsResult.data || []).map(function(item) { return String(item.subject_id); }));
+    registeredSubjectIdsForSelectedClass = new Set(
+      (itemsResult.data || []).map(function(item) { return String(item.subject_id); })
+    );
+
+    // Keep the session/term context used for the successful lookup visible to
+    // the rest of this admin workflow and its subsequent assignment validation.
+    if (matchedSession) activeAcademicSession = matchedSession;
+    if (matchedTerm) activeAssessmentTerm = matchedTerm;
     renderStSubjectOptions();
   }
   function renderStSubjectOptions() {
