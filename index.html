@@ -11245,12 +11245,63 @@ async function loadAdminCa1ResultsView() {
   }
 }
 
+async function loadFormMasterSubjectResultsView() {
+  var panel = document.getElementById('formMasterSubjectResultsPanel');
+  if (!panel || !supabaseClient || !authenticatedProfile || !activeAcademicSession || !currentUser || currentUser.type !== 'formmaster') return;
+  panel.innerHTML = '<p style="color:#64748b">Loading saved subject scores for your assigned class…</p>';
+  try {
+    var classId = currentUser.classId;
+    var schoolId = authenticatedProfile.school_id;
+    var terms = availableAssessmentTerms || [];
+    var termIds = terms.map(function(item) { return item.id; });
+    if (!classId || !termIds.length) throw new Error('Your assigned class or configured terms could not be resolved.');
+    var result = await supabaseClient.from('results')
+      .select('id,student_id,subject_id,academic_session_id,term_id,ca1,ca2,ca3,examination,total,grade,remark,status,updated_at')
+      .eq('school_id', schoolId).eq('class_id', classId)
+      .eq('academic_session_id', activeAcademicSession.id).in('term_id', termIds)
+      .order('updated_at', { ascending: false });
+    if (result.error) throw result.error;
+    var rows = result.data || [];
+    var studentIds = Array.from(new Set(rows.map(function(row) { return row.student_id; })));
+    var subjectIds = Array.from(new Set(rows.map(function(row) { return row.subject_id; })));
+    var lookups = await Promise.all([
+      studentIds.length ? supabaseClient.from('students').select('id,admission_number,first_name,middle_name,last_name').eq('school_id', schoolId).in('id', studentIds) : Promise.resolve({data:[],error:null}),
+      subjectIds.length ? supabaseClient.from('subjects').select('id,name').eq('school_id', schoolId).in('id', subjectIds) : Promise.resolve({data:[],error:null})
+    ]);
+    if (lookups[0].error) throw lookups[0].error;
+    if (lookups[1].error) throw lookups[1].error;
+    var studentMap = {}, subjectMap = {}, termMap = {};
+    (lookups[0].data || []).forEach(function(s) { studentMap[String(s.id)] = s; });
+    (lookups[1].data || []).forEach(function(s) { subjectMap[String(s.id)] = s.name; });
+    terms.forEach(function(t) { termMap[String(t.id)] = t.name; });
+    var esc = escapeManagementText;
+    var html = '<div style="display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;align-items:center"><div><h3 style="margin:0;color:#293968">Subject Scores Submitted by Subject Teachers</h3><p style="font-size:12px;color:#64748b;margin-top:5px">A live read-only view of saved draft and submitted scores for your class. This is the subject-score foundation for the class result sheet.</p></div><button type="button" class="btn btn-primary" id="refreshFormMasterSubjectResults">Refresh</button></div>';
+    if (!rows.length) {
+      html += '<p class="alert alert-info" style="margin-top:12px">No subject scores have been saved for your class in this academic session yet.</p>';
+    } else {
+      html += '<p style="margin:10px 0;color:#475569;font-size:12px"><strong>'+rows.length+'</strong> student-subject score record(s) found.</p><div style="overflow-x:auto"><table><thead><tr><th>Student</th><th>Admission No.</th><th>Subject</th><th>Term</th><th>CA1</th><th>CA2</th><th>CA3</th><th>Exam</th><th>Total</th><th>Grade</th><th>Status</th><th>Last Saved</th></tr></thead><tbody>';
+      rows.forEach(function(row) {
+        var s = studentMap[String(row.student_id)] || {};
+        var name = [s.first_name,s.middle_name,s.last_name].filter(Boolean).join(' ') || 'Student record unavailable';
+        html += '<tr><td>'+esc(name)+'</td><td>'+esc(s.admission_number || '—')+'</td><td>'+esc(subjectMap[String(row.subject_id)] || '—')+'</td><td>'+esc(termMap[String(row.term_id)] || '—')+'</td><td>'+esc(row.ca1 == null ? '—' : row.ca1)+'</td><td>'+esc(row.ca2 == null ? '—' : row.ca2)+'</td><td>'+esc(row.ca3 == null ? '—' : row.ca3)+'</td><td>'+esc(row.examination == null ? '—' : row.examination)+'</td><td><strong>'+esc(row.total == null ? '—' : row.total)+'</strong></td><td>'+esc(row.grade || '—')+'</td><td><strong>'+esc(row.status || 'draft')+'</strong></td><td>'+esc(row.updated_at ? new Date(row.updated_at).toLocaleString() : '—')+'</td></tr>';
+      });
+      html += '</tbody></table></div>';
+    }
+    panel.innerHTML = html;
+    var refresh = panel.querySelector('#refreshFormMasterSubjectResults');
+    if (refresh) refresh.addEventListener('click', loadFormMasterSubjectResultsView);
+  } catch (error) {
+    console.error('Form Master subject results view failed:', error);
+    panel.innerHTML = '<p class="alert alert-error">Could not load subject scores: '+escapeManagementText(error.message || 'Unknown error')+'</p>';
+  }
+}
+
 function renderView() {
   var userStudents = currentUser.type === 'admin' || currentUser.type === 'subadmin' ? students : students.filter(function(s) { return s.className === currentUser.arm; });
   var canDeleteStudents = currentUser.type === 'admin' || currentUser.type === 'formmaster' || (currentUser.type === 'subadmin' && hasSubAdminPermission('deleteRecords'));
   var canGenerateSheets = currentUser.type === 'admin' || currentUser.type === 'formmaster' || (currentUser.type === 'subadmin' && hasSubAdminPermission('generateSheets'));
   var canManagePassports = currentUser.type === 'admin' || currentUser.type === 'formmaster' || (currentUser.type === 'subadmin' && hasSubAdminPermission('manageStudents'));
-  var html = (currentUser.type === 'admin' ? '<div class="card"><h2>Students with CA1 Scores</h2><p style="color:#64748b;font-size:13px">Students appear here once at least their first CA score has been saved.</p><div id="adminCa1ResultsPanel"><p style="color:#64748b">Loading saved CA1 results…</p></div></div>' : '') + '<div class="card"><div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; flex-wrap: wrap; gap: 10px;"><h2 style="margin: 0;">Classes Catalogue / Students</h2>';
+  var html = (currentUser.type === 'admin' ? '<div class="card"><h2>Students with CA1 Scores</h2><p style="color:#64748b;font-size:13px">Students appear here once at least their first CA score has been saved.</p><div id="adminCa1ResultsPanel"><p style="color:#64748b">Loading saved CA1 results…</p></div></div>' : '') + (currentUser.type === 'formmaster' ? '<div class="card" id="formMasterSubjectResultsPanel"><p style="color:#64748b">Loading subject scores…</p></div>' : '') + '<div class="card"><div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; flex-wrap: wrap; gap: 10px;"><h2 style="margin: 0;">Classes Catalogue / Students</h2>';
   if (userStudents.length > 0) html += '<div style="display: flex; gap: 8px; flex-wrap: wrap;">' + (canGenerateSheets ? '<button class="btn btn-success" onclick="exportToExcel()">📊 Export to Excel</button>' : '') + (canDeleteStudents ? '<button class="btn btn-danger" onclick="clearAllStudents()">Clear All Students</button>' : '') + '</div>';
   html += '</div>';
 
@@ -11267,6 +11318,7 @@ function renderView() {
   }
   document.getElementById('viewTab').innerHTML = html;
   if (currentUser.type === 'admin') loadAdminCa1ResultsView();
+  if (currentUser.type === 'formmaster') loadFormMasterSubjectResultsView();
   document.querySelectorAll('.passport-upload').forEach(function(input) {
     input.addEventListener('change', async function() {
       var file = input.files && input.files[0];
@@ -12191,7 +12243,7 @@ async function renderSubjectTeacherInput() {
     var html = '<div class="card"><h2>' + escapeManagementText(className) + ' — ' + escapeManagementText(subjectName) + '</h2>' +
       '<p><strong>Academic session:</strong> ' + escapeManagementText(activeAcademicSession && activeAcademicSession.name || '') + '</p>' +
       '<p><strong>Term:</strong> ' + escapeManagementText(selectedTerm.name) + '</p>' +
-      '<p class="alert alert-info"><strong>Configured assessment components:</strong> ' + escapeManagementText(scoreLimitSummary) + '<br><strong>Total maximum:</strong> ' + configuredTotalMaximum + '</p>' +
+      '<p class="alert alert-info"><strong>Configured assessment components:</strong> ' + escapeManagementText(scoreLimitSummary) + '<br><strong>Total maximum:</strong> ' + configuredTotalMaximum + '<br><strong>Automatic draft saving:</strong> Scores are saved to Supabase as you enter them. You can sign in later on another device and continue from the last confirmed draft.</p>' +
       '<div class="input-group" style="max-width:260px"><label for="stTermSelect">Select term</label><select id="stTermSelect">';
     terms.forEach(function(term) {
       html += '<option value="' + escapeManagementText(term.term_number) + '"' +
@@ -12260,6 +12312,101 @@ async function renderSubjectTeacherInput() {
       var next = root.querySelectorAll('tbody tr')[rowIndex].querySelector('[data-field="' + activeAssessmentFields[colIndex].key + '"]');
       if (next) next.focus();
     }
+    var draftSaveTimers = {};
+    var draftSaveChains = {};
+    var draftSaveState = {};
+    function setDraftRowStatus(row, message, isError) {
+      var statusCell = row && row.querySelector('.st-status');
+      if (statusCell) {
+        statusCell.textContent = message;
+        statusCell.style.color = isError ? '#b42318' : '#18794e';
+        statusCell.style.fontWeight = '700';
+      }
+    }
+    async function persistSubjectTeacherDraftRow(row) {
+      if (!row || !row.isConnected) return;
+      var studentId = row.getAttribute('data-student-id');
+      if (!studentId) return;
+      var existing = resultsByStudent[String(studentId)];
+      if (existing && ['submitted','approved','published'].indexOf(String(existing.status || '').toLowerCase()) !== -1) {
+        setDraftRowStatus(row, 'Locked', true);
+        return;
+      }
+      var values = {};
+      var hasAnyScore = false;
+      assessmentFields.forEach(function(item) {
+        var input = row.querySelector('[data-field="' + item.key + '"]');
+        var raw = input ? input.value.trim() : '';
+        if (raw !== '') hasAnyScore = true;
+        var number = raw === '' ? null : Number(raw);
+        if (number !== null && (!Number.isFinite(number) || number < 0 || number > item.maximum)) {
+          throw new Error(item.label + ' must be between 0 and ' + item.maximum + '.');
+        }
+        values[item.key] = number;
+      });
+      if (!hasAnyScore) {
+        setDraftRowStatus(row, 'Not started', false);
+        return;
+      }
+      var total = activeAssessmentFields.reduce(function(sum, item) {
+        return sum + (values[item.key] == null ? 0 : values[item.key]);
+      }, 0);
+      var grade = 'F', remark = 'Failed';
+      if (total >= configuredTotalMaximum * 0.8) { grade = 'A'; remark = 'Excellent'; }
+      else if (total >= configuredTotalMaximum * 0.7) { grade = 'B'; remark = 'Very Good'; }
+      else if (total >= configuredTotalMaximum * 0.6) { grade = 'C'; remark = 'Good'; }
+      else if (total >= configuredTotalMaximum * 0.5) { grade = 'D'; remark = 'Pass'; }
+      var payload = {
+        school_id: schoolId, student_id: studentId, class_id: classId,
+        subject_id: subjectId, academic_session_id: sessionId, term_id: selectedTerm.id,
+        ca1: values.ca1, ca2: values.ca2, ca3: values.ca3, examination: values.examination,
+        total: total, grade: grade, remark: remark, entered_by: teacherId,
+        status: 'draft', updated_at: new Date().toISOString()
+      };
+      setDraftRowStatus(row, 'Saving…', false);
+      var saved = await supabaseClient.from('results').upsert(payload, {
+        onConflict: 'student_id,subject_id,academic_session_id,term_id'
+      }).select('id,student_id,ca1,ca2,ca3,examination,total,grade,remark,status').single();
+      if (saved.error) throw new Error(saved.error.message || 'Supabase draft save failed.');
+      var check = await supabaseClient.from('results')
+        .select('id,student_id,ca1,ca2,ca3,examination,total,grade,remark,status')
+        .eq('school_id', schoolId).eq('class_id', classId).eq('subject_id', subjectId)
+        .eq('academic_session_id', sessionId).eq('term_id', selectedTerm.id)
+        .eq('student_id', studentId).maybeSingle();
+      if (check.error) throw new Error('Draft was written but could not be verified: ' + check.error.message);
+      if (!check.data || String(check.data.status).toLowerCase() !== 'draft' ||
+          ['ca1','ca2','ca3','examination','total'].some(function(key) {
+            return (check.data[key] == null ? null : Number(check.data[key])) !==
+              (payload[key] == null ? null : Number(payload[key]));
+          })) throw new Error('Supabase read-back did not match the latest draft values.');
+      resultsByStudent[String(studentId)] = check.data;
+      setDraftRowStatus(row, 'Draft saved', false);
+      var totalCell = row.querySelector('.st-total');
+      var gradeCell = row.querySelector('.st-grade');
+      if (totalCell) totalCell.textContent = String(total);
+      if (gradeCell) gradeCell.textContent = grade;
+    }
+    function queueSubjectTeacherDraftSave(input, immediate) {
+      var row = input && input.closest('tr[data-student-id]');
+      if (!row) return;
+      var studentId = row.getAttribute('data-student-id');
+      if (draftSaveTimers[studentId]) clearTimeout(draftSaveTimers[studentId]);
+      setDraftRowStatus(row, 'Unsaved changes…', false);
+      var run = function() {
+        var prior = draftSaveChains[studentId] || Promise.resolve();
+        draftSaveChains[studentId] = prior.catch(function() {}).then(function() {
+          return persistSubjectTeacherDraftRow(row);
+        }).catch(function(error) {
+          console.error('Subject Teacher draft autosave failed:', error);
+          setDraftRowStatus(row, 'Save failed — retrying on next edit', true);
+          showToast('Draft not confirmed for ' + (row.cells[1] ? row.cells[1].textContent : 'student') +
+            ': ' + (error.message || 'Check your connection and edit again.'), 'error');
+        });
+      };
+      if (immediate) run();
+      else draftSaveTimers[studentId] = setTimeout(run, 850);
+    }
+
     function scheduleSmartAdvance(input) {
       if (autoAdvanceTimer) clearTimeout(autoAdvanceTimer);
       if (styleSelect.value === 'classic' || !input.value.trim() || input.value.endsWith('.')) return;
@@ -12308,6 +12455,7 @@ async function renderSubjectTeacherInput() {
         if(styleSelect.value==='touch') renderTouchTiles(this);
       });
       input.addEventListener('click', function() { activeScoreInput = this; });
+      input.addEventListener('blur', function() { queueSubjectTeacherDraftSave(this, true); });
       input.addEventListener('keydown', function(event) {
         if (event.key !== 'Enter' && event.key !== 'ArrowDown' && event.key !== 'ArrowUp' && event.key !== 'ArrowRight' && event.key !== 'ArrowLeft') return;
         event.preventDefault();
@@ -12404,6 +12552,7 @@ async function renderSubjectTeacherInput() {
         this.classList.remove('st-score-invalid');
         clearScoreValidation();
         calculateRow(this.closest('tr'));
+        queueSubjectTeacherDraftSave(this, false);
         root.querySelector('#stKeypadDisplay').textContent=this.value||'—';
         if(styleSelect.value==='touch') renderTouchTiles(this);
         scheduleSmartAdvance(this);
