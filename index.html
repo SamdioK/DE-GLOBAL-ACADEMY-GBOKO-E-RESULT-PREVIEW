@@ -9239,6 +9239,32 @@ async function renderMasters() {
     }).join('');
     renderStSubjectOptions();
   }
+  var registeredSubjectIdsForSelectedClass = new Set();
+  async function loadRegisteredSubjectsForClass(classId) {
+    registeredSubjectIdsForSelectedClass = new Set();
+    var subjSelect = document.getElementById('newStSubject');
+    if (!classId || !activeAcademicSession || !activeAcademicSession.id || !activeAssessmentTerm || !activeAssessmentTerm.id) {
+      if (subjSelect) subjSelect.innerHTML = '<option value="">Select a class and ensure the active term is configured</option>';
+      return;
+    }
+    if (subjSelect) subjSelect.innerHTML = '<option value="">Loading registered class subjects…</option>';
+    var registrationResult = await supabaseClient.from('class_subject_registrations').select('id')
+      .eq('school_id', authenticatedProfile.school_id)
+      .eq('academic_session_id', activeAcademicSession.id)
+      .eq('term_id', activeAssessmentTerm.id)
+      .eq('class_id', classId).maybeSingle();
+    if (registrationResult.error) throw registrationResult.error;
+    if (!registrationResult.data) {
+      renderStSubjectOptions();
+      return;
+    }
+    var itemsResult = await supabaseClient.from('class_subject_registration_items').select('subject_id')
+      .eq('school_id', authenticatedProfile.school_id)
+      .eq('registration_id', registrationResult.data.id);
+    if (itemsResult.error) throw itemsResult.error;
+    registeredSubjectIdsForSelectedClass = new Set((itemsResult.data || []).map(function(item) { return String(item.subject_id); }));
+    renderStSubjectOptions();
+  }
   function renderStSubjectOptions() {
     var subjSelect = document.getElementById('newStSubject');
     var searchInput = document.getElementById('newStSubjectSearch');
@@ -9247,28 +9273,28 @@ async function renderMasters() {
     var searchTerm = String(searchInput.value || '').trim().toLowerCase();
     var selectedClass = availableSupabaseClasses.find(function(item) { return String(item.id) === String(classSelect.value); });
     var isSeniorClass = /^SS/i.test(selectedClass ? selectedClass.class_name : '');
+    var expectedSection = isSeniorClass ? 'senior' : 'basic';
     var sectionSubjects = availableSupabaseSubjects.filter(function(item) {
       var name = String(item.name || '').trim().toLowerCase();
-      var inBasicSection = basicCoreSubjects.concat(tradeSubjects).some(function(subject) { return subject.toLowerCase() === name; });
-      var inSeniorSection = seniorCoreSubjects.some(function(subject) { return subject.toLowerCase() === name; });
-      return isSeniorClass ? inSeniorSection : inBasicSection;
+      var inClassCatalogue = (isSeniorClass ? seniorCoreSubjects : basicCoreSubjects).concat(tradeSubjects)
+        .some(function(subject) { return subject.toLowerCase() === name; });
+      return String(item.section || '').toLowerCase() === expectedSection &&
+        inClassCatalogue && registeredSubjectIdsForSelectedClass.has(String(item.id));
     });
     var filteredSubjects = sectionSubjects.filter(function(subject) {
-      return !searchTerm || String(subject.name || '').toLowerCase().startsWith(searchTerm);
+      return !searchTerm || String(subject.name || '').toLowerCase().includes(searchTerm);
     });
-    var seenSubjectIds = new Set();
     var seenSubjectNames = new Set();
     var uniqueSubjects = filteredSubjects.filter(function(subject) {
-      var subjectId = String(subject.id || '').trim();
-      var subjectName = String(subject.name || '').trim().replace(/\s+/g, ' ').toLowerCase();
-      if (!subjectId || !subjectName || seenSubjectIds.has(subjectId) || seenSubjectNames.has(subjectName)) return false;
-      seenSubjectIds.add(subjectId);
+      var subjectName = String(subject.name || '').trim().replace(/\\s+/g, ' ').toLowerCase();
+      if (!subject.id || !subjectName || seenSubjectNames.has(subjectName)) return false;
       seenSubjectNames.add(subjectName);
       return true;
     });
-    subjSelect.innerHTML = '';
-    subjSelect.innerHTML = '<option value="">' + (uniqueSubjects.length ? 'Select an active subject' : (searchTerm ? 'No matching subjects' : 'No subjects available for this class')) + '</option>' +
-      uniqueSubjects.map(function(item) {
+    subjSelect.innerHTML = '<option value="">' +
+      (uniqueSubjects.length ? 'Select a subject registered for this class' :
+        (selectedClass ? 'No subjects registered for this class and term' : 'Select a class first')) +
+      '</option>' + uniqueSubjects.map(function(item) {
         return '<option value="' + escapeManagementText(item.id) + '">' + escapeManagementText(item.name) + '</option>';
       }).join('');
     subjSelect.disabled = uniqueSubjects.length === 0;
@@ -9295,13 +9321,25 @@ async function renderMasters() {
       return;
     }
     availableSupabaseSubjects = result.data || [];
-    renderStSubjectOptions();
+    try {
+      await loadRegisteredSubjectsForClass(document.getElementById('newStArm').value);
+    } catch (error) {
+      registeredSubjectIdsForSelectedClass = new Set();
+      subjSelect.innerHTML = '<option value="">Could not load registered subjects</option>';
+      showToast(error.message || 'Could not load registered subjects for this class.', 'error');
+    }
   }
   document.getElementById('newStSubjectSearch').addEventListener('input', renderStSubjectOptions);
-  document.getElementById('newStArm').addEventListener('change', function() {
+  document.getElementById('newStArm').addEventListener('change', async function() {
     document.getElementById('newStSubjectSearch').value = '';
-    document.getElementById('newStSubject').value = '';
-    renderStSubjectOptions();
+    document.getElementById('newStSubject').innerHTML = '<option value="">Loading registered subjects…</option>';
+    try {
+      await loadRegisteredSubjectsForClass(this.value);
+    } catch (error) {
+      registeredSubjectIdsForSelectedClass = new Set();
+      document.getElementById('newStSubject').innerHTML = '<option value="">Could not load registered subjects</option>';
+      showToast(error.message || 'Could not load this class subject registration.', 'error');
+    }
   });
   document.querySelectorAll('input[name="subjectTeacherAccountType"]').forEach(function(input) {
     input.addEventListener('change', function() {
