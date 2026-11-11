@@ -9304,29 +9304,15 @@ async function renderMasters() {
       }
       var directoryRows = await supabasePersistence.getStaffDirectory();
       staffDirectoryForAllocation = directoryRows || [];
-      var profilesResult = await supabaseClient.from('profiles')
-        .select('id,school_id,full_name,username,email,phone,role,is_active')
-        .eq('school_id', authenticatedProfile.school_id).order('full_name');
+      // profiles has an owner-only SELECT policy, so direct table reads cannot
+      // expose other staff logins to an administrator. Use the guarded
+      // SECURITY DEFINER RPC, which returns only this school's non-student
+      // login profiles after verifying the caller is an active administrator.
+      var profilesResult = await supabaseClient.rpc('get_school_staff_login_profiles');
       if (profilesResult.error) throw profilesResult.error;
-      var profiles = (profilesResult.data || []).filter(function(profile) { return profile.role !== 'student'; });
-      // Recover staff-linked accounts by their authoritative profile_id as well.
-      // This covers older rows where the normal school profile listing may not
-      // include the linked profile for a transient/RLS visibility reason.
-      var linkedIds = (staffDirectoryForAllocation || []).map(function(staff) {
-        return staff.profile_id ? String(staff.profile_id) : '';
-      }).filter(function(id, index, list) { return id && list.indexOf(id) === index; });
-      var missingLinkedIds = linkedIds.filter(function(id) {
-        return !profiles.some(function(profile) { return String(profile.id) === id; });
+      var profiles = (profilesResult.data || []).filter(function(profile) {
+        return profile.role !== 'student' && String(profile.school_id) === String(authenticatedProfile.school_id);
       });
-      if (missingLinkedIds.length) {
-        var linkedProfilesResult = await supabaseClient.from('profiles')
-          .select('id,school_id,full_name,username,email,phone,role,is_active')
-          .in('id', missingLinkedIds).eq('school_id', authenticatedProfile.school_id);
-        if (linkedProfilesResult.error) throw linkedProfilesResult.error;
-        (linkedProfilesResult.data || []).forEach(function(profile) {
-          if (profile.role !== 'student' && !profiles.some(function(item) { return String(item.id) === String(profile.id); })) profiles.push(profile);
-        });
-      }
       var profileIds = profiles.map(function(profile) { return profile.id; }).filter(Boolean);
       var rolesByProfile = {};
       if (profileIds.length) {
