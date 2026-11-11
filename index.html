@@ -9149,8 +9149,12 @@ async function renderMasters() {
   var availableSupabaseSubjects = [];
   var availableSupabaseClasses = [];
   var existingStaffProfiles = [];
+  var staffDirectoryForAllocation = [];
   function subjectTeacherRoleLabel(role) {
     return { administrator: 'Administrator', sub_administrator: 'Sub-Administrator', form_master: 'Form Master', subject_teacher: 'Subject Teacher', portal_developer: 'Portal Developer', student: 'Student' }[role] || String(role || '').replace(/_/g, ' ');
+  }
+  function staffQualificationsText(value) {
+    return Array.isArray(value) ? value.join(', ') : String(value || '').split(';').map(function(item) { return item.trim(); }).filter(Boolean).join(', ');
   }
   function renderExistingStaffOptions() {
     var select = document.getElementById('existingStaffProfile');
@@ -9159,13 +9163,23 @@ async function renderMasters() {
     var query = search.value.trim().toLowerCase();
     var selectedId = select.value;
     var matches = existingStaffProfiles.filter(function(profile) {
-      return [profile.full_name, profile.username, profile.email].join(' ').toLowerCase().indexOf(query) !== -1;
+      var directory = profile.staffRecord || {};
+      return [
+        profile.full_name, profile.username, profile.email, profile.phone,
+        directory.staff_id, directory.gender, directory.designation, directory.department,
+        staffQualificationsText(directory.qualification), directory.specialisation,
+        directory.employment_type, directory.date_employed, directory.status, directory.biography
+      ].join(' ').toLowerCase().indexOf(query) !== -1;
     });
-    select.innerHTML = '<option value="">' + (matches.length ? 'Select Existing Staff Member' : 'No matching staff members') + '</option>' + matches.map(function(profile) {
+    select.innerHTML = '<option value="">' + (matches.length ? 'Select an enrolled staff member' : 'No matching staff members') + '</option>' + matches.map(function(profile) {
       var roles = profile.responsibilities || [profile.role];
       var additional = roles.filter(function(role) { return role !== profile.role; });
-      var detail = 'Primary: ' + subjectTeacherRoleLabel(profile.role) + (additional.length ? ' · Additional: ' + additional.map(subjectTeacherRoleLabel).join(', ') : '');
-      return '<option value="' + escapeManagementText(profile.id) + '" data-profile-id="' + escapeManagementText(profile.id) + '"' + (String(profile.id) === String(selectedId) ? ' selected' : '') + '>' + escapeManagementText(profile.full_name || profile.username || profile.email || 'Staff member') + ' — ' + escapeManagementText(detail) + ' — ' + escapeManagementText(profile.email || '') + '</option>';
+      var directory = profile.staffRecord || {};
+      var accountState = profile.hasAccountProfile ? (profile.is_active ? 'Account active' : 'Account inactive') : 'No login account linked';
+      var detail = (directory.designation || subjectTeacherRoleLabel(profile.role || 'staff')) + ' · ' + (directory.department || 'Department not entered') + ' · ' + accountState;
+      return '<option value="' + escapeManagementText(profile.id) + '"' + (String(profile.id) === String(selectedId) ? ' selected' : '') + '>' +
+        escapeManagementText(directory.full_name || profile.full_name || profile.username || profile.email || 'Staff member') +
+        ' — ' + escapeManagementText(detail) + (additional.length ? ' — ' + escapeManagementText(additional.map(subjectTeacherRoleLabel).join(', ')) : '') + '</option>';
     }).join('');
     updateExistingStaffDetails();
   }
@@ -9174,13 +9188,28 @@ async function renderMasters() {
     var details = document.getElementById('existingStaffDetails');
     if (!select || !details) return;
     var profile = existingStaffProfiles.find(function(item) { return String(item.id) === String(select.value); });
-    if (!profile) { details.textContent = 'Select a staff member to view their account and responsibilities.'; return; }
+    if (!profile) { details.textContent = 'Select a staff member to view their complete Staff Database record and account details.'; return; }
+    var d = profile.staffRecord || {};
     var roles = profile.responsibilities || [profile.role];
-    var additional = roles.filter(function(role) { return role !== profile.role; });
-    details.innerHTML = '<strong>' + escapeManagementText(profile.full_name || 'Staff member') + '</strong><br>' +
-      'Username: ' + escapeManagementText(profile.username || '—') + ' · Email: ' + escapeManagementText(profile.email || '—') + '<br>' +
-      'Primary: ' + escapeManagementText(subjectTeacherRoleLabel(profile.role)) +
-      (additional.length ? ' · Additional: ' + escapeManagementText(additional.map(subjectTeacherRoleLabel).join(', ')) : '');
+    var lines = [
+      '<strong>' + escapeManagementText(d.full_name || profile.full_name || 'Staff member') + '</strong>',
+      'Staff ID: ' + escapeManagementText(d.staff_id || '—') + ' · Gender: ' + escapeManagementText(d.gender || '—'),
+      'Designation: ' + escapeManagementText(d.designation || '—') + ' · Department: ' + escapeManagementText(d.department || '—'),
+      'Qualification: ' + escapeManagementText(staffQualificationsText(d.qualification) || '—'),
+      'Specialisation: ' + escapeManagementText(d.specialisation || '—'),
+      'Employment type: ' + escapeManagementText(d.employment_type || '—') + ' · Date employed: ' + escapeManagementText(d.date_employed || '—'),
+      'Phone: ' + escapeManagementText(d.phone || profile.phone || '—') + ' · Email: ' + escapeManagementText(d.email || profile.email || '—'),
+      'Staff status: ' + escapeManagementText(d.status || '—') + ' · Portal profile: ' + (d.show_on_portal === true ? 'Visible' : 'Not displayed'),
+      'Biography: ' + escapeManagementText(d.biography || '—'),
+      'Account username: ' + escapeManagementText(profile.username || '—') + ' · Account status: ' + (profile.hasAccountProfile ? (profile.is_active ? 'Active' : 'Inactive') : 'No account linked'),
+      'Responsibilities: ' + escapeManagementText(roles.map(subjectTeacherRoleLabel).join(', ') || 'Not assigned')
+    ];
+    details.innerHTML = lines.join('<br>');
+    if (!profile.hasAccountProfile) {
+      details.innerHTML += '<br><strong style="color:#b45309">This staff record has no linked login account. Select “New Staff Member” to create an account using these saved details before allocation.</strong>';
+    } else if (!profile.is_active) {
+      details.innerHTML += '<br><strong style="color:#b91c1c">This staff account is inactive and cannot receive a new assignment until reactivated.</strong>';
+    }
   }
   async function populateExistingStaffOptions() {
     var select = document.getElementById('existingStaffProfile');
@@ -9193,31 +9222,69 @@ async function renderMasters() {
       return;
     }
     try {
-      var result = await supabaseClient.from('profiles').select('id,school_id,full_name,username,email,phone,role,is_active')
-        .eq('school_id', authenticatedProfile.school_id).eq('is_active', true).order('full_name');
-      if (result.error) throw result.error;
-      var profiles = (result.data || []).filter(function(profile) { return profile.role !== 'student'; });
-      var ids = profiles.map(function(profile) { return profile.id; }).filter(Boolean);
+      if (!window.supabasePersistence || typeof supabasePersistence.getStaffDirectory !== 'function') {
+        throw new Error('The Supabase Staff Database service is unavailable. Please sign in again.');
+      }
+      var directoryRows = await supabasePersistence.getStaffDirectory();
+      staffDirectoryForAllocation = directoryRows || [];
+      var profilesResult = await supabaseClient.from('profiles')
+        .select('id,school_id,full_name,username,email,phone,role,is_active')
+        .eq('school_id', authenticatedProfile.school_id).order('full_name');
+      if (profilesResult.error) throw profilesResult.error;
+      var profiles = (profilesResult.data || []).filter(function(profile) { return profile.role !== 'student'; });
+      var profileIds = profiles.map(function(profile) { return profile.id; }).filter(Boolean);
       var rolesByProfile = {};
-      if (ids.length) {
-        var rolesResult = await supabaseClient.from('profile_roles').select('profile_id,role').in('profile_id', ids);
+      if (profileIds.length) {
+        var rolesResult = await supabaseClient.from('profile_roles').select('profile_id,role').in('profile_id', profileIds);
         if (rolesResult.error) throw rolesResult.error;
         (rolesResult.data || []).forEach(function(item) {
           if (!rolesByProfile[String(item.profile_id)]) rolesByProfile[String(item.profile_id)] = [];
           rolesByProfile[String(item.profile_id)].push(item.role);
         });
       }
-      existingStaffProfiles = profiles.filter(function(profile) {
-        return (rolesByProfile[String(profile.id)] || []).indexOf('student') === -1;
-      }).map(function(profile) {
+      var profilesById = {};
+      var profilesByEmail = {};
+      profiles.forEach(function(profile) {
+        profilesById[String(profile.id)] = profile;
+        var emailKey = String(profile.email || '').trim().toLowerCase();
+        if (emailKey) {
+          if (!profilesByEmail[emailKey]) profilesByEmail[emailKey] = [];
+          profilesByEmail[emailKey].push(profile);
+        }
+      });
+      var usedProfileIds = {};
+      existingStaffProfiles = staffDirectoryForAllocation.map(function(staff) {
+        var linked = staff.profile_id ? profilesById[String(staff.profile_id)] : null;
+        if (!linked) {
+          var emailKey = String(staff.email || '').trim().toLowerCase();
+          var emailMatches = emailKey ? (profilesByEmail[emailKey] || []) : [];
+          if (emailMatches.length === 1) linked = emailMatches[0];
+        }
+        var responsibilities = linked ? [linked.role].concat(rolesByProfile[String(linked.id)] || []).filter(function(role, index, all) { return role && all.indexOf(role) === index; }) : [];
+        var syntheticId = linked ? String(linked.id) : 'staff:' + String(staff.id);
+        if (linked) usedProfileIds[String(linked.id)] = true;
+        return {
+          id: syntheticId, profileId: linked ? linked.id : null, hasAccountProfile: !!linked,
+          is_active: linked ? linked.is_active === true : false,
+          full_name: linked ? linked.full_name : staff.full_name,
+          username: linked ? linked.username : '', email: linked && linked.email || staff.email || '',
+          phone: linked && linked.phone || staff.phone || '', role: linked ? linked.role : 'staff',
+          responsibilities: responsibilities, staffRecord: staff
+        };
+      });
+      profiles.forEach(function(profile) {
+        if (usedProfileIds[String(profile.id)]) return;
         var responsibilities = [profile.role].concat(rolesByProfile[String(profile.id)] || []).filter(function(role, index, all) { return role && all.indexOf(role) === index; });
-        return Object.assign({}, profile, { responsibilities: responsibilities });
+        existingStaffProfiles.push(Object.assign({}, profile, {
+          id: String(profile.id), profileId: profile.id, hasAccountProfile: true,
+          responsibilities: responsibilities, staffRecord: null
+        }));
       });
       error.classList.add('hidden');
       renderExistingStaffOptions();
     } catch (loadError) {
-      select.innerHTML = '<option value="">Unable to load staff</option>';
-      error.textContent = loadError && loadError.message ? loadError.message : 'Could not load active staff profiles.';
+      select.innerHTML = '<option value="">Unable to load staff records</option>';
+      error.textContent = loadError && loadError.message ? loadError.message : 'Could not load all enrolled staff records from Supabase.';
       error.classList.remove('hidden');
     }
   }
@@ -9350,7 +9417,20 @@ async function renderMasters() {
     });
   });
   document.getElementById('existingStaffSearch').addEventListener('input', renderExistingStaffOptions);
-  document.getElementById('existingStaffProfile').addEventListener('change', updateExistingStaffDetails);
+  document.getElementById('existingStaffProfile').addEventListener('change', function() {
+    updateExistingStaffDetails();
+    var selected = existingStaffProfiles.find(function(item) { return String(item.id) === String(this.value); }.bind(this));
+    if (selected && !selected.hasAccountProfile && selected.staffRecord) {
+      document.querySelector('input[name="subjectTeacherAccountType"][value="new"]').checked = true;
+      document.getElementById('existingStaffFields').classList.add('hidden');
+      document.getElementById('newSubjectTeacherFields').classList.remove('hidden');
+      document.getElementById('newStName').value = selected.staffRecord.full_name || '';
+      document.getElementById('newStEmail').value = selected.staffRecord.email || '';
+      document.getElementById('newStPhone').value = selected.staffRecord.phone || '';
+      document.getElementById('newStUsername').focus();
+      document.getElementById('addStBtn').textContent = 'Create Subject Teacher Account';
+    }
+  });
   populateStClassOptions();
   populateExistingStaffOptions();
   populateStSubjectOptions();
@@ -9364,7 +9444,16 @@ async function renderMasters() {
     var subjectId = document.getElementById('newStSubject').value;
     var selectedSubject = availableSupabaseSubjects.find(function(item) { return String(item.id) === String(subjectId); });
     var existingProfileId = document.getElementById('existingStaffProfile').value;
-    var existingProfile = existingStaffProfiles.find(function(item) { return String(item.id) === String(existingProfileId); });
+    var selectedStaffRecord = existingStaffProfiles.find(function(item) { return String(item.id) === String(existingProfileId); });
+    var existingProfile = selectedStaffRecord && selectedStaffRecord.hasAccountProfile ? selectedStaffRecord : null;
+    if (existingMode && selectedStaffRecord && !selectedStaffRecord.hasAccountProfile) {
+      showToast('This enrolled staff member has no linked login account. Select “New Staff Member” to create the account from the saved Staff Database details.', 'error');
+      return;
+    }
+    if (existingMode && selectedStaffRecord && !selectedStaffRecord.is_active) {
+      showToast('The selected staff login account is inactive. Reactivate it before allocation.', 'error');
+      return;
+    }
     var name = existingMode ? (existingProfile && (existingProfile.full_name || existingProfile.username || existingProfile.email) || '') : document.getElementById('newStName').value.trim();
     var username = existingMode ? (existingProfile && existingProfile.username || '') : document.getElementById('newStUsername').value.trim();
     var email = existingMode ? (existingProfile && existingProfile.email || '') : document.getElementById('newStEmail').value.trim();
