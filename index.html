@@ -9451,6 +9451,11 @@ async function renderMasters() {
       showToast('This enrolled staff member has no linked login account. Select “New Staff Member” to create the account from the saved Staff Database details.', 'error');
       return;
     }
+    if (existingMode && selectedStaffRecord && selectedStaffRecord.staffRecord &&
+        String(selectedStaffRecord.staffRecord.status || 'Active').toLowerCase() !== 'active') {
+      showToast('The selected Staff Database record is not Active. Activate the staff record before allocation.', 'error');
+      return;
+    }
     if (existingMode && selectedStaffRecord && !selectedStaffRecord.is_active) {
       showToast('The selected staff login account is inactive. Reactivate it before allocation.', 'error');
       return;
