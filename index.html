@@ -9063,7 +9063,7 @@ async function renderMasters() {
   html += '</div><p style="color:#666; font-size:13px; margin-bottom:15px;">Manage individual Supabase Form Master accounts and their class assignments. Temporary passwords are generated only by the server and shown once.</p><div id="formMasterManagementPanel"><p class="alert alert-info">Loading Form Master assignments…</p></div></div></div><div id="mastersSubjectSection"' + (activeMastersCategory === 'subjectTeachers' ? '' : ' style="display:none"') + '>';
 
   html += '<div class="card"><div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;"><h2 style="margin: 0;">Subject Teachers</h2>';
-  html += '</div><p style="color:#666; font-size:13px; margin-bottom:15px;">Assign a teacher to a specific class arm and subject. Activate a slot to let that teacher log in and enter scores for only that subject.</p>';
+  html += '</div><p style="color:#666; font-size:13px; margin-bottom:15px;">Assign one teacher to a subject across one or more eligible class arms. Activate each slot to let the teacher log in and enter scores only for the assigned subject and class arms.</p>';
   html += '<div style="background: #f9f9f9; padding: 15px; border-radius: 8px; margin-bottom: 20px;"><h3 style="margin: 0 0 15px 0; font-size: 16px;">Add Subject Teacher</h3>' +
     '<div class="input-group"><label>Subject Teacher Account Type</label><div class="subject-teacher-account-options"><label class="subject-teacher-account-option"><input type="radio" name="subjectTeacherAccountType" value="existing" checked> Existing Staff Member</label><label class="subject-teacher-account-option"><input type="radio" name="subjectTeacherAccountType" value="new"> New Staff Member</label></div></div>' +
     '<div id="existingStaffFields"><div class="input-group"><label for="existingStaffSearch">Search existing staff</label><input type="search" id="existingStaffSearch" placeholder="Search staff name, username or email..."></div><div class="input-group"><label for="existingStaffProfile">Select Existing Staff Member</label><select id="existingStaffProfile"><option value="">Loading enrolled staff records...</option></select></div><div id="existingStaffDetails" class="alert alert-info">Select a staff member to view their account and responsibilities.</div><div id="existingStaffLoadError" class="hidden alert alert-error"></div></div>' +
@@ -9302,10 +9302,8 @@ async function renderMasters() {
   var allocationTermId = activeAssessmentTerm && activeAssessmentTerm.id || null;
 
   function getSelectedStClassArmIds() {
-    var selected = Array.from(document.querySelectorAll('.st-class-arm-check:checked'))
-      .map(function(input) { return String(input.value); });
-    selectedStClassArmIds = new Set(selected);
-    return selected;
+    // Keep checked arms selected even when the administrator filters the visible list.
+    return Array.from(selectedStClassArmIds);
   }
 
   function updateStClassArmSelectionCount() {
