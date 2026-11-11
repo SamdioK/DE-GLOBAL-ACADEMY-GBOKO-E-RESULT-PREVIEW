@@ -9075,7 +9075,7 @@ async function renderMasters() {
     '<div class="input-group"><label for="newStEmail">Email</label><input type="email" id="newStEmail" placeholder="Teacher email"></div>' +
     '<div class="input-group"><label for="newStPhone">Phone</label><input type="tel" id="newStPhone" placeholder="Phone number"></div>' +
     '<div class="input-group"><label for="newStPassword">Password</label><input type="password" id="newStPassword" placeholder="New account password"></div></div>' +
-    '<p id="subjectTeacherSessionInfo" class="alert alert-info" style="margin-top:12px">Academic Session: ' + escapeManagementText(activeAcademicSession ? activeAcademicSession.name : 'Unavailable') + '</p>' +
+    '<p id="subjectTeacherSessionInfo" class="alert alert-info" style="margin-top:12px">Academic Session: ' + escapeManagementText(activeAcademicSession ? activeAcademicSession.name : 'Unavailable') + ' · Term: ' + escapeManagementText(activeAssessmentTerm ? activeAssessmentTerm.name : 'Unavailable') + '. Only subjects saved in the Form Master Subject Registration for the selected class and term are available here.</p>' +
     '<button class="btn btn-success" id="addStBtn" style="margin-top: 10px;">Assign Subject Teacher</button></div>';
 
   if (subjectAssignments.length === 0) {
@@ -9373,6 +9373,10 @@ async function renderMasters() {
     var password = existingMode ? '' : passwordInput.value;
     if (!classId || !assignedClass) { showToast('Select a valid class.', 'error'); return; }
     if (!subjectId || !selectedSubject) { showToast('Please select a subject.', 'error'); return; }
+    if (!registeredSubjectIdsForSelectedClass.has(String(subjectId))) {
+      showToast('This subject is not registered for the selected class and active term. Register it in the Form Master Subject Registration section first.', 'error');
+      return;
+    }
     if (existingMode && (!existingProfileId || !existingProfile)) { showToast('Select an existing active staff member.', 'error'); return; }
     if (!existingMode && (!name || !username || !email || !password)) { showToast('Full name, username, email and password are required for a new staff account.', 'error'); return; }
     var className = assignedClass.class_name;
