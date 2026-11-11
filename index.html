@@ -9067,9 +9067,17 @@ async function renderMasters() {
   html += '<div style="background: #f9f9f9; padding: 15px; border-radius: 8px; margin-bottom: 20px;"><h3 style="margin: 0 0 15px 0; font-size: 16px;">Add Subject Teacher</h3>' +
     '<div class="input-group"><label>Subject Teacher Account Type</label><div class="subject-teacher-account-options"><label class="subject-teacher-account-option"><input type="radio" name="subjectTeacherAccountType" value="existing" checked> Existing Staff Member</label><label class="subject-teacher-account-option"><input type="radio" name="subjectTeacherAccountType" value="new"> New Staff Member</label></div></div>' +
     '<div id="existingStaffFields"><div class="input-group"><label for="existingStaffSearch">Search existing staff</label><input type="search" id="existingStaffSearch" placeholder="Search staff name, username or email..."></div><div class="input-group"><label for="existingStaffProfile">Select Existing Staff Member</label><select id="existingStaffProfile"><option value="">Loading enrolled staff records...</option></select></div><div id="existingStaffDetails" class="alert alert-info">Select a staff member to view their account and responsibilities.</div><div id="existingStaffLoadError" class="hidden alert alert-error"></div></div>' +
-    '<div class="grid grid-3"><div class="input-group"><label for="newStArm">Class</label><select id="newStArm"><option value="">Loading classes from Supabase…</option></select></div>' +
-    '<div class="input-group" style="grid-column:1/-1;margin-bottom:0"><label for="newStSubjectSearch">Search Subject</label><input type="search" id="newStSubjectSearch" placeholder="Type subject name..." autocomplete="off" style="width:100%;padding:8px;border:1px solid #ddd;border-radius:4px;font-size:13px"></div>' +
-    '<div class="input-group"><label for="newStSubject">Subject</label><select id="newStSubject"><option value="">Select an active subject</option></select></div></div>' +
+    '<div class="input-group"><label for="newStSubjectSearch">Find a subject</label><input type="search" id="newStSubjectSearch" placeholder="Search registered subjects…" autocomplete="off"></div>' +
+    '<div class="input-group"><label for="newStSubject">Subject to assign</label><select id="newStSubject"><option value="">Loading registered subjects…</option></select></div>' +
+    '<div id="stClassArmAllocationPanel" style="margin:16px 0 12px;padding:16px;border:1px solid #dfe5f2;border-radius:12px;background:linear-gradient(145deg,#f7f9ff,#fff);">' +
+      '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px;flex-wrap:wrap;margin-bottom:12px;">' +
+        '<div><h4 style="margin:0;color:#26365f;font-size:15px;">Select class arms</h4><p style="margin:5px 0 0;color:#64708a;font-size:12px;line-height:1.5;">Tick every class arm this teacher will handle for the selected subject. Only arms where the subject is registered are shown.</p></div>' +
+        '<span id="stClassArmSelectedCount" style="padding:6px 10px;border-radius:20px;background:#e8edff;color:#3449a1;font-size:12px;font-weight:700;">0 selected</span>' +
+      '</div>' +
+      '<div class="input-group" style="margin-bottom:10px;"><input type="search" id="newStClassSearch" placeholder="Filter class arms (e.g. BASIC7 or SS1)…" autocomplete="off"></div>' +
+      '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px;"><button type="button" class="btn" id="selectAllStClassArms" style="background:#e9edff;color:#3449a1;padding:7px 11px;">Select all available</button><button type="button" class="btn" id="clearStClassArms" style="background:#f1f3f7;color:#4b5563;padding:7px 11px;">Clear selection</button></div>' +
+      '<div id="newStClassArmChoices" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(145px,1fr));gap:9px;"><p style="grid-column:1/-1;color:#718096;font-size:13px;">Loading eligible class arms…</p></div>' +
+    '</div>' +
     '<div id="newSubjectTeacherFields" class="grid grid-3 hidden"><div class="input-group"><label for="newStName">Full Name</label><input type="text" id="newStName" placeholder="Teacher full name"></div>' +
     '<div class="input-group"><label for="newStUsername">Username</label><input type="text" id="newStUsername" placeholder="Account username"></div>' +
     '<div class="input-group"><label for="newStEmail">Email</label><input type="email" id="newStEmail" placeholder="Teacher email"></div>' +
@@ -9289,188 +9297,203 @@ async function renderMasters() {
       error.classList.remove('hidden');
     }
   }
-  async function populateStClassOptions() {
-    var select = document.getElementById('newStArm');
-    if (!select) return;
-    select.innerHTML = '<option value="">Loading classes...</option>';
-    var result = await supabaseClient.from('classes').select('id,class_name,level,arm')
-      .eq('school_id', authenticatedProfile.school_id).order('class_name');
-    if (result.error) {
-      availableSupabaseClasses = [];
-      select.innerHTML = '<option value="">Could not load classes</option>';
-      showToast(result.error.message || 'Could not load classes for this school.', 'error');
-      return;
-    }
-    availableSupabaseClasses = result.data || [];
-    select.innerHTML = '<option value="">Select a class</option>' + availableSupabaseClasses.map(function(item) {
-      return '<option value="' + escapeManagementText(item.id) + '">' + escapeManagementText(item.class_name) + '</option>';
-    }).join('');
-    await loadRegisteredSubjectsForClass(select.value);
+  var registeredSubjectIdsByClass = {};
+  var selectedStClassArmIds = new Set();
+  var allocationTermId = activeAssessmentTerm && activeAssessmentTerm.id || null;
+
+  function getSelectedStClassArmIds() {
+    var selected = Array.from(document.querySelectorAll('.st-class-arm-check:checked'))
+      .map(function(input) { return String(input.value); });
+    selectedStClassArmIds = new Set(selected);
+    return selected;
   }
-  var registeredSubjectIdsForSelectedClass = new Set();
-  async function loadRegisteredSubjectsForClass(classId) {
-    registeredSubjectIdsForSelectedClass = new Set();
-    var subjSelect = document.getElementById('newStSubject');
-    if (!classId) {
-      if (subjSelect) subjSelect.innerHTML = '<option value="">Select a class first</option>';
-      if (subjSelect) subjSelect.disabled = true;
+
+  function updateStClassArmSelectionCount() {
+    var count = document.getElementById('stClassArmSelectedCount');
+    if (count) count.textContent = selectedStClassArmIds.size + ' selected';
+  }
+
+  function renderStSubjectOptions() {
+    var select = document.getElementById('newStSubject');
+    var search = document.getElementById('newStSubjectSearch');
+    if (!select || !search) return;
+    var query = String(search.value || '').trim().toLowerCase();
+    var registeredIds = new Set();
+    Object.keys(registeredSubjectIdsByClass).forEach(function(classId) {
+      registeredSubjectIdsByClass[classId].forEach(function(subjectId) { registeredIds.add(String(subjectId)); });
+    });
+    var options = availableSupabaseSubjects.filter(function(subject) {
+      return registeredIds.has(String(subject.id)) &&
+        (!query || String(subject.name || '').toLowerCase().includes(query));
+    });
+    var previous = select.value;
+    select.innerHTML = '<option value="">' +
+      (options.length ? 'Choose from ' + options.length + ' registered subject(s)' : 'No matching registered subjects') +
+      '</option>' + options.map(function(subject) {
+        var trade = subject.is_trade ? ' · Trade' : '';
+        return '<option value="' + escapeManagementText(subject.id) + '">' +
+          escapeManagementText(subject.name) + trade + '</option>';
+      }).join('');
+    select.disabled = options.length === 0;
+    if (previous && options.some(function(item) { return String(item.id) === String(previous); })) {
+      select.value = previous;
+    } else {
+      selectedStClassArmIds = new Set();
+    }
+    renderStClassArmChoices();
+  }
+
+  function renderStClassArmChoices() {
+    var root = document.getElementById('newStClassArmChoices');
+    var search = document.getElementById('newStClassSearch');
+    var subjectSelect = document.getElementById('newStSubject');
+    if (!root || !search || !subjectSelect) return;
+    var subjectId = String(subjectSelect.value || '');
+    var query = String(search.value || '').trim().toLowerCase();
+    if (!subjectId) {
+      root.innerHTML = '<p style="grid-column:1/-1;color:#718096;font-size:13px;">Select a subject first to view the eligible class arms.</p>';
+      updateStClassArmSelectionCount();
       return;
     }
-    if (subjSelect) {
-      subjSelect.innerHTML = '<option value="">Checking current subject registration…</option>';
-      subjSelect.disabled = true;
+    var eligible = availableSupabaseClasses.filter(function(cls) {
+      var ids = registeredSubjectIdsByClass[String(cls.id)] || new Set();
+      return ids.has(subjectId) && String(cls.class_name || '').toLowerCase().includes(query);
+    });
+    if (!eligible.length) {
+      root.innerHTML = '<p style="grid-column:1/-1;color:#9a5b12;font-size:13px;">This subject is not registered in any class arm matching your search.</p>';
+      updateStClassArmSelectionCount();
+      return;
+    }
+    var selectedStaff = document.getElementById('existingStaffProfile');
+    var selectedStaffId = selectedStaff ? String(selectedStaff.value || '') : '';
+    var existingMode = document.querySelector('input[name="subjectTeacherAccountType"]:checked');
+    var existingTeacherId = existingMode && existingMode.value === 'existing' ? selectedStaffId : '';
+    root.innerHTML = eligible.map(function(cls) {
+      var id = String(cls.id);
+      var existing = existingTeacherId ? subjectAssignments.find(function(item) {
+        return String(item.teacherId) === existingTeacherId &&
+          String(item.classId) === id && String(item.subjectId) === subjectId;
+      }) : null;
+      var checked = selectedStClassArmIds.has(id);
+      var label = escapeManagementText(cls.class_name || 'Class arm');
+      var status = existing ? (existing.activated ? 'Already assigned' : 'Existing · inactive') : 'Available';
+      return '<label style="display:flex;align-items:center;gap:9px;min-width:0;padding:11px 12px;border:1px solid ' +
+        (existing ? '#d8dee9' : (checked ? '#687de0' : '#e1e7f2')) + ';border-radius:10px;background:' +
+        (existing ? '#f3f4f6' : (checked ? '#eef1ff' : '#fff')) + ';cursor:' + (existing ? 'not-allowed' : 'pointer') +
+        ';box-shadow:' + (checked ? '0 0 0 2px rgba(88,108,210,.10)' : '0 2px 6px rgba(30,45,80,.04)') + ';">' +
+        '<input type="checkbox" class="st-class-arm-check" value="' + escapeManagementText(id) + '"' +
+        (checked ? ' checked' : '') + (existing ? ' disabled' : '') +
+        ' style="width:17px;height:17px;flex:0 0 auto;accent-color:#586cd2;">' +
+        '<span style="display:flex;flex-direction:column;min-width:0;gap:3px;"><strong style="font-size:13px;color:#26365f;">' + label +
+        '</strong><small style="font-size:10px;color:' + (existing ? '#7b8493' : (checked ? '#4255b2' : '#718096')) + ';">' +
+        status + '</small></span></label>';
+    }).join('');
+    root.querySelectorAll('.st-class-arm-check').forEach(function(input) {
+      input.addEventListener('change', function() {
+        if (this.checked) selectedStClassArmIds.add(String(this.value));
+        else selectedStClassArmIds.delete(String(this.value));
+        renderStClassArmChoices();
+      });
+    });
+    updateStClassArmSelectionCount();
+  }
+
+  async function loadSubjectTeacherAllocationOptions() {
+    var subjectSelect = document.getElementById('newStSubject');
+    var choices = document.getElementById('newStClassArmChoices');
+    if (!subjectSelect || !choices) return;
+    subjectSelect.innerHTML = '<option value="">Loading registered subjects…</option>';
+    subjectSelect.disabled = true;
+    choices.innerHTML = '<p style="grid-column:1/-1;color:#718096;font-size:13px;">Loading class registrations…</p>';
+    if (!supabaseClient || !authenticatedProfile || !authenticatedProfile.school_id) {
+      throw new Error('An authenticated school administrator is required to load class registrations.');
     }
 
-    // Resolve the current session and term from Supabase itself. The cached
-    // page-level values can be stale after a session/term change or a long-lived
-    // admin session, which previously caused valid registrations to look absent.
     var schoolId = authenticatedProfile.school_id;
-    var currentResults = await Promise.all([
-      supabaseClient.from('academic_sessions')
-        .select('id,name,is_current').eq('school_id', schoolId)
-        .eq('is_current', true).limit(1).maybeSingle(),
-      supabaseClient.from('terms')
-        .select('id,name,term_number,is_current').eq('school_id', schoolId)
-        .eq('is_current', true).limit(1).maybeSingle()
+    var contextResults = await Promise.all([
+      supabaseClient.from('academic_sessions').select('id,name,is_current')
+        .eq('school_id', schoolId).eq('is_current', true).limit(1).maybeSingle(),
+      supabaseClient.from('terms').select('id,name,term_number,is_current')
+        .eq('school_id', schoolId).eq('is_current', true).limit(1).maybeSingle()
     ]);
-    if (currentResults[0].error) throw currentResults[0].error;
-    if (currentResults[1].error) throw currentResults[1].error;
+    if (contextResults[0].error) throw contextResults[0].error;
+    if (contextResults[1].error) throw contextResults[1].error;
+    var session = contextResults[0].data || activeAcademicSession;
+    var term = contextResults[1].data || activeAssessmentTerm;
+    if (!session || !session.id || !term || !term.id) {
+      throw new Error('The current academic session and term must be configured before assigning subject teachers.');
+    }
+    activeAcademicSession = session;
+    activeAssessmentTerm = term;
+    allocationTermId = term.id;
 
-    var sessionCandidates = [];
-    var termCandidates = [];
-    if (currentResults[0].data) sessionCandidates.push(currentResults[0].data);
-    if (activeAcademicSession && activeAcademicSession.id &&
-        !sessionCandidates.some(function(item) { return String(item.id) === String(activeAcademicSession.id); })) {
-      sessionCandidates.push(activeAcademicSession);
-    }
-    if (currentResults[1].data) termCandidates.push(currentResults[1].data);
-    if (activeAssessmentTerm && activeAssessmentTerm.id &&
-        !termCandidates.some(function(item) { return String(item.id) === String(activeAssessmentTerm.id); })) {
-      termCandidates.push(activeAssessmentTerm);
-    }
-    if (!sessionCandidates.length || !termCandidates.length) {
-      throw new Error('The current academic session or term is not configured in Supabase.');
-    }
-
-    var registration = null;
-    var matchedSession = null;
-    var matchedTerm = null;
-    for (var si = 0; si < sessionCandidates.length && !registration; si++) {
-      for (var ti = 0; ti < termCandidates.length && !registration; ti++) {
-        var registrationResult = await supabaseClient.from('class_subject_registrations')
-          .select('id')
-          .eq('school_id', schoolId)
-          .eq('academic_session_id', sessionCandidates[si].id)
-          .eq('term_id', termCandidates[ti].id)
-          .eq('class_id', classId)
-          .order('updated_at', { ascending: false })
-          .limit(1)
-          .maybeSingle();
-        if (registrationResult.error) throw registrationResult.error;
-        if (registrationResult.data) {
-          registration = registrationResult.data;
-          matchedSession = sessionCandidates[si];
-          matchedTerm = termCandidates[ti];
-        }
+    var classResult = await supabaseClient.from('classes')
+      .select('id,class_name,level,arm').eq('school_id', schoolId).order('class_name');
+    if (classResult.error) throw classResult.error;
+    availableSupabaseClasses = classResult.data || [];
+    registeredSubjectIdsByClass = {};
+    var classIds = availableSupabaseClasses.map(function(cls) { return String(cls.id); });
+    if (classIds.length) {
+      var registrationsResult = await supabaseClient.from('class_subject_registrations')
+        .select('id,class_id').eq('school_id', schoolId)
+        .eq('academic_session_id', session.id).eq('term_id', term.id)
+        .in('class_id', classIds);
+      if (registrationsResult.error) throw registrationsResult.error;
+      var registrations = registrationsResult.data || [];
+      if (registrations.length) {
+        var itemsResult = await supabaseClient.from('class_subject_registration_items')
+          .select('registration_id,subject_id').eq('school_id', schoolId)
+          .in('registration_id', registrations.map(function(item) { return item.id; }));
+        if (itemsResult.error) throw itemsResult.error;
+        var registrationClass = {};
+        registrations.forEach(function(item) { registrationClass[String(item.id)] = String(item.class_id); });
+        (itemsResult.data || []).forEach(function(item) {
+          var classId = registrationClass[String(item.registration_id)];
+          if (!classId) return;
+          if (!registeredSubjectIdsByClass[classId]) registeredSubjectIdsByClass[classId] = new Set();
+          registeredSubjectIdsByClass[classId].add(String(item.subject_id));
+        });
       }
     }
 
-    if (!registration) {
-      renderStSubjectOptions();
-      return;
-    }
-
-    var itemsResult = await supabaseClient.from('class_subject_registration_items')
-      .select('subject_id')
-      .eq('school_id', schoolId)
-      .eq('registration_id', registration.id);
-    if (itemsResult.error) throw itemsResult.error;
-    registeredSubjectIdsForSelectedClass = new Set(
-      (itemsResult.data || []).map(function(item) { return String(item.subject_id); })
-    );
-
-    // Keep the session/term context used for the successful lookup visible to
-    // the rest of this admin workflow and its subsequent assignment validation.
-    if (matchedSession) activeAcademicSession = matchedSession;
-    if (matchedTerm) activeAssessmentTerm = matchedTerm;
-    renderStSubjectOptions();
-  }
-  function renderStSubjectOptions() {
-    var subjSelect = document.getElementById('newStSubject');
-    var searchInput = document.getElementById('newStSubjectSearch');
-    var classSelect = document.getElementById('newStArm');
-    if (!subjSelect || !searchInput || !classSelect) return;
-    var searchTerm = String(searchInput.value || '').trim().toLowerCase();
-    var selectedClass = availableSupabaseClasses.find(function(item) { return String(item.id) === String(classSelect.value); });
-    var className = String(selectedClass && selectedClass.class_name || '').replace(/\\s+/g, '').toUpperCase();
-    var classLevel = String(selectedClass && selectedClass.level || '').toLowerCase();
-    var isSeniorClass = /^SS[1-3]/.test(className) || classLevel.indexOf('senior') !== -1;
-    var expectedSection = isSeniorClass ? 'senior' : 'basic';
-    // Subject Registration is the sole source of truth. Do not apply a second,
-    // hard-coded subject catalogue here; it can hide valid registered subjects.
-    var sectionSubjects = availableSupabaseSubjects.filter(function(item) {
-      return String(item.section || '').toLowerCase() === expectedSection &&
-        registeredSubjectIdsForSelectedClass.has(String(item.id));
-    });
-    var filteredSubjects = sectionSubjects.filter(function(subject) {
-      return !searchTerm || String(subject.name || '').toLowerCase().includes(searchTerm);
-    });
-    var seenSubjectNames = new Set();
-    var uniqueSubjects = filteredSubjects.filter(function(subject) {
-      var subjectName = String(subject.name || '').trim().replace(/\\s+/g, ' ').toLowerCase();
-      if (!subject.id || !subjectName || seenSubjectNames.has(subjectName)) return false;
-      seenSubjectNames.add(subjectName);
-      return true;
-    });
-    subjSelect.innerHTML = '<option value="">' +
-      (uniqueSubjects.length ? 'Select from ' + uniqueSubjects.length + ' registered subject(s)' :
-        (selectedClass ? (registeredSubjectIdsForSelectedClass.size ? 'Registered subjects are unavailable in the active subject catalogue' : 'No subjects registered for this class and term') : 'Select a class first')) +
-      '</option>' + uniqueSubjects.map(function(item) {
-        return '<option value="' + escapeManagementText(item.id) + '">' + escapeManagementText(item.name) + '</option>';
-      }).join('');
-    subjSelect.disabled = uniqueSubjects.length === 0;
-  }
-  async function populateStSubjectOptions() {
-    var subjSelect = document.getElementById('newStSubject');
-    if (!subjSelect) return;
-    subjSelect.innerHTML = '<option value="">Loading active subjects...</option>';
-    subjSelect.disabled = true;
-    if (!supabaseClient || !authenticatedProfile || !authenticatedProfile.school_id) {
-      subjSelect.innerHTML = '<option value="">Supabase school account required</option>';
-      showToast('An authenticated school account is required to load subjects.', 'error');
-      return;
-    }
-    var result = await supabaseClient.from('subjects')
-      .select('id, name, code, section, subject_group, is_trade, is_optional')
-      .eq('school_id', authenticatedProfile.school_id)
-      .eq('is_active', true)
-      .order('name');
-    if (result.error) {
-      availableSupabaseSubjects = [];
-      subjSelect.innerHTML = '<option value="">Could not load subjects</option>';
-      showToast(result.error.message || 'Could not load active Supabase subjects.', 'error');
-      return;
-    }
-    availableSupabaseSubjects = result.data || [];
-    try {
-      await loadRegisteredSubjectsForClass(document.getElementById('newStArm').value);
-    } catch (error) {
-      registeredSubjectIdsForSelectedClass = new Set();
-      subjSelect.innerHTML = '<option value="">Could not load registered subjects</option>';
-      showToast(error.message || 'Could not load registered subjects for this class.', 'error');
-    }
-  }
-  document.getElementById('newStSubjectSearch').addEventListener('input', renderStSubjectOptions);
-  document.getElementById('newStArm').addEventListener('change', async function() {
+    var subjectsResult = await supabaseClient.from('subjects')
+      .select('id,name,code,section,subject_group,is_trade,is_optional')
+      .eq('school_id', schoolId).eq('is_active', true).order('name');
+    if (subjectsResult.error) throw subjectsResult.error;
+    availableSupabaseSubjects = subjectsResult.data || [];
+    selectedStClassArmIds = new Set();
+    document.getElementById('newStClassSearch').value = '';
     document.getElementById('newStSubjectSearch').value = '';
-    document.getElementById('newStSubject').innerHTML = '<option value="">Loading registered subjects…</option>';
-    try {
-      await loadRegisteredSubjectsForClass(this.value);
-    } catch (error) {
-      registeredSubjectIdsForSelectedClass = new Set();
-      document.getElementById('newStSubject').innerHTML = '<option value="">Could not load registered subjects</option>';
-      showToast(error.message || 'Could not load this class subject registration.', 'error');
-    }
+    renderStSubjectOptions();
+    var info = document.getElementById('subjectTeacherSessionInfo');
+    if (info) info.textContent = 'Academic Session: ' + session.name + ' · Term: ' + term.name +
+      '. Choose a subject, then tick one or more class arms where that subject is registered.';
+  }
+
+  document.getElementById('newStSubjectSearch').addEventListener('input', renderStSubjectOptions);
+  document.getElementById('newStSubject').addEventListener('change', function() {
+    selectedStClassArmIds = new Set();
+    document.getElementById('newStClassSearch').value = '';
+    renderStClassArmChoices();
+  });
+  document.getElementById('newStClassSearch').addEventListener('input', renderStClassArmChoices);
+  document.getElementById('selectAllStClassArms').addEventListener('click', function() {
+    var subjectId = String(document.getElementById('newStSubject').value || '');
+    availableSupabaseClasses.forEach(function(cls) {
+      var ids = registeredSubjectIdsByClass[String(cls.id)] || new Set();
+      var mode = document.querySelector('input[name="subjectTeacherAccountType"]:checked');
+      var staffId = mode && mode.value === 'existing' ? String(document.getElementById('existingStaffProfile').value || '') : '';
+      var alreadyAssigned = subjectAssignments.some(function(item) {
+        return staffId && String(item.teacherId) === staffId && String(item.classId) === String(cls.id) &&
+          String(item.subjectId) === subjectId;
+      });
+      if (subjectId && ids.has(subjectId) && !alreadyAssigned) selectedStClassArmIds.add(String(cls.id));
+    });
+    renderStClassArmChoices();
+  });
+  document.getElementById('clearStClassArms').addEventListener('click', function() {
+    selectedStClassArmIds = new Set();
+    renderStClassArmChoices();
   });
   document.querySelectorAll('input[name="subjectTeacherAccountType"]').forEach(function(input) {
     input.addEventListener('change', function() {
@@ -9483,6 +9506,8 @@ async function renderMasters() {
   document.getElementById('existingStaffSearch').addEventListener('input', renderExistingStaffOptions);
   document.getElementById('existingStaffProfile').addEventListener('change', function() {
     updateExistingStaffDetails();
+    selectedStClassArmIds = new Set();
+    renderStClassArmChoices();
     var selected = existingStaffProfiles.find(function(item) { return String(item.id) === String(this.value); }.bind(this));
     if (selected && !selected.hasAccountProfile && selected.staffRecord) {
       document.querySelector('input[name="subjectTeacherAccountType"][value="new"]').checked = true;
@@ -9495,105 +9520,138 @@ async function renderMasters() {
       document.getElementById('addStBtn').textContent = 'Create Subject Teacher Account';
     }
   });
-  populateStClassOptions();
   populateExistingStaffOptions();
-  populateStSubjectOptions();
+  loadSubjectTeacherAllocationOptions().catch(function(error) {
+    var select = document.getElementById('newStSubject');
+    var choices = document.getElementById('newStClassArmChoices');
+    if (select) { select.innerHTML = '<option value="">Unable to load registered subjects</option>'; select.disabled = true; }
+    if (choices) choices.innerHTML = '<p style="grid-column:1/-1;color:#b42318;font-size:13px;">' + escapeManagementText(error.message || 'Could not load class registrations.') + '</p>';
+    showToast(error.message || 'Could not load registered subjects and class arms.', 'error');
+  });
 
   var addStBtn = document.getElementById('addStBtn');
   if (addStBtn) addStBtn.addEventListener('click', async function() {
     var selectedAccountType = document.querySelector('input[name="subjectTeacherAccountType"]:checked');
     var existingMode = !!selectedAccountType && selectedAccountType.value === 'existing';
-    var classId = document.getElementById('newStArm').value;
-    var assignedClass = availableSupabaseClasses.find(function(item) { return String(item.id) === String(classId); });
     var subjectId = document.getElementById('newStSubject').value;
     var selectedSubject = availableSupabaseSubjects.find(function(item) { return String(item.id) === String(subjectId); });
+    var selectedClassIds = getSelectedStClassArmIds();
+    var selectedClasses = selectedClassIds.map(function(id) {
+      return availableSupabaseClasses.find(function(item) { return String(item.id) === String(id); });
+    }).filter(Boolean);
     var existingProfileId = document.getElementById('existingStaffProfile').value;
     var selectedStaffRecord = existingStaffProfiles.find(function(item) { return String(item.id) === String(existingProfileId); });
     var existingProfile = selectedStaffRecord && selectedStaffRecord.hasAccountProfile ? selectedStaffRecord : null;
+
     if (existingMode && selectedStaffRecord && !selectedStaffRecord.hasAccountProfile) {
-      showToast('This enrolled staff member has no linked login account. Select “New Staff Member” to create the account from the saved Staff Database details.', 'error');
+      showToast('This staff record has no login account. Choose New Staff Member to create an account first.', 'error');
       return;
     }
     if (existingMode && selectedStaffRecord && selectedStaffRecord.staffRecord &&
         String(selectedStaffRecord.staffRecord.status || 'Active').toLowerCase() !== 'active') {
-      showToast('The selected Staff Database record is not Active. Activate the staff record before allocation.', 'error');
+      showToast('The selected Staff Database record is not Active. Activate it before allocation.', 'error');
       return;
     }
     if (existingMode && selectedStaffRecord && !selectedStaffRecord.is_active) {
       showToast('The selected staff login account is inactive. Reactivate it before allocation.', 'error');
       return;
     }
+
     var name = existingMode ? (existingProfile && (existingProfile.full_name || existingProfile.username || existingProfile.email) || '') : document.getElementById('newStName').value.trim();
     var username = existingMode ? (existingProfile && existingProfile.username || '') : document.getElementById('newStUsername').value.trim();
     var email = existingMode ? (existingProfile && existingProfile.email || '') : document.getElementById('newStEmail').value.trim();
     var phone = existingMode ? (existingProfile && existingProfile.phone || '') : document.getElementById('newStPhone').value.trim();
     var passwordInput = document.getElementById('newStPassword');
     var password = existingMode ? '' : passwordInput.value;
-    if (!classId || !assignedClass) { showToast('Select a valid class.', 'error'); return; }
-    if (!subjectId || !selectedSubject) { showToast('Please select a subject.', 'error'); return; }
-    if (!registeredSubjectIdsForSelectedClass.has(String(subjectId))) {
-      showToast('This subject is not registered for the selected class and active term. Register it in the Form Master Subject Registration section first.', 'error');
+
+    if (!subjectId || !selectedSubject) { showToast('Select a registered subject.', 'error'); return; }
+    if (!selectedClasses.length) { showToast('Tick at least one eligible class arm for this subject.', 'error'); return; }
+    if (selectedClasses.some(function(cls) {
+      var registeredIds = registeredSubjectIdsByClass[String(cls.id)] || new Set();
+      return !registeredIds.has(String(subjectId));
+    })) {
+      showToast('One or more selected class arms do not have this subject registered. Refresh the allocation list and try again.', 'error');
       return;
     }
     if (existingMode && (!existingProfileId || !existingProfile)) { showToast('Select an existing active staff member.', 'error'); return; }
-    if (!existingMode && (!name || !username || !email || !password)) { showToast('Full name, username, email and password are required for a new staff account.', 'error'); return; }
-    var className = assignedClass.class_name;
-    var subject = selectedSubject.name;
+    if (!existingMode && (!name || !username || !email || !password)) {
+      showToast('Full name, username, email and password are required for a new staff account.', 'error'); return;
+    }
+    if (!existingMode && password.length < 8) { showToast('Use a password of at least 8 characters.', 'error'); return; }
     if (currentUser.type !== 'admin' || !authenticatedProfile || authenticatedProfile.role !== 'administrator' || authenticatedProfile.is_active !== true) {
       showToast('Only an authenticated active School Administrator can assign Subject Teachers.', 'error'); return;
     }
-    if (!supabaseClient) { showToast('Supabase is not configured. Cannot create a Subject Teacher account.', 'error'); return; }
-    if (!activeAcademicSession || !activeAcademicSession.id) { showToast('No active academic session is available. Select or configure a session first.', 'error'); return; }
+    if (!supabaseClient || !activeAcademicSession || !activeAcademicSession.id || !allocationTermId) {
+      showToast('The active academic session and term are required.', 'error'); return;
+    }
 
     addStBtn.disabled = true;
-    addStBtn.textContent = 'Creating Subject Teacher...';
+    var successfulClasses = [];
+    var teacherProfileId = existingMode ? existingProfile.id : null;
     try {
-      var requestBody = {
-        school_id: authenticatedProfile.school_id,
-        class_id: assignedClass.id,
-        subject_id: subjectId,
-        academic_session_id: activeAcademicSession.id
-      };
-      if (existingMode) {
-        requestBody.existing_profile_id = existingProfile.id;
-      } else {
-        requestBody.full_name = name;
-        requestBody.username = username;
-        requestBody.email = email;
-        requestBody.phone = phone;
-        requestBody.password = password;
-      }
-      var result = await supabaseClient.functions.invoke('create-subject-teacher', { body: requestBody });
-      if (result.error) {
-        var functionErrorMessage = result.error.message || 'Subject Teacher creation failed.';
-        if (result.error.context && typeof result.error.context.json === 'function') {
-          try {
-            var errorBody = await result.error.context.json();
-            if (errorBody && (errorBody.error || errorBody.message)) functionErrorMessage = errorBody.error || errorBody.message;
-          } catch (responseError) {}
+      for (var index = 0; index < selectedClasses.length; index++) {
+        var assignedClass = selectedClasses[index];
+        addStBtn.textContent = 'Assigning ' + (index + 1) + ' of ' + selectedClasses.length + '…';
+        var requestBody = {
+          school_id: authenticatedProfile.school_id,
+          class_id: assignedClass.id,
+          subject_id: subjectId,
+          academic_session_id: activeAcademicSession.id,
+          term_id: allocationTermId
+        };
+        if (teacherProfileId) {
+          requestBody.existing_profile_id = teacherProfileId;
+        } else {
+          requestBody.full_name = name;
+          requestBody.username = username;
+          requestBody.email = email;
+          requestBody.phone = phone;
+          requestBody.password = password;
         }
-        throw new Error(functionErrorMessage);
-      }
-      var functionFailure = result.data && result.data.error;
-      if (!result.data || functionFailure || result.data.success === false) {
-        var responseMessage = functionFailure || (result.data && result.data.message);
-        if (responseMessage && typeof responseMessage === 'object') responseMessage = responseMessage.message || responseMessage.details;
-        throw new Error(responseMessage || 'The Edge Function did not confirm Subject Teacher creation.');
+        var result = await supabaseClient.functions.invoke('create-subject-teacher', { body: requestBody });
+        if (result.error) {
+          var functionErrorMessage = result.error.message || 'Subject Teacher assignment failed.';
+          if (result.error.context && typeof result.error.context.json === 'function') {
+            try {
+              var errorBody = await result.error.context.json();
+              if (errorBody && (errorBody.error || errorBody.message)) functionErrorMessage = errorBody.error || errorBody.message;
+            } catch (responseError) {}
+          }
+          throw new Error(assignedClass.class_name + ': ' + functionErrorMessage);
+        }
+        var functionFailure = result.data && result.data.error;
+        if (!result.data || functionFailure || result.data.success === false) {
+          var responseMessage = functionFailure || (result.data && result.data.message);
+          if (responseMessage && typeof responseMessage === 'object') responseMessage = responseMessage.message || responseMessage.details;
+          throw new Error(assignedClass.class_name + ': ' + (responseMessage || 'The server did not confirm this assignment.'));
+        }
+        if (!teacherProfileId && result.data.subject_teacher && result.data.subject_teacher.id) {
+          teacherProfileId = result.data.subject_teacher.id;
+        }
+        if (!teacherProfileId) throw new Error('The server did not return the teacher account ID needed to complete the remaining class assignments.');
+        successfulClasses.push(assignedClass.class_name);
       }
 
-      logActivity(existingMode ? 'Assigned subject teacher responsibility to existing staff' : 'Added subject teacher assignment', assignedClass.class_name + ' / ' + subject + ' / ' + name);
       if (!existingMode) passwordInput.value = '';
-      showToast(existingMode
-        ? 'Subject Teacher assignment successful. ' + name + ' has been assigned to teach ' + subject + ' in ' + className + '.'
-        : 'Subject Teacher account created and assignment completed successfully.', 'success');
-      renderMasters();
+      logActivity(existingMode ? 'Assigned subject teacher to multiple class arms' : 'Created subject teacher with multiple class-arm assignments',
+        name + ' / ' + selectedSubject.name + ' / ' + successfulClasses.join(', '));
+      showToast(name + ' has been assigned to ' + successfulClasses.length + ' class arm(s) for ' + selectedSubject.name + '.', 'success');
+      selectedStClassArmIds = new Set();
+      await renderMasters();
     } catch (error) {
-      showToast(error && error.message ? error.message : 'Could not create or assign the Subject Teacher.', 'error');
+      if (successfulClasses.length) {
+        showToast('Partially completed: ' + successfulClasses.length + ' of ' + selectedClasses.length +
+          ' class arm(s) assigned (' + successfulClasses.join(', ') + '). ' + error.message +
+          ' Refresh the assignment list before retrying.', 'error');
+        await renderMasters();
+      } else {
+        showToast(error && error.message ? error.message : 'Could not create or assign the Subject Teacher.', 'error');
+      }
     } finally {
       addStBtn.disabled = false;
       addStBtn.textContent = 'Assign Subject Teacher';
     }
-  });
+  });;
 }
 
 window.toggleAssignmentActivation = async function(id) {
