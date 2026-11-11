@@ -12364,7 +12364,9 @@ async function renderSubjectTeacherInput() {
         status: 'draft', updated_at: new Date().toISOString()
       };
       setDraftRowStatus(row, 'Saving…', false);
-      var saved = await supabaseClient.from('results').upsert(payload, {
+      var databasePayload = Object.assign({}, payload);
+      delete databasePayload.total; // results.total is GENERATED ALWAYS by PostgreSQL.
+      var saved = await supabaseClient.from('results').upsert(databasePayload, {
         onConflict: 'student_id,subject_id,academic_session_id,term_id'
       }).select('id,student_id,ca1,ca2,ca3,examination,total,grade,remark,status').single();
       if (saved.error) throw new Error(saved.error.message || 'Supabase draft save failed.');
@@ -12612,7 +12614,12 @@ async function renderSubjectTeacherInput() {
         }).filter(Boolean);
 
         if (!payloads.length) throw new Error('No scores have been entered. Enter at least one score before saving.');
-        var saved = await supabaseClient.from('results').upsert(payloads, {
+        var databasePayloads = payloads.map(function(payload) {
+          var databasePayload = Object.assign({}, payload);
+          delete databasePayload.total; // PostgreSQL calculates this generated column.
+          return databasePayload;
+        });
+        var saved = await supabaseClient.from('results').upsert(databasePayloads, {
           onConflict: 'student_id,subject_id,academic_session_id,term_id'
         }).select('id,student_id,status');
         if (saved.error) throw new Error('Supabase could not save the score batch: ' + saved.error.message);
