@@ -9310,7 +9310,7 @@ async function renderMasters() {
       return;
     }
     var result = await supabaseClient.from('subjects')
-      .select('id, name, code')
+      .select('id, name, code, section, subject_group, is_trade, is_optional')
       .eq('school_id', authenticatedProfile.school_id)
       .eq('is_active', true)
       .order('name');
