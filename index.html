@@ -166,8 +166,8 @@ th { background: #f5f5f5; font-weight: 600; }
         <select id="userType">
           <option value="">Select Login Type</option>
           <option value="admin">School Administrator</option>
-          <option value="formmaster">Form Master</option>
-          <option value="subjectteacher">Subject Teacher</option>
+          <option value="formmaster">Form Master / Form Mistress</option>
+          <option value="subjectteacher">Subject Teacher (existing staff login)</option>
           <option value="subadmin">Sub-Administrator</option>
           <option value="student">Student</option>
           <option value="developer" id="developerLoginOption" hidden>
@@ -183,12 +183,12 @@ th { background: #f5f5f5; font-weight: 600; }
 
       <div id="formmasterFields" class="hidden">
         <div class="input-group"><label>Class Arm</label><select id="selectedArm"><option value="">Select Class Arm</option></select></div>
-        <div class="input-group"><label>Password</label><input type="password" id="armPassword" placeholder="Enter your password"></div>
+        <div class="input-group"><label>Password</label><input type="password" id="armPassword" autocomplete="current-password" placeholder="Use your existing staff password"></div>
       </div>
 
       <div id="subjectTeacherFields" class="hidden">
         <div class="input-group"><label for="selectedAssignment">Assigned Class Arm &amp; Subject</label><select id="selectedAssignment"><option value="">Assigned classes load after sign in</option></select><small style="display:block;color:#666;margin-top:6px">After you enter your email and password and tap Login, your assigned class arms and subjects will appear here. Select the assignment you want, then tap Login again.</small></div>
-        <div class="input-group"><label for="assignmentPassword">Password</label><input type="password" id="assignmentPassword" placeholder="Enter your password"></div>
+        <div class="input-group"><label for="assignmentPassword">Existing Staff Password</label><input type="password" id="assignmentPassword" autocomplete="current-password" placeholder="Use the same password as your Form Master login"></div><small style="display:block;color:#166534;margin-top:5px">Form Masters and Form Mistresses assigned to teach a subject must use their existing email and password. No second account or separate password is required.</small>
       </div>
       <div id="subadminLoginFields" class="hidden">
         <div class="input-group"><label>Username</label><input type="text" id="subadminUsername" autocomplete="username"></div>
@@ -1531,7 +1531,7 @@ async function handleSupabaseLogin(userType, errorDiv) {
       }
     }
     if (!profile.school_id && userType !== 'developer') throw new Error('This account is not linked to a school. Contact the administrator.');
-    var profileRolesResult = await supabaseClient.from('profile_roles').select('role').eq('profile_id', profile.id);
+    var profileRolesResult = await supabaseClient.from('profile_roles').select('role').eq('profile_id', profile.id).eq('is_active', true);
     if (profileRolesResult.error) throw profileRolesResult.error;
     var activeRoles = [profile.role]
       .concat((profileRolesResult.data || []).map(function(item) {
@@ -9063,9 +9063,9 @@ async function renderMasters() {
   html += '</div><p style="color:#666; font-size:13px; margin-bottom:15px;">Manage individual Supabase Form Master accounts and their class assignments. Temporary passwords are generated only by the server and shown once.</p><div id="formMasterManagementPanel"><p class="alert alert-info">Loading Form Master assignments…</p></div></div></div><div id="mastersSubjectSection"' + (activeMastersCategory === 'subjectTeachers' ? '' : ' style="display:none"') + '>';
 
   html += '<div class="card"><div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;"><h2 style="margin: 0;">Subject Teachers</h2>';
-  html += '</div><p style="color:#666; font-size:13px; margin-bottom:15px;">Assign one teacher to a subject across one or more eligible class arms. Activate each slot to let the teacher log in and enter scores only for the assigned subject and class arms.</p>';
+  html += '</div><p style="color:#666; font-size:13px; margin-bottom:15px;">Assign an existing staff member to a subject across one or more eligible class arms. Form Masters and Form Mistresses keep their existing account and password when given Subject Teacher duties; no duplicate login is created. Teachers can enter scores only for their assigned subject and class arms.</p>';
   html += '<div style="background: #f9f9f9; padding: 15px; border-radius: 8px; margin-bottom: 20px;"><h3 style="margin: 0 0 15px 0; font-size: 16px;">Add Subject Teacher</h3>' +
-    '<div class="input-group"><label>Subject Teacher Account Type</label><div class="subject-teacher-account-options"><label class="subject-teacher-account-option"><input type="radio" name="subjectTeacherAccountType" value="existing" checked> Existing Staff Member</label><label class="subject-teacher-account-option"><input type="radio" name="subjectTeacherAccountType" value="new"> New Staff Member</label></div></div>' +
+    '<p class="alert alert-info" style="margin-bottom:14px">Important: If the teacher is already a Form Master or Form Mistress, select Existing Staff Member and choose that person. Their current Supabase account and password will be used for both roles.</p><div class="input-group"><label>Subject Teacher Account Type</label><div class="subject-teacher-account-options"><label class="subject-teacher-account-option"><input type="radio" name="subjectTeacherAccountType" value="existing" checked> Existing Staff Member</label><label class="subject-teacher-account-option"><input type="radio" name="subjectTeacherAccountType" value="new"> New Staff Member</label></div></div>' +
     '<div id="existingStaffFields"><div class="input-group"><label for="existingStaffSearch">Search existing staff</label><input type="search" id="existingStaffSearch" placeholder="Search staff name, username or email..."></div><div class="input-group"><label for="existingStaffProfile">Select Existing Staff Member</label><select id="existingStaffProfile"><option value="">Loading enrolled staff records...</option></select></div><div id="existingStaffDetails" class="alert alert-info">Select a staff member to view their account and responsibilities.</div><div id="existingStaffLoadError" class="hidden alert alert-error"></div></div>' +
     '<div class="input-group"><label for="newStSubjectSearch">Find a subject</label><input type="search" id="newStSubjectSearch" placeholder="Search registered subjects…" autocomplete="off"></div>' +
     '<div class="input-group"><label for="newStSubject">Subject to assign</label><select id="newStSubject"><option value="">Loading registered subjects…</option></select></div>' +
@@ -9312,7 +9312,7 @@ async function renderMasters() {
       var profileIds = profiles.map(function(profile) { return profile.id; }).filter(Boolean);
       var rolesByProfile = {};
       if (profileIds.length) {
-        var rolesResult = await supabaseClient.from('profile_roles').select('profile_id,role').in('profile_id', profileIds);
+        var rolesResult = await supabaseClient.from('profile_roles').select('profile_id,role').in('profile_id', profileIds).eq('is_active', true);
         if (rolesResult.error) throw rolesResult.error;
         (rolesResult.data || []).forEach(function(item) {
           if (!rolesByProfile[String(item.profile_id)]) rolesByProfile[String(item.profile_id)] = [];
