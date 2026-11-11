@@ -11193,12 +11193,64 @@ window.computePositions = async function() {
 };
 
 // ===================== VIEW + EXCEL EXPORT =====================
+async function loadAdminCa1ResultsView() {
+  if (!currentUser || currentUser.type !== 'admin') return;
+  var panel = document.getElementById('adminCa1ResultsPanel');
+  if (!panel || !supabaseClient || !authenticatedProfile || !authenticatedProfile.school_id) return;
+  panel.innerHTML = '<p style="color:#64748b">Loading students with entered CA1 scores…</p>';
+  try {
+    var schoolId = authenticatedProfile.school_id;
+    var resultsQuery = await supabaseClient.from('results')
+      .select('id,student_id,class_id,subject_id,academic_session_id,term_id,ca1,ca2,ca3,examination,total,status,created_at')
+      .eq('school_id', schoolId).not('ca1', 'is', null)
+      .order('created_at', { ascending: false });
+    if (resultsQuery.error) throw resultsQuery.error;
+    var rows = resultsQuery.data || [];
+    if (!rows.length) {
+      panel.innerHTML = '<p style="color:#64748b">No saved CA1 scores were found in this school yet. Students will appear here automatically as soon as a teacher saves a CA1 score.</p>';
+      return;
+    }
+    var ids = function(key) { return Array.from(new Set(rows.map(function(row) { return row[key]; }).filter(Boolean))); };
+    var studentIds = ids('student_id'), classIds = ids('class_id'), subjectIds = ids('subject_id'),
+        sessionIds = ids('academic_session_id'), termIds = ids('term_id');
+    var fetchByIds = async function(table, columns, key, values) {
+      if (!values.length) return [];
+      var result = await supabaseClient.from(table).select(columns).eq('school_id', schoolId).in(key, values);
+      if (result.error) throw result.error;
+      return result.data || [];
+    };
+    var fetched = await Promise.all([
+      fetchByIds('students','id,first_name,middle_name,last_name,admission_number','id',studentIds),
+      fetchByIds('classes','id,class_name','id',classIds),
+      fetchByIds('subjects','id,name','id',subjectIds),
+      fetchByIds('academic_sessions','id,name','id',sessionIds),
+      fetchByIds('terms','id,name,term_number','id',termIds)
+    ]);
+    var indexById = function(list) { var map = {}; list.forEach(function(item) { map[String(item.id)] = item; }); return map; };
+    var studentsById=indexById(fetched[0]), classesById=indexById(fetched[1]), subjectsById=indexById(fetched[2]),
+        sessionsById=indexById(fetched[3]), termsById=indexById(fetched[4]);
+    var esc = escapeManagementText;
+    var html = '<div style="margin-bottom:10px"><strong>' + rows.length + ' subject result record(s) with CA1 entered</strong></div>' +
+      '<div style="overflow-x:auto"><table><thead><tr><th>Student</th><th>Admission No.</th><th>Class</th><th>Subject</th><th>Session</th><th>Term</th><th>CA1</th><th>CA2</th><th>CA3</th><th>Exam</th><th>Status</th></tr></thead><tbody>';
+    rows.forEach(function(row) {
+      var student=studentsById[String(row.student_id)]||{}, session=sessionsById[String(row.academic_session_id)]||{}, term=termsById[String(row.term_id)]||{};
+      var name=[student.first_name,student.middle_name,student.last_name].filter(Boolean).join(' ') || 'Student record unavailable';
+      html += '<tr><td>'+esc(name)+'</td><td>'+esc(student.admission_number||'—')+'</td><td>'+esc((classesById[String(row.class_id)]||{}).class_name||'—')+'</td><td>'+esc((subjectsById[String(row.subject_id)]||{}).name||'—')+'</td><td>'+esc(session.name||'—')+'</td><td>'+esc(term.name||('Term '+(term.term_number||'—')) )+'</td><td><strong>'+esc(row.ca1)+'</strong></td><td>'+esc(row.ca2==null?'—':row.ca2)+'</td><td>'+esc(row.ca3==null?'—':row.ca3)+'</td><td>'+esc(row.examination==null?'—':row.examination)+'</td><td>'+esc(row.status||'draft')+'</td></tr>';
+    });
+    html += '</tbody></table></div>';
+    panel.innerHTML = html;
+  } catch (error) {
+    console.error('Admin CA1 results view failed:', error);
+    panel.innerHTML = '<p style="color:#b42318">Could not load saved CA1 results: '+escapeManagementText(error.message||'Unknown error')+'</p>';
+  }
+}
+
 function renderView() {
   var userStudents = currentUser.type === 'admin' || currentUser.type === 'subadmin' ? students : students.filter(function(s) { return s.className === currentUser.arm; });
   var canDeleteStudents = currentUser.type === 'admin' || currentUser.type === 'formmaster' || (currentUser.type === 'subadmin' && hasSubAdminPermission('deleteRecords'));
   var canGenerateSheets = currentUser.type === 'admin' || currentUser.type === 'formmaster' || (currentUser.type === 'subadmin' && hasSubAdminPermission('generateSheets'));
   var canManagePassports = currentUser.type === 'admin' || currentUser.type === 'formmaster' || (currentUser.type === 'subadmin' && hasSubAdminPermission('manageStudents'));
-  var html = '<div class="card"><div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; flex-wrap: wrap; gap: 10px;"><h2 style="margin: 0;">Classes Catalogue / Students</h2>';
+  var html = (currentUser.type === 'admin' ? '<div class="card"><h2>Students with CA1 Scores</h2><p style="color:#64748b;font-size:13px">Students appear here once at least their first CA score has been saved.</p><div id="adminCa1ResultsPanel"><p style="color:#64748b">Loading saved CA1 results…</p></div></div>' : '') + '<div class="card"><div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; flex-wrap: wrap; gap: 10px;"><h2 style="margin: 0;">Classes Catalogue / Students</h2>';
   if (userStudents.length > 0) html += '<div style="display: flex; gap: 8px; flex-wrap: wrap;">' + (canGenerateSheets ? '<button class="btn btn-success" onclick="exportToExcel()">📊 Export to Excel</button>' : '') + (canDeleteStudents ? '<button class="btn btn-danger" onclick="clearAllStudents()">Clear All Students</button>' : '') + '</div>';
   html += '</div>';
 
@@ -11214,6 +11266,7 @@ function renderView() {
     html += '</tbody></table></div></div>';
   }
   document.getElementById('viewTab').innerHTML = html;
+  if (currentUser.type === 'admin') loadAdminCa1ResultsView();
   document.querySelectorAll('.passport-upload').forEach(function(input) {
     input.addEventListener('change', async function() {
       var file = input.files && input.files[0];
