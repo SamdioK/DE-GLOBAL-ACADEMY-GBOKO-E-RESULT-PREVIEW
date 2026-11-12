@@ -25,8 +25,9 @@ export default {
 
       if (body.action === "list") {
         let enrolmentsQuery = ctx.supabaseAdmin.from("student_enrolments")
-          .select("student_id,class_id,academic_session_id,students!inner(admission_number,first_name,middle_name,last_name),classes!inner(class_name)")
-          .eq("school_id", actor.school_id).is("archived_at", null);
+          .select("student_id,class_id,academic_session_id,register_number,students!inner(admission_number,first_name,middle_name,last_name),classes!inner(class_name)")
+          .eq("school_id", actor.school_id).is("archived_at", null)
+          .order("register_number", { ascending: true });
         if (body.academic_session_id) enrolmentsQuery = enrolmentsQuery.eq("academic_session_id", body.academic_session_id);
         if (body.class_id) enrolmentsQuery = enrolmentsQuery.eq("class_id", body.class_id);
         const { data: enrolments, error: enrolmentError } = await enrolmentsQuery;
@@ -76,6 +77,7 @@ export default {
             class_id: e.class_id,
             class_name: cls?.class_name || "",
             academic_session_id: e.academic_session_id,
+            register_number: e.register_number,
             admission_number: student?.admission_number || "",
             full_name: [student?.first_name, student?.middle_name, student?.last_name].filter(Boolean).join(" "),
             eligible_result_count: eligibleCounts.get(e.student_id) || 0,
