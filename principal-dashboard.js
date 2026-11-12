@@ -77,6 +77,21 @@
   async function count(table, extra) {
     return await query(table, 'id', {count:true, eq:extra || {}});
   }
+  async function queryAll(table, columns, orderColumn) {
+    var all = [], offset = 0, pageSize = 1000;
+    while (true) {
+      var result = await supabaseClient.from(table).select(columns || '*')
+        .eq('school_id', authenticatedProfile.school_id)
+        .order(orderColumn || 'created_at', {ascending:false})
+        .range(offset, offset + pageSize - 1);
+      if (result.error) throw result.error;
+      var batch = result.data || [];
+      all = all.concat(batch);
+      if (batch.length < pageSize) break;
+      offset += pageSize;
+    }
+    return all;
+  }
   function stat(label, value, note) {
     return '<div class="principal-stat"><span class="label">' + esc(label) + '</span><strong>' +
       esc(value) + '</strong><small>' + esc(note || 'Official school record') + '</small></div>';
@@ -93,7 +108,7 @@
     try {
       var vals = await Promise.all([
         count('students'), count('classes'), count('school_staff_directory'),
-        count('subjects'), query('results','id,status,total,grade,academic_session_id,term_id',{limit:1500}),
+        count('subjects'), queryAll('results','id,status,total,grade,academic_session_id,term_id','created_at'),
         query('academic_sessions','id,name,is_current',{order:'created_at',limit:20}),
         query('terms','id,name,term_number,is_current',{limit:10})
       ]);
@@ -141,7 +156,7 @@
   async function renderResults(root) {
     root.innerHTML=frame('principalResults','<div class="principal-panel">Loading results workflow…</div>');
     try {
-      var rows=await query('results','id,status,total,grade,academic_session_id,term_id,student_id,class_id,subject_id,submitted_at,approved_at,published_at',{order:'created_at',limit:1500});
+      var rows=await queryAll('results','id,status,total,grade,academic_session_id,term_id,student_id,class_id,subject_id,submitted_at,approved_at,published_at','created_at');
       var tally={draft:0,submitted:0,approved:0,published:0,other:0};
       rows.forEach(function(r){var s=String(r.status||'other').toLowerCase();if(tally.hasOwnProperty(s))tally[s]++;else tally.other++;});
       root.innerHTML=frame('principalResults','<div class="principal-grid">'+stat('Draft',tally.draft,'Awaiting teacher submission')+
@@ -156,7 +171,7 @@
   async function renderReports(root) {
     root.innerHTML=frame('principalReports','<div class="principal-panel">Preparing academic summaries…</div>');
     try {
-      var vals=await Promise.all([query('results','id,total,grade,class_id,subject_id,status',{limit:1500}),query('classes','id,class_name'),query('subjects','id,name')]);
+      var vals=await Promise.all([queryAll('results','id,total,grade,class_id,subject_id,status','created_at'),query('classes','id,class_name'),query('subjects','id,name')]);
       var results=vals[0],classes=vals[1],subjects=vals[2];
       var classRows=classes.map(function(c){var subset=results.filter(function(r){return r.class_id===c.id&&r.total!==null;});var average=subset.length?Math.round(subset.reduce(function(s,r){return s+Number(r.total||0);},0)/subset.length):0;return row([esc(c.class_name),subset.length,subset.length?average+'%':'—']);});
       var subjectRows=subjects.map(function(s){var subset=results.filter(function(r){return r.subject_id===s.id&&r.total!==null;});var average=subset.length?Math.round(subset.reduce(function(a,r){return a+Number(r.total||0);},0)/subset.length):0;return {name:s.name,count:subset.length,average:average};}).filter(function(s){return s.count;}).sort(function(a,b){return b.average-a.average;}).map(function(s){return row([esc(s.name),s.count,s.average+'%']);});
