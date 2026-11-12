@@ -171,8 +171,11 @@
   async function renderReports(root) {
     root.innerHTML=frame('principalReports','<div class="principal-panel">Preparing academic summaries…</div>');
     try {
-      var vals=await Promise.all([queryAll('results','id,total,grade,class_id,subject_id,status','created_at'),query('classes','id,class_name'),query('subjects','id,name')]);
+      var vals=await Promise.all([queryAll('results','id,total,grade,class_id,subject_id,status,academic_session_id,term_id','created_at'),query('classes','id,class_name'),query('subjects','id,name'),query('academic_sessions','id,name,is_current'),query('terms','id,name,is_current,term_number')]);
       var results=vals[0],classes=vals[1],subjects=vals[2];
+      var currentSession=vals[3].find(function(x){return x.is_current;})||vals[3][0];
+      var currentTerm=vals[4].find(function(x){return x.is_current;})||vals[4].sort(function(x,y){return Number(x.term_number)-Number(y.term_number);})[0];
+      results=results.filter(function(r){return (!currentSession||r.academic_session_id===currentSession.id)&&(!currentTerm||r.term_id===currentTerm.id);});
       var classRows=classes.map(function(c){var subset=results.filter(function(r){return r.class_id===c.id&&r.total!==null;});var average=subset.length?Math.round(subset.reduce(function(s,r){return s+Number(r.total||0);},0)/subset.length):0;return row([esc(c.class_name),subset.length,subset.length?average+'%':'—']);});
       var subjectRows=subjects.map(function(s){var subset=results.filter(function(r){return r.subject_id===s.id&&r.total!==null;});var average=subset.length?Math.round(subset.reduce(function(a,r){return a+Number(r.total||0);},0)/subset.length):0;return {name:s.name,count:subset.length,average:average};}).filter(function(s){return s.count;}).sort(function(a,b){return b.average-a.average;}).map(function(s){return row([esc(s.name),s.count,s.average+'%']);});
       root.innerHTML=frame('principalReports','<div class="principal-panel"><h3>Class Performance Summary</h3>'+table(['Class Arm','Result Entries','Average Score'],classRows,'No class result data is available.')+'</div>'+
