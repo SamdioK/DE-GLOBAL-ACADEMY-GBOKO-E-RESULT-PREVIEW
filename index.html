@@ -3799,10 +3799,10 @@ function renderUserManagement() {
       '<div class="input-group"><label>Phone Number</label><input id="principalAccountPhone" type="tel" placeholder="Optional phone number"></div></div>' +
       '<button class="btn btn-success" id="createPrincipalAccountBtn">Create Principal Account</button>') +
       (principalNotice ? '<div class="alert alert-info" style="white-space:pre-wrap;margin-top:12px">'+esc(principalNotice)+'</div><button class="btn" id="clearPrincipalNoticeBtn">Dismiss credentials notice</button>' : '') +
-      '</div>' +
+      '</section>' +
       '</section><section class="um-panel"><div class="um-panel-heading"><div><span class="um-section-kicker">DELEGATED ACCESS</span><h2>Sub-Administrator Management</h2><p>Create support accounts and assign only the permissions each person needs.</p></div><span class="um-role-tag um-muted-tag">SUB-ADMIN</span></div>' +
       '<p style="color:#64748b">Accounts and individual permissions are now managed through Supabase. Passwords are generated securely on the server. Accounts are deactivated rather than deleted.</p>' +
-      '<h3>Create Sub-Administrator</h3><div class="grid grid-2">' +
+      '<div class="um-subadmin-form"><h3>Create Sub-Administrator</h3><div class="grid grid-2">' +
       '<div class="input-group"><label>Full Name *</label><input id="saFullName" autocomplete="name"></div>' +
       '<div class="input-group"><label>Username *</label><input id="saUsername" autocomplete="username"></div>' +
       '<div class="input-group"><label>Email *</label><input id="saEmail" type="email" autocomplete="email"></div>' +
@@ -3824,7 +3824,7 @@ function renderUserManagement() {
       });
       html += '</tbody></table></div>';
     }
-    html += '</div>';
+    html += '</div></section>';
     if (selectedId) {
       var selected = accounts.find(function(a) { return a.id === selectedId; });
       html += '<div class="um-panel um-permissions-panel"><h3>Individual Permissions' + (selected ? ' — ' + esc(selected.full_name) : '') + '</h3>' +
@@ -3834,7 +3834,7 @@ function renderUserManagement() {
         }).join('') + '</div><button class="btn btn-success" id="saSavePermissions" style="margin-top:14px">Save Permissions</button></div>';
     }
     if (notice) html += '<div class="um-credential-notice"><p class="alert alert-info" style="white-space:pre-wrap">' + esc(notice) + '</p><button class="btn" id="saClearNotice">Dismiss</button></div>';
-    html += '</div></section></div>';
+    html += '</div>';
     root.innerHTML = html;
     var principalCreateBtn = document.getElementById('createPrincipalAccountBtn');
     if (principalCreateBtn) principalCreateBtn.addEventListener('click', createPrincipalAccount);
