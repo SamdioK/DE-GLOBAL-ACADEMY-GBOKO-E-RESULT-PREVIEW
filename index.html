@@ -1214,7 +1214,7 @@ async function loadArmDropdown() {
   // Form Master assignments are private. They are fetched from Supabase
   // after the user authenticates, never from device-local browser storage.
   var select = document.getElementById('selectedArm');
-  if (select) select.innerHTML = '<option value="">Assigned classes load after sign in</option>';
+  if (select) select.innerHTML = '<option value="">Sign in to load your assigned class arms</option>';
 }
 
 async function resolveSupabaseClass(className) {
@@ -1542,7 +1542,20 @@ async function handleSupabaseLogin(userType, errorDiv) {
     subadmin: ['sub_administrator'], student: ['student'], developer: ['portal_developer']
   };
   try {
-    var authResult = await supabaseClient.auth.signInWithPassword({ email: email, password: password });
+    // If the first authenticated attempt was used only to retrieve this teacher's
+    // private class assignments, reuse that same Supabase session when they select
+    // an assignment and press Login again. Never expose assignments before auth.
+    var existingSessionResult = await supabaseClient.auth.getSession();
+    if (existingSessionResult.error) throw existingSessionResult.error;
+    var existingSession = existingSessionResult.data && existingSessionResult.data.session;
+    var authResult;
+    if (existingSession && existingSession.user &&
+        String(existingSession.user.email || '').toLowerCase() === email.toLowerCase()) {
+      authResult = { data: { user: existingSession.user }, error: null };
+    } else {
+      if (existingSession) await supabaseClient.auth.signOut();
+      authResult = await supabaseClient.auth.signInWithPassword({ email: email, password: password });
+    }
     if (authResult.error || !authResult.data || !authResult.data.user) throw authResult.error || new Error('Sign-in failed.');
     var profileResult = await supabaseClient.from('profiles')
       .select('id,school_id,full_name,username,email,gender,role,is_active,must_change_password')
@@ -1672,10 +1685,10 @@ async function handleSupabaseLogin(userType, errorDiv) {
             selectedArmInput.appendChild(option);
           });
         }
-        currentUser = null;
-        authenticatedProfile = null;
-        await supabaseClient.auth.signOut();
-        errorDiv.textContent = 'Your assigned classes are now available. Select your class and tap Login again.';
+        // Keep the authenticated Supabase session alive while the teacher
+        // chooses one of the assignments just retrieved from Supabase.
+        // The next Login tap resumes this same session and completes the login.
+        errorDiv.textContent = 'Your assigned classes are now available. Select your class arm and tap Login again to continue.';
         errorDiv.classList.remove('hidden');
         if (selectedArmInput) selectedArmInput.focus();
         return;
