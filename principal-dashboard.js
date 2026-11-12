@@ -100,7 +100,7 @@
       var students=vals[0], classes=vals[1], staff=vals[2], subjects=vals[3], results=vals[4], sessions=vals[5], terms=vals[6];
       var currentSession=sessions.find(function(x){return x.is_current;}) || sessions[0];
       var currentTerm=terms.find(function(x){return x.is_current;}) || terms.sort(function(a,b){return Number(a.term_number)-Number(b.term_number);})[0];
-      var activeResults=results.filter(function(r){return !currentSession || r.academic_session_id===currentSession.id;});
+      var activeResults=results.filter(function(r){return (!currentSession || r.academic_session_id===currentSession.id) && (!currentTerm || r.term_id===currentTerm.id);});
       var submitted=activeResults.filter(function(r){return ['submitted','approved','published'].indexOf(String(r.status||'').toLowerCase())!==-1;}).length;
       var published=activeResults.filter(function(r){return String(r.status||'').toLowerCase()==='published';}).length;
       var avg=activeResults.length?Math.round(activeResults.reduce(function(s,r){return s+Number(r.total||0);},0)/activeResults.length):0;
