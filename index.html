@@ -7623,7 +7623,7 @@ function renderStaffDatabase() {
       }
     }
     var file = document.getElementById('staffPhoto').files[0];
-    if (file && (!/^image\\/(png|jpeg|webp)$/i.test(file.type || '') || file.size > 5 * 1024 * 1024)) {
+    if (file && (!/^image\/(png|jpeg|webp)$/i.test(file.type || '') || file.size > 5 * 1024 * 1024)) {
       showToast('Choose a PNG, JPG or WEBP staff photograph up to 5 MB.', 'error');
       return;
     }
