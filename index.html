@@ -2873,7 +2873,12 @@ async function saveAllData() {
   var role = String(authenticatedProfile && authenticatedProfile.role || '').toLowerCase();
   // Score/result workflows for non-admin staff write to their dedicated relational tables.
   // They must not attempt to rewrite school-wide administrator configuration.
-  if (['subject_teacher','form_master','sub_administrator'].includes(role)) return true;
+  // The Principal workspace is deliberately read-only. Startup helpers and shared
+  // legacy UI callbacks may still reach this function; treat those calls as a
+  // harmless no-op rather than surfacing an administrator-configuration denial.
+  // Principal-specific decisions/approvals must use their separately authorised
+  // workflow and must never write school-wide configuration through this function.
+  if (['subject_teacher','form_master','sub_administrator','principal'].includes(role)) return true;
   if (!['administrator','portal_developer'].includes(role)) {
     throw new Error('This account is not authorised to save school-wide configuration.');
   }
