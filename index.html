@@ -3791,6 +3791,47 @@ function renderUserManagement() {
   var activeSection = 'principal';
 
   function esc(value) { return escapeManagementText(value == null ? '' : String(value)); }
+  function showPrincipalCredentialsDialog(details) {
+    var dialog = showStudentDbDialog(
+      details.isReset ? 'Principal Password Reset' : 'Principal Account Created',
+      '<div style="display:flex;align-items:center;gap:12px;padding:14px 16px;background:#ecfdf3;border:1px solid #b7e4c7;border-radius:12px;margin-bottom:18px">' +
+        '<div style="width:42px;height:42px;flex:0 0 42px;border-radius:50%;display:grid;place-items:center;background:#d1fae5;color:#087443;font-size:22px;font-weight:800">✓</div>' +
+        '<div><strong style="display:block;color:#12643f;font-size:15px">' + (details.isReset ? 'Password reset successfully' : 'Principal account created successfully') + '</strong>' +
+        '<span style="display:block;color:#39745a;font-size:12px;margin-top:3px">The account operation has been confirmed by Supabase.</span></div></div>' +
+      '<div style="border:1px solid #e2e8f0;border-radius:12px;overflow:hidden;margin-bottom:16px">' +
+        '<div style="padding:11px 14px;background:#f8fafc;border-bottom:1px solid #e2e8f0;font-weight:700;color:#334155">ACCOUNT DETAILS</div>' +
+        '<div style="display:grid;grid-template-columns:minmax(95px,.7fr) 1.3fr;gap:8px 12px;padding:14px;font-size:13px">' +
+          (details.fullName ? '<span style="color:#64748b">Full name</span><strong style="color:#1e293b;overflow-wrap:anywhere">' + esc(details.fullName) + '</strong>' : '') +
+          (details.username ? '<span style="color:#64748b">Username</span><strong style="color:#1e293b;overflow-wrap:anywhere">' + esc(details.username) + '</strong>' : '') +
+          (details.email ? '<span style="color:#64748b">Email address</span><strong style="color:#1e293b;overflow-wrap:anywhere">' + esc(details.email) + '</strong>' : '') +
+        '</div></div>' +
+      '<div style="padding:14px;border:1px solid #cbd5e1;border-radius:12px;background:#f8fafc">' +
+        '<label for="principalTemporaryPassword" style="display:block;font-size:12px;font-weight:700;color:#334155;margin-bottom:8px">TEMPORARY PASSWORD</label>' +
+        '<div style="display:flex;gap:8px;align-items:stretch;flex-wrap:wrap">' +
+          '<input id="principalTemporaryPassword" type="text" readonly autocomplete="off" value="' + esc(details.password) + '" style="flex:1 1 190px;min-width:0;font-family:monospace;font-size:15px;font-weight:700;letter-spacing:.3px;padding:11px;border:1px solid #cbd5e1;border-radius:8px;background:#fff;color:#0f172a">' +
+          '<button type="button" class="btn btn-primary" id="copyPrincipalTemporaryPassword" style="white-space:nowrap">Copy password</button></div>' +
+        '<p id="principalCredentialCopyStatus" role="status" aria-live="polite" style="min-height:18px;margin:7px 0 0;font-size:12px;color:#166534"></p></div>' +
+      '<div style="display:flex;gap:10px;align-items:flex-start;margin-top:14px;padding:12px;border-left:4px solid #d69e2e;background:#fffbeb;border-radius:8px;color:#854d0e;font-size:12px;line-height:1.5">' +
+        '<span aria-hidden="true" style="font-size:17px">🔒</span><div><strong>Security reminder</strong><br>Share this temporary password privately with the Principal. It must be changed immediately at first login. Do not post or forward these credentials in a public group.</div></div>' +
+      '<p style="font-size:11px;color:#64748b;margin:12px 0 0">For security, this password is shown only in this confirmation dialog. Close the dialog after recording it safely.</p>'
+    );
+    var copyButton = dialog && dialog.querySelector('#copyPrincipalTemporaryPassword');
+    if (copyButton) copyButton.addEventListener('click', async function() {
+      var input = dialog.querySelector('#principalTemporaryPassword');
+      var status = dialog.querySelector('#principalCredentialCopyStatus');
+      try {
+        if (navigator.clipboard && window.isSecureContext) await navigator.clipboard.writeText(input.value);
+        else {
+          input.focus(); input.select();
+          if (!document.execCommand('copy')) throw new Error('Copy is unavailable. Select and copy the password manually.');
+        }
+        status.textContent = 'Temporary password copied. Share it privately.';
+      } catch (error) {
+        input.focus(); input.select();
+        status.textContent = error.message || 'Select the password above and copy it manually.';
+      }
+    });
+  }
   function render() {
     var html = '<div class="um-shell"><div class="masters-category-picker" role="tablist" aria-label="User management"><button type="button" class="masters-category-button '+(activeSection==='principal'?'selected':'')+'" data-um-section="principal" role="tab" aria-selected="'+(activeSection==='principal')+'">Principal</button><button type="button" class="masters-category-button '+(activeSection==='subadmins'?'selected':'')+'" data-um-section="subadmins" role="tab" aria-selected="'+(activeSection==='subadmins')+'">Sub-Administrator</button></div>' +
       (activeSection === 'principal' ? '<section class="um-panel um-principal-panel"><div class="um-panel-heading"><div><h2>Principal Account</h2></div></div>' +
@@ -3800,7 +3841,7 @@ function renderUserManagement() {
       '<div class="input-group"><label>Email Address *</label><input id="principalAccountEmail" type="email" autocomplete="email" placeholder="Principal email"></div>' +
       '<div class="input-group"><label>Phone Number</label><input id="principalAccountPhone" type="tel" placeholder="Optional phone number"></div></div>' +
       '<button class="btn btn-success" id="createPrincipalAccountBtn">Create Principal Account</button>') +
-      (principalNotice ? '<div class="alert alert-info" style="white-space:pre-wrap;margin-top:12px">'+esc(principalNotice)+'</div><button class="btn" id="clearPrincipalNoticeBtn">Dismiss credentials notice</button>' : '') +
+
       '</section>' : '');
     if (activeSection === 'subadmins') {
       html += '<section class="um-panel"><div class="um-panel-heading"><div><h2>Sub-Administrator Accounts</h2></div></div>' +
@@ -3844,8 +3885,6 @@ function renderUserManagement() {
     if (principalCreateBtn) principalCreateBtn.addEventListener('click', createPrincipalAccount);
     root.querySelectorAll('.principal-status').forEach(function(btn){btn.addEventListener('click',function(){setPrincipalStatus(btn.dataset.id,btn.dataset.active==='true');});});
     root.querySelectorAll('.principal-reset').forEach(function(btn){btn.addEventListener('click',function(){resetPrincipalPassword(btn.dataset.id);});});
-    var clearPrincipalNoticeBtn=document.getElementById('clearPrincipalNoticeBtn');
-    if(clearPrincipalNoticeBtn) clearPrincipalNoticeBtn.addEventListener('click',function(){principalNotice='';render();});
     var createBtn = document.getElementById('saCreateBtn');
     if (createBtn) createBtn.addEventListener('click', createAccount);
     root.querySelectorAll('.sa-select').forEach(function(btn) { btn.addEventListener('click', function() { loadGrants(btn.dataset.id); }); });
@@ -3871,9 +3910,9 @@ function renderUserManagement() {
       var result=await supabaseClient.functions.invoke('manage-principal-account',{body:payload});
       if(result.error) throw result.error;
       if(!result.data||result.data.success!==true) throw new Error(result.data&&result.data.error||'Principal account creation failed.');
-      principalNotice='PRINCIPAL ACCOUNT CREATED SUCCESSFULLY\\n\\nName: '+payload.full_name+'\\nUsername: '+payload.username+'\\nEmail: '+payload.email+'\\nTemporary password: '+result.data.temporary_password+'\\n\\nShare these credentials privately. The Principal must change the password at first login.';
       showToast('Principal account created successfully.','success');
       await loadPrincipalAccounts();render();
+      showPrincipalCredentialsDialog({fullName:payload.full_name,username:payload.username,email:payload.email,password:result.data.temporary_password,isReset:false});
     }catch(error){showToast(error.message||'Could not create Principal account.','error');button.disabled=false;button.textContent='Create Principal Account';}
   }
   async function setPrincipalStatus(profileId,isActive){
@@ -3882,7 +3921,7 @@ function renderUserManagement() {
   }
   async function resetPrincipalPassword(profileId){
     if(!confirm('Generate a new temporary password for the Principal? The Principal will have to change it at next login.'))return;
-    try{var result=await supabaseClient.functions.invoke('manage-principal-account',{body:{action:'reset_password',profile_id:profileId}});if(result.error)throw result.error;if(!result.data||result.data.success!==true)throw new Error(result.data&&result.data.error||'Principal password reset failed.');principalNotice='NEW PRINCIPAL TEMPORARY PASSWORD\\n\\n'+result.data.temporary_password+'\\n\\nShare privately. The Principal must change it at next login.';render();}
+    try{var result=await supabaseClient.functions.invoke('manage-principal-account',{body:{action:'reset_password',profile_id:profileId}});if(result.error)throw result.error;if(!result.data||result.data.success!==true)throw new Error(result.data&&result.data.error||'Principal password reset failed.');showPrincipalCredentialsDialog({password:result.data.temporary_password,isReset:true});}
     catch(error){showToast(error.message||'Could not reset Principal password.','error');}
   }
   async function loadAccounts() {
