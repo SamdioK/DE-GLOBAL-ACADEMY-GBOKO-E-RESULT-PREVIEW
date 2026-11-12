@@ -7383,13 +7383,14 @@ async function syncSchoolStaffAccountToDirectory(details) {
     : role === 'administrator' ? 'School Administrator' : 'Staff';
   var payload = {
     profile_id: profile.id,
-    full_name: profile.full_name || source.full_name || (linked && linked.full_name) || email,
+    full_name: source.full_name || profile.full_name || (linked && linked.full_name) || email,
     email: profile.email || email,
-    phone: profile.phone || source.phone || (linked && linked.phone) || null,
+    phone: source.phone || profile.phone || (linked && linked.phone) || null,
     designation: linked && linked.designation && !/^staff$/i.test(linked.designation) ? linked.designation : roleLabel,
     department: linked && linked.department || (role === 'form_master' || role === 'subject_teacher' ? 'Teaching' : null),
     status: profile.is_active === true ? 'Active' : 'Inactive',
-    show_on_portal: linked ? linked.show_on_portal === true : false
+    show_on_portal: linked ? linked.show_on_portal === true : false,
+    gender: source.gender || profile.gender || (linked && linked.gender) || null
   };
   if (linked) {
     await supabasePersistence.updateStaffDirectoryRecord(String(linked.id), payload);
@@ -7712,7 +7713,7 @@ function renderStaffDatabase() {
     var matches = staffDatabase.filter(function(record) { return fields.some(function(field) { return String(record[field[0]] || '').toLowerCase().indexOf(query) !== -1; }) || String(record.staffId || '').toLowerCase().indexOf(query) !== -1; });
     document.getElementById('staffDatabaseRows').innerHTML = matches.length ? '<div style="overflow-x:auto"><table><thead><tr><th>Photo</th><th>Staff ID</th><th>Name</th><th>Gender</th><th>Employment Type</th><th>Designation / Department</th><th>Specialisation</th><th>Status</th><th>Portal</th><th>Actions</th></tr></thead><tbody>' + matches.map(function(record) { return '<tr><td>' + (record.photo ? '<img src="' + escapeManagementText(record.photo) + '" alt="" style="width:48px;height:54px;object-fit:cover;border-radius:4px">' : '—') + '</td><td>' + escapeManagementText(record.staffId) + '</td><td>' + escapeManagementText(record.fullName) + '</td><td>' + escapeManagementText(record.gender) + '</td><td>' + escapeManagementText(record.employmentType) + '</td><td>' + escapeManagementText(record.designation) + ' / ' + escapeManagementText(record.department) + '</td><td>' + escapeManagementText(record.specialisation) + '</td><td>' + escapeManagementText(record.status) + '</td><td>' + (record.showOnPortal ? 'Yes' : 'No') + '</td><td style="white-space:nowrap"><button class="btn btn-primary staff-edit" data-id="' + escapeManagementText(record.id) + '">Edit</button> <button class="btn ' + (record.status === 'Active' ? 'btn-danger' : 'btn-success') + ' staff-toggle" data-id="' + escapeManagementText(record.id) + '">' + (record.status === 'Active' ? 'Deactivate' : 'Activate') + '</button></td></tr>'; }).join('') + '</tbody></table></div>' : '<p style="color:#999">No matching staff records.</p>';
     document.querySelectorAll('.staff-edit').forEach(function(button) { button.addEventListener('click', function() { var record = staffDatabase.find(function(item) { return String(item.id) === button.dataset.id; }); if (!record) return; editingId = String(record.id); inputIds.forEach(function(id) { document.getElementById(id).value = record[id] || ''; }); loadDepartment(record); editingQualificationLegacy = loadQualifications(record); document.getElementById('staffPhoto').value = ''; document.getElementById('staffStatus').value = record.status || 'Active'; document.getElementById('staffShowOnPortal').checked = record.showOnPortal === true; document.getElementById('saveStaffRecordBtn').textContent = 'Save Staff Changes'; document.getElementById('staffDatabaseTab').scrollIntoView({ behavior: 'smooth' }); }); });
-    document.querySelectorAll('.staff-toggle').forEach(function(button) { button.addEventListener('click', async function() { var record = staffDatabase.find(function(item) { return String(item.id) === button.dataset.id; }); if (!record) return; var nextStatus = record.status === 'Active' ? 'Inactive' : 'Active'; button.disabled = true; try { var updated = await supabasePersistence.updateStaffDirectoryRecord(String(record.id), { full_name: record.fullName, staff_id: record.staffId || null, gender: record.gender || null, designation: record.designation || null, department: record.department || null, qualification: Array.isArray(record.qualification) ? record.qualification.join('; ') : (record.qualification || null), specialisation: record.specialisation || null, employment_type: record.employmentType || null, phone: record.phone || null, email: record.email || null, biography: record.biography || null, date_employed: record.dateEmployed || null, status: nextStatus, show_on_portal: record.showOnPortal === true }); Object.assign(record, mapSupabaseStaffRecord(updated)); renderRows(); showToast('Staff status updated', 'success'); } catch (error) { showToast('Staff update failed: ' + (error.message || 'Unknown error'), 'error'); button.disabled = false; } }); });
+    document.querySelectorAll('.staff-toggle').forEach(function(button) { button.addEventListener('click', async function() { var record = staffDatabase.find(function(item) { return String(item.id) === button.dataset.id; }); if (!record) return; var nextStatus = record.status === 'Active' ? 'Inactive' : 'Active'; button.disabled = true; try { if (record.profileId) { var profileStatusSync = await supabaseClient.rpc('sync_staff_directory_profile', { p_profile_id: String(record.profileId), p_full_name: record.fullName, p_phone: record.phone || null, p_gender: record.gender || null, p_is_active: nextStatus === 'Active' }); if (profileStatusSync.error) throw profileStatusSync.error; } var updated = await supabasePersistence.updateStaffDirectoryRecord(String(record.id), { full_name: record.fullName, staff_id: record.staffId || null, gender: record.gender || null, designation: record.designation || null, department: record.department || null, qualification: Array.isArray(record.qualification) ? record.qualification.join('; ') : (record.qualification || null), specialisation: record.specialisation || null, employment_type: record.employmentType || null, phone: record.phone || null, email: record.email || null, biography: record.biography || null, date_employed: record.dateEmployed || null, status: nextStatus, show_on_portal: record.showOnPortal === true }); Object.assign(record, mapSupabaseStaffRecord(updated)); renderRows(); showToast('Staff status updated', 'success'); } catch (error) { showToast('Staff update failed: ' + (error.message || 'Unknown error'), 'error'); button.disabled = false; } }); });
   }
   document.getElementById('staffDatabaseSearch').addEventListener('input', renderRows);
   document.getElementById('clearStaffRecordBtn').addEventListener('click', clearForm);
@@ -7751,8 +7752,14 @@ function renderStaffDatabase() {
       return;
     }
     var saveRecord = async function() {
-      var record = staffDatabase.find(function(item) { return String(item.id) === editingId; }) || {};
+      var originalRecord = staffDatabase.find(function(item) { return String(item.id) === editingId; }) || null;
+      var record = originalRecord ? Object.assign({}, originalRecord) : {};
+      var originalEmail = String(originalRecord && originalRecord.email || '').trim().toLowerCase();
       inputIds.forEach(function(id) { record[id] = document.getElementById(id).value.trim(); });
+      if (originalRecord && originalRecord.profileId && originalEmail !== String(record.email || '').trim().toLowerCase()) {
+        showToast('This staff member has a linked login. Change the login email through the authorised account-email update process first.', 'error');
+        return;
+      }
       if (selectedDepartment === '12. Others') {
         record.department = '12. Others — ' + customDepartment;
         record.departmentOther = customDepartment;
@@ -7798,15 +7805,26 @@ function renderStaffDatabase() {
           ? await supabasePersistence.updateStaffDirectoryRecord(editingId, payload)
           : await supabasePersistence.createStaffDirectoryRecord(payload);
         staffRecordCommitted = true;
-        if (record.email) {
-          try {
-            await syncSchoolStaffAccountToDirectory({ email: record.email, full_name: record.fullName, phone: record.phone, required: false });
-            saved = await supabasePersistence.getStaffDirectory().then(function(rows) {
-              return rows.find(function(row) { return String(row.id) === String(saved.id); }) || saved;
-            });
-          } catch (accountLinkError) {
-            console.warn('Staff record saved, but linking an existing login profile needs attention:', accountLinkError);
-          }
+        var linkedProfileId = originalRecord && originalRecord.profileId ? String(originalRecord.profileId) : '';
+        if (!linkedProfileId && record.email) {
+          var linkedAccount = await syncSchoolStaffAccountToDirectory({
+            email: record.email, full_name: record.fullName, phone: record.phone,
+            gender: record.gender, required: false
+          });
+          linkedProfileId = linkedAccount && linkedAccount.profileId ? String(linkedAccount.profileId) : '';
+        }
+        if (linkedProfileId) {
+          var profileSync = await supabaseClient.rpc('sync_staff_directory_profile', {
+            p_profile_id: linkedProfileId,
+            p_full_name: record.fullName,
+            p_phone: record.phone || null,
+            p_gender: record.gender || null,
+            p_is_active: record.status === 'Active'
+          });
+          if (profileSync.error) throw new Error('Staff Database was saved, but linked Masters profile synchronisation failed: ' + profileSync.error.message);
+          saved = await supabasePersistence.getStaffDirectory().then(function(rows) {
+            return rows.find(function(row) { return String(row.id) === String(saved.id); }) || saved;
+          });
         }
         if (uploadedPhotoUrl && previousPhotoUrl && previousPhotoUrl !== uploadedPhotoUrl) {
           var oldMarker = '/storage/v1/object/public/school-public-assets/';
