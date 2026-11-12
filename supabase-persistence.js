@@ -420,7 +420,7 @@
 
     function normaliseStaffRecord(record) {
       const source = record || {};
-      const allowed = ['staff_id','full_name','gender','designation','department','qualification','specialisation','employment_type','phone','email','biography','photo_url','date_employed','status','show_on_portal'];
+      const allowed = ['profile_id','staff_id','full_name','gender','designation','department','qualification','specialisation','employment_type','phone','email','biography','photo_url','date_employed','status','show_on_portal'];
       const result = {};
       allowed.forEach(key => {
         if (Object.prototype.hasOwnProperty.call(source, key)) result[key] = source[key];
