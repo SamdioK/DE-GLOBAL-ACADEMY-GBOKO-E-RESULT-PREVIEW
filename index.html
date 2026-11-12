@@ -9195,7 +9195,14 @@ async function renderFormMasterManagement(panel) {
         } });
         if (created.error || !created.data || created.data.error || created.data.success === false) throw new Error(created.data && (created.data.error || created.data.message) || created.error && created.error.message || 'The server did not confirm Form Master creation.');
         var temporaryPassword = typeof created.data.temporary_password === 'string' ? created.data.temporary_password : '';
-        showFormStatus('Form Master account and class assignment created.', 'success');
+        var staffSyncWarning = '';
+        try {
+          await syncSchoolStaffAccountToDirectory({ email: email, full_name: fullName, gender: gender, role: 'form_master' });
+        } catch (staffSyncError) {
+          console.error('Form Master account created but Staff Database synchronisation needs attention:', staffSyncError);
+          staffSyncWarning = ' The login was created, but its Staff Database link needs administrator attention: ' + (staffSyncError.message || 'Unknown sync error');
+        }
+        showFormStatus('Form Master account and class assignment created.' + staffSyncWarning, staffSyncWarning ? 'error' : 'success');
         if (temporaryPassword) {
           showStudentDbDialog('Form Master Credentials', '<p class="alert alert-success">The server confirmed account creation. Share these credentials privately; the teacher must change the temporary password at first login.</p><p><strong>Login email:</strong> ' + escapeManagementText(created.data.email || email) + '</p><div class="input-group"><label for="fmTemporaryPassword">Temporary password — share privately</label><input id="fmTemporaryPassword" type="text" readonly autocomplete="off" value="' + escapeManagementText(temporaryPassword) + '"></div>');
         } else {
@@ -9976,10 +9983,17 @@ async function renderMasters() {
         successfulClasses.push(assignedClass.class_name);
       }
 
+      var staffSyncWarning = '';
+      try {
+        await syncSchoolStaffAccountToDirectory({ email: email, full_name: name, phone: phone, role: 'subject_teacher' });
+      } catch (staffSyncError) {
+        console.error('Subject Teacher assignment completed but Staff Database synchronisation needs attention:', staffSyncError);
+        staffSyncWarning = ' Assignment completed, but the Staff Database link needs administrator attention: ' + (staffSyncError.message || 'Unknown sync error');
+      }
       if (!existingMode) passwordInput.value = '';
       logActivity(existingMode ? 'Assigned subject teacher to multiple class arms' : 'Created subject teacher with multiple class-arm assignments',
         name + ' / ' + selectedSubject.name + ' / ' + successfulClasses.join(', '));
-      showToast(name + ' has been assigned to ' + successfulClasses.length + ' class arm(s) for ' + selectedSubject.name + '.', 'success');
+      showToast(name + ' has been assigned to ' + successfulClasses.length + ' class arm(s) for ' + selectedSubject.name + '.' + staffSyncWarning, staffSyncWarning ? 'error' : 'success');
       selectedStClassArmIds = new Set();
       await renderMasters();
     } catch (error) {
