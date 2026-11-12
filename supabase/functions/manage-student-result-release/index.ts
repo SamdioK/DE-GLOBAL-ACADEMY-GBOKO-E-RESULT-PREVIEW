@@ -33,27 +33,37 @@ export default {
         if (enrolmentError) throw enrolmentError;
         const studentIds = [...new Set((enrolments || []).map((x: { student_id: string }) => x.student_id))];
         let stages: Record<string, unknown>[] = [];
-        if (studentIds.length) {
-          let stageQuery = ctx.supabaseAdmin.from("student_result_release_stages")
-            .select("student_id,academic_session_id,term_id,release_stage,updated_at")
-            .eq("school_id", actor.school_id).in("student_id", studentIds);
-          if (body.academic_session_id) stageQuery = stageQuery.eq("academic_session_id", body.academic_session_id);
-          if (body.term_id) stageQuery = stageQuery.eq("term_id", body.term_id);
-          const { data, error } = await stageQuery;
-          if (error) throw error;
-          stages = (data || []) as Record<string, unknown>[];
+        // Keep PostgREST URLs safely bounded for schools with large enrolments.
+        // A single .in() containing thousands of UUIDs can exceed gateway URL limits.
+        const idBatches: string[][] = [];
+        for (let i = 0; i < studentIds.length; i += 100) idBatches.push(studentIds.slice(i, i + 100));
+        if (idBatches.length) {
+          const stageBatches = await Promise.all(idBatches.map(async (batch) => {
+            let stageQuery = ctx.supabaseAdmin.from("student_result_release_stages")
+              .select("student_id,academic_session_id,term_id,release_stage,updated_at")
+              .eq("school_id", actor.school_id).in("student_id", batch);
+            if (body.academic_session_id) stageQuery = stageQuery.eq("academic_session_id", body.academic_session_id);
+            if (body.term_id) stageQuery = stageQuery.eq("term_id", body.term_id);
+            const { data, error } = await stageQuery;
+            if (error) throw error;
+            return (data || []) as Record<string, unknown>[];
+          }));
+          stages = stageBatches.flat();
         }
         const stageMap = new Map(stages.map((x: Record<string, unknown>) =>
           [String(x.student_id) + ":" + String(x.academic_session_id) + ":" + String(x.term_id), x]));
         let eligibleCounts = new Map<string, number>();
         let publishedCounts = new Map<string, number>();
         if (studentIds.length && body.term_id) {
-          const { data: publishedRows, error: publishedError } = await ctx.supabaseAdmin.from("results")
-            .select("student_id,status").eq("school_id", actor.school_id)
-            .eq("academic_session_id", body.academic_session_id).eq("term_id", body.term_id)
-            .in("status", ["approved","published"]).in("student_id", studentIds);
-          if (publishedError) throw publishedError;
-          (publishedRows || []).forEach((row: { student_id: string; status: string }) => {
+          const resultBatches = await Promise.all(idBatches.map(async (batch) => {
+            const { data, error } = await ctx.supabaseAdmin.from("results")
+              .select("student_id,status").eq("school_id", actor.school_id)
+              .eq("academic_session_id", body.academic_session_id).eq("term_id", body.term_id)
+              .in("status", ["approved","published"]).in("student_id", batch);
+            if (error) throw error;
+            return data || [];
+          }));
+          resultBatches.flat().forEach((row: { student_id: string; status: string }) => {
             eligibleCounts.set(row.student_id, (eligibleCounts.get(row.student_id) || 0) + 1);
             if (row.status === "published") publishedCounts.set(row.student_id, (publishedCounts.get(row.student_id) || 0) + 1);
           });
