@@ -7346,6 +7346,56 @@ function syncStaffDatabaseFromExistingRecords() {
   return changed;
 }
 
+// Keep every staff login and assignment linked to the one Supabase Staff Database.
+async function syncSchoolStaffAccountToDirectory(details) {
+  if (!supabaseClient || !supabasePersistence || !authenticatedProfile ||
+      authenticatedProfile.role !== 'administrator' || authenticatedProfile.is_active !== true) {
+    throw new Error('An active school administrator session is required to synchronise staff records.');
+  }
+  var source = details || {};
+  var email = String(source.email || '').trim().toLowerCase();
+  if (!email) throw new Error('A staff email is required to link the staff account to the Staff Database.');
+  var profilesResult = await supabaseClient.rpc('get_school_staff_login_profiles');
+  if (profilesResult.error) throw profilesResult.error;
+  var profile = (profilesResult.data || []).find(function(item) {
+    return String(item.email || '').trim().toLowerCase() === email &&
+      String(item.school_id) === String(authenticatedProfile.school_id) &&
+      String(item.role || '').toLowerCase() !== 'student';
+  });
+  if (!profile) throw new Error('The new staff login could not be found in this school after account creation.');
+  var directory = await supabasePersistence.getStaffDirectory();
+  var linked = directory.find(function(item) { return String(item.profile_id || '') === String(profile.id); });
+  if (!linked) {
+    var emailMatches = directory.filter(function(item) {
+      return String(item.email || '').trim().toLowerCase() === email;
+    });
+    if (emailMatches.length === 1) linked = emailMatches[0];
+    else if (emailMatches.length > 1) throw new Error('More than one Staff Database record uses this email. Resolve the duplicate before linking the account.');
+  }
+  var role = String(profile.role || source.role || '').toLowerCase();
+  var roleLabel = role === 'form_master' ? (String(profile.gender || source.gender || '').toLowerCase() === 'female' ? 'Form Mistress' : 'Form Master')
+    : role === 'subject_teacher' ? 'Subject Teacher'
+    : role === 'sub_administrator' ? 'Sub-Administrator'
+    : role === 'principal' ? 'Principal'
+    : role === 'administrator' ? 'School Administrator' : 'Staff';
+  var payload = {
+    profile_id: profile.id,
+    full_name: profile.full_name || source.full_name || (linked && linked.full_name) || email,
+    email: profile.email || email,
+    phone: profile.phone || source.phone || (linked && linked.phone) || null,
+    designation: linked && linked.designation && !/^staff$/i.test(linked.designation) ? linked.designation : roleLabel,
+    department: linked && linked.department || (role === 'form_master' || role === 'subject_teacher' ? 'Teaching' : null),
+    status: profile.is_active === true ? 'Active' : 'Inactive',
+    show_on_portal: linked ? linked.show_on_portal === true : false
+  };
+  if (linked) {
+    await supabasePersistence.updateStaffDirectoryRecord(String(linked.id), payload);
+  } else {
+    await supabasePersistence.createStaffDirectoryRecord(payload);
+  }
+  return { profileId: profile.id, fullName: payload.full_name, email: payload.email };
+}
+
 function renderStaffDatabase() {
   if (!currentUser || currentUser.type !== 'admin') return;
   var editingId = '';
