@@ -984,6 +984,7 @@ var authenticatedProfile = null;
 var studentPasswordChangePending = false;
 var formMasterPasswordChangePending = false;
 var subAdminPasswordChangePending = false;
+var principalPasswordChangePending = false;
 var activeAcademicSession = null;
 var activeAssessmentTerm = null;
 var availableAcademicSessions = [];
@@ -1393,12 +1394,15 @@ async function handleStudentPasswordChange() {
   statusElement.classList.add('hidden');
   var changingFormMasterPassword = formMasterPasswordChangePending;
   var changingSubAdminPassword = subAdminPasswordChangePending;
-  var validPasswordChangeProfile = changingFormMasterPassword
+  var changingPrincipalPassword = principalPasswordChangePending;
+  var validPasswordChangeProfile = changingPrincipalPassword
+    ? !!(currentUser && currentUser.type === 'principal' && authenticatedProfile && String(currentUser.id) === String(authenticatedProfile.id))
+    : changingFormMasterPassword
     ? !!(currentUser && currentUser.type === 'formmaster' && authenticatedProfile && String(currentUser.id) === String(authenticatedProfile.id))
     : changingSubAdminPassword
       ? !!(currentUser && currentUser.type === 'subadmin' && authenticatedProfile && String(currentUser.id) === String(authenticatedProfile.id))
       : !!(authenticatedProfile && String(authenticatedProfile.role || '').toLowerCase() === 'student');
-  if ((!studentPasswordChangePending && !formMasterPasswordChangePending && !subAdminPasswordChangePending) || !authenticatedProfile || !validPasswordChangeProfile) {
+  if ((!studentPasswordChangePending && !formMasterPasswordChangePending && !subAdminPasswordChangePending && !principalPasswordChangePending) || !authenticatedProfile || !validPasswordChangeProfile) {
     statusElement.textContent = 'Your authenticated session has expired. Sign in again.';
     statusElement.classList.remove('hidden');
     return;
@@ -1422,9 +1426,11 @@ async function handleStudentPasswordChange() {
         String(sessionResult.data.session.user.id) !== String(authenticatedProfile.id)) {
       throw new Error('Your student session has expired. Sign in again before changing your password.');
     }
-    var result = changingFormMasterPassword
-      ? await supabaseClient.functions.invoke('change-form-master-password', { body: { new_password: newPassword } })
-      : changingSubAdminPassword
+    var result = changingPrincipalPassword
+      ? await supabaseClient.functions.invoke('change-principal-password', { body: { new_password: newPassword } })
+      : changingFormMasterPassword
+        ? await supabaseClient.functions.invoke('change-form-master-password', { body: { new_password: newPassword } })
+        : changingSubAdminPassword
         ? await supabaseClient.functions.invoke('change-sub-administrator-password', { body: { new_password: newPassword } })
         : await supabaseClient.functions.invoke('change-student-password', { body: { new_password: newPassword } });
     if (result.error) {
@@ -1444,12 +1450,14 @@ async function handleStudentPasswordChange() {
     confirmInput.value = '';
     var completedFormMaster = changingFormMasterPassword;
     var completedSubAdmin = changingSubAdminPassword;
+    var completedPrincipal = changingPrincipalPassword;
     var formMasterArm = currentUser && currentUser.arm || '';
     var formMasterEmail = authenticatedProfile && authenticatedProfile.email || currentUser && currentUser.email || '';
     var subAdminUsernameAfterChange = authenticatedProfile && authenticatedProfile.username || '';
     studentPasswordChangePending = false;
     formMasterPasswordChangePending = false;
     subAdminPasswordChangePending = false;
+    principalPasswordChangePending = false;
     currentUser = null;
     authenticatedProfile = null;
     try { await supabaseClient.auth.signOut(); } catch (signOutError) {}
@@ -1457,13 +1465,14 @@ async function handleStudentPasswordChange() {
     document.getElementById('loginView').classList.remove('hidden');
     document.getElementById('loginContainer').style.display = 'flex';
     document.getElementById('appContainer').classList.remove('active');
-    document.getElementById('userType').value = completedFormMaster ? 'formmaster' : (completedSubAdmin ? 'subadmin' : 'student');
-    document.getElementById('genericAuthEmailGroup').classList.toggle('hidden', !(completedFormMaster || completedSubAdmin));
+    document.getElementById('userType').value = completedFormMaster ? 'formmaster' : (completedSubAdmin ? 'subadmin' : (completedPrincipal ? 'principal' : 'student'));
+    document.getElementById('genericAuthEmailGroup').classList.toggle('hidden', !(completedFormMaster || completedSubAdmin || completedPrincipal));
     document.getElementById('adminLoginFields').classList.add('hidden');
+    document.getElementById('principalLoginFields').classList.toggle('hidden', !completedPrincipal);
     document.getElementById('formmasterFields').classList.toggle('hidden', !completedFormMaster);
     document.getElementById('subjectTeacherFields').classList.add('hidden');
     document.getElementById('subadminLoginFields').classList.toggle('hidden', !completedSubAdmin);
-    document.getElementById('studentLoginFields').classList.toggle('hidden', completedFormMaster || completedSubAdmin);
+    document.getElementById('studentLoginFields').classList.toggle('hidden', completedFormMaster || completedSubAdmin || completedPrincipal);
     if (completedFormMaster) {
       document.getElementById('selectedArm').value = formMasterArm;
       document.getElementById('authEmail').value = formMasterEmail;
@@ -1471,6 +1480,9 @@ async function handleStudentPasswordChange() {
     if (completedSubAdmin) {
       document.getElementById('authEmail').value = formMasterEmail;
       document.getElementById('subadminUsername').value = subAdminUsernameAfterChange;
+    }
+    if (completedPrincipal) {
+      document.getElementById('principalEmail').value = formMasterEmail;
     }
     document.getElementById('studentPassword').value = '';
     document.getElementById('armPassword').value = '';
@@ -1608,6 +1620,15 @@ async function handleSupabaseLogin(userType, errorDiv) {
     var selectedRole = expectedRoles[userType].find(function(role) { return activeRoles.indexOf(role) !== -1; });
     var appType = { administrator: 'admin', principal: 'principal', sub_administrator: 'subadmin', form_master: 'formmaster', subject_teacher: 'subjectteacher', portal_developer: 'developer', student: 'student' }[selectedRole];
     currentUser = { type: appType, role: selectedRole, id: profile.id, name: profile.full_name, email: authResult.data.user.email, profile: profile };
+    if (appType === 'principal' && profile.must_change_password === true) {
+      principalPasswordChangePending = true;
+      document.getElementById('studentNewPassword').value = '';
+      document.getElementById('studentConfirmNewPassword').value = '';
+      document.getElementById('studentPasswordChangeError').classList.add('hidden');
+      document.getElementById('loginView').classList.add('hidden');
+      document.getElementById('studentPasswordChangeView').classList.remove('hidden');
+      return;
+    }
     if (appType === 'subadmin' && profile.must_change_password === true) {
       subAdminPasswordChangePending = true;
       document.getElementById('studentNewPassword').value = '';
@@ -1922,6 +1943,7 @@ async function handleLogout() {
   studentPasswordChangePending = false;
   formMasterPasswordChangePending = false;
   subAdminPasswordChangePending = false;
+  principalPasswordChangePending = false;
   if (supabaseClient) { try { await supabaseClient.auth.signOut(); } catch (error) {} }
   selectedSubjects = []; subjectScores = {}; selectedTradeSubject = '';
   affectiveDomains.forEach(function(d) { affectiveRatings[d] = 5; });
