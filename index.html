@@ -7362,7 +7362,10 @@ async function syncSchoolStaffAccountToDirectory(details) {
       String(item.school_id) === String(authenticatedProfile.school_id) &&
       String(item.role || '').toLowerCase() !== 'student';
   });
-  if (!profile) throw new Error('The new staff login could not be found in this school after account creation.');
+  if (!profile) {
+    if (source.required === false) return null;
+    throw new Error('The new staff login could not be found in this school after account creation.');
+  }
   var directory = await supabasePersistence.getStaffDirectory();
   var linked = directory.find(function(item) { return String(item.profile_id || '') === String(profile.id); });
   if (!linked) {
@@ -7795,6 +7798,16 @@ function renderStaffDatabase() {
           ? await supabasePersistence.updateStaffDirectoryRecord(editingId, payload)
           : await supabasePersistence.createStaffDirectoryRecord(payload);
         staffRecordCommitted = true;
+        if (record.email) {
+          try {
+            await syncSchoolStaffAccountToDirectory({ email: record.email, full_name: record.fullName, phone: record.phone, required: false });
+            saved = await supabasePersistence.getStaffDirectory().then(function(rows) {
+              return rows.find(function(row) { return String(row.id) === String(saved.id); }) || saved;
+            });
+          } catch (accountLinkError) {
+            console.warn('Staff record saved, but linking an existing login profile needs attention:', accountLinkError);
+          }
+        }
         if (uploadedPhotoUrl && previousPhotoUrl && previousPhotoUrl !== uploadedPhotoUrl) {
           var oldMarker = '/storage/v1/object/public/school-public-assets/';
           var oldIndex = previousPhotoUrl.indexOf(oldMarker);
@@ -9175,7 +9188,15 @@ async function renderFormMasterManagement(panel) {
             school_id: String(schoolId), academic_session_id: String(activeAcademicSession.id), class_id: String(classId), full_name: fullName, email: email, gender: gender
           } });
           if (update.error || !update.data || update.data.success !== true) throw new Error(update.data && (update.data.error || update.data.message) || update.error && update.error.message || 'The server did not confirm the assignment update.');
-          showFormStatus('Assignment updated.', 'success');
+          try {
+            await syncSchoolStaffAccountToDirectory({ email: email, full_name: fullName, gender: gender, role: 'form_master' });
+          } catch (staffSyncError) {
+            console.error('Updated Form Master profile could not be synchronised to Staff Database:', staffSyncError);
+            showFormStatus('Assignment updated, but Staff Database synchronisation needs attention: ' + (staffSyncError.message || 'Unknown sync error'), 'error');
+            await renderFormMasterManagement(panel);
+            return;
+          }
+          showFormStatus('Assignment and central Staff Database record updated.', 'success');
           await renderFormMasterManagement(panel);
         } catch (error) { showFormStatus(error.message || 'Unable to update this assignment.', 'error'); }
         finally { saveButton.disabled = false; }
