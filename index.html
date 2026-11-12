@@ -7528,7 +7528,10 @@ function renderStaffDatabase() {
       }
     }
     var file = document.getElementById('staffPhoto').files[0];
-    if (file) { showToast('Staff photo upload will be enabled after the Supabase Storage policy is verified. Save the record without a new photo for now.', 'error'); return; }
+    if (file && (!/^image\\/(png|jpeg|webp)$/i.test(file.type || '') || file.size > 5 * 1024 * 1024)) {
+      showToast('Choose a PNG, JPG or WEBP staff photograph up to 5 MB.', 'error');
+      return;
+    }
     var saveRecord = async function() {
       var record = staffDatabase.find(function(item) { return String(item.id) === editingId; }) || {};
       inputIds.forEach(function(id) { record[id] = document.getElementById(id).value.trim(); });
@@ -7554,20 +7557,38 @@ function renderStaffDatabase() {
         delete record.qualificationLegacy;
       }
       record.status = document.getElementById('staffStatus').value; record.showOnPortal = document.getElementById('staffShowOnPortal').checked;
+      var previousPhotoUrl = record.photo || record.photoUrl || '';
+      var uploadedPhotoUrl = '';
       var payload = {
         staff_id: record.staffId || null, full_name: record.fullName, gender: record.gender || null,
         designation: record.designation || null, department: record.department || null,
         qualification: Array.isArray(record.qualification) ? record.qualification.join('; ') : (record.qualification || null),
         specialisation: record.specialisation || null, employment_type: record.employmentType || null,
         phone: record.phone || null, email: record.email || null, biography: record.biography || null,
+        photo_url: previousPhotoUrl || null,
         date_employed: record.dateEmployed || null, status: record.status, show_on_portal: record.showOnPortal
       };
       var saveButton = document.getElementById('saveStaffRecordBtn');
       saveButton.disabled = true;
       try {
+        if (file) {
+          uploadedPhotoUrl = await uploadSchoolPublicAsset(file, 'staff-directory');
+          payload.photo_url = uploadedPhotoUrl;
+        }
         var saved = editingId
           ? await supabasePersistence.updateStaffDirectoryRecord(editingId, payload)
           : await supabasePersistence.createStaffDirectoryRecord(payload);
+        if (uploadedPhotoUrl && previousPhotoUrl && previousPhotoUrl !== uploadedPhotoUrl) {
+          var oldMarker = '/storage/v1/object/public/school-public-assets/';
+          var oldIndex = previousPhotoUrl.indexOf(oldMarker);
+          if (oldIndex >= 0) {
+            var oldPath = decodeURIComponent(previousPhotoUrl.slice(oldIndex + oldMarker.length).split('?')[0]);
+            if (oldPath.indexOf(String(authenticatedProfile.school_id) + '/staff-directory/') === 0) {
+              var oldRemoval = await supabaseClient.storage.from('school-public-assets').remove([oldPath]);
+              if (oldRemoval.error) console.warn('Previous staff photo cleanup failed:', oldRemoval.error);
+            }
+          }
+        }
         var mapped = mapSupabaseStaffRecord(saved);
         var existingIndex = staffDatabase.findIndex(function(item) { return String(item.id) === String(mapped.id); });
         if (existingIndex >= 0) staffDatabase[existingIndex] = mapped; else staffDatabase.push(mapped);
@@ -7575,6 +7596,18 @@ function renderStaffDatabase() {
         showToast('Staff record saved to Supabase', 'success');
         renderStaffDatabase();
       } catch (error) {
+        if (uploadedPhotoUrl) {
+          var newMarker = '/storage/v1/object/public/school-public-assets/';
+          var newIndex = uploadedPhotoUrl.indexOf(newMarker);
+          if (newIndex >= 0) {
+            var newPath = decodeURIComponent(uploadedPhotoUrl.slice(newIndex + newMarker.length).split('?')[0]);
+            if (newPath.indexOf(String(authenticatedProfile.school_id) + '/staff-directory/') === 0) {
+              await supabaseClient.storage.from('school-public-assets').remove([newPath]).catch(function(cleanupError) {
+                console.warn('Uncommitted staff photo cleanup failed:', cleanupError);
+              });
+            }
+          }
+        }
         showToast('Staff record was not saved: ' + (error.message || 'Unknown error'), 'error');
         saveButton.disabled = false;
       }
