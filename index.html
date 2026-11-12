@@ -1929,6 +1929,9 @@ async function handleLogout() {
   document.getElementById('loginContainer').style.display = 'flex';
   document.getElementById('appContainer').classList.remove('active');
   document.getElementById('userType').value = '';
+  document.getElementById('principalEmail').value = '';
+  document.getElementById('principalPassword').value = '';
+  document.getElementById('principalLoginFields').classList.add('hidden');
   document.getElementById('adminUsername').value = '';
   document.getElementById('adminPassword').value = '';
   document.getElementById('adminLoginFields').classList.add('hidden');
