@@ -1168,7 +1168,7 @@ async function handleUserTypeChange(e) {
   if (genericEmailGroup) {
     genericEmailGroup.classList.toggle(
       'hidden',
-      userType === 'student' || userType === 'developer'
+      userType === 'student' || userType === 'developer' || userType === 'principal'
     );
   }
   var principalFields = document.getElementById('principalLoginFields');
