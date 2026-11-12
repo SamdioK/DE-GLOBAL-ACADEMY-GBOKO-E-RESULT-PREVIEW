@@ -3805,8 +3805,8 @@ function renderUserManagement() {
       '<button class="btn btn-success" id="createPrincipalAccountBtn">Create Principal Account</button>') +
       (principalNotice ? '<div class="alert alert-info" style="white-space:pre-wrap;margin-top:12px">'+esc(principalNotice)+'</div><button class="btn" id="clearPrincipalNoticeBtn">Dismiss credentials notice</button>' : '') +
       '</section>' : '');
-    if (activeSection === 'subadmins') html +=
-      '<section class="um-panel"><div class="um-panel-heading"><div><span class="um-section-kicker">DELEGATED ACCESS</span><h2>Sub-Administrator Management</h2><p>Create support accounts and assign only the permissions each person needs.</p></div><span class="um-role-tag um-muted-tag">SUB-ADMIN</span></div>' +
+    if (activeSection === 'subadmins') {
+      html += '<section class="um-panel"><div class="um-panel-heading"><div><span class="um-section-kicker">DELEGATED ACCESS</span><h2>Sub-Administrator Management</h2><p>Create support accounts and assign only the permissions each person needs.</p></div><span class="um-role-tag um-muted-tag">SUB-ADMIN</span></div>' +
       '<p style="color:#64748b">Accounts and individual permissions are now managed through Supabase. Passwords are generated securely on the server. Accounts are deactivated rather than deleted.</p>' +
       '<div class="um-subadmin-form"><h3>Create Sub-Administrator</h3><div class="grid grid-2">' +
       '<div class="input-group"><label>Full Name *</label><input id="saFullName" autocomplete="name"></div>' +
