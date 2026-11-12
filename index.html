@@ -7559,6 +7559,7 @@ function renderStaffDatabase() {
       record.status = document.getElementById('staffStatus').value; record.showOnPortal = document.getElementById('staffShowOnPortal').checked;
       var previousPhotoUrl = record.photo || record.photoUrl || '';
       var uploadedPhotoUrl = '';
+      var staffRecordCommitted = false;
       var payload = {
         staff_id: record.staffId || null, full_name: record.fullName, gender: record.gender || null,
         designation: record.designation || null, department: record.department || null,
@@ -7578,6 +7579,7 @@ function renderStaffDatabase() {
         var saved = editingId
           ? await supabasePersistence.updateStaffDirectoryRecord(editingId, payload)
           : await supabasePersistence.createStaffDirectoryRecord(payload);
+        staffRecordCommitted = true;
         if (uploadedPhotoUrl && previousPhotoUrl && previousPhotoUrl !== uploadedPhotoUrl) {
           var oldMarker = '/storage/v1/object/public/school-public-assets/';
           var oldIndex = previousPhotoUrl.indexOf(oldMarker);
@@ -7596,7 +7598,7 @@ function renderStaffDatabase() {
         showToast('Staff record saved to Supabase', 'success');
         renderStaffDatabase();
       } catch (error) {
-        if (uploadedPhotoUrl) {
+        if (uploadedPhotoUrl && !staffRecordCommitted) {
           var newMarker = '/storage/v1/object/public/school-public-assets/';
           var newIndex = uploadedPhotoUrl.indexOf(newMarker);
           if (newIndex >= 0) {
