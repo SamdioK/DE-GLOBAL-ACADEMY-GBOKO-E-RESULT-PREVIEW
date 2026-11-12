@@ -1466,7 +1466,7 @@ async function handleStudentPasswordChange() {
     document.getElementById('loginContainer').style.display = 'flex';
     document.getElementById('appContainer').classList.remove('active');
     document.getElementById('userType').value = completedFormMaster ? 'formmaster' : (completedSubAdmin ? 'subadmin' : (completedPrincipal ? 'principal' : 'student'));
-    document.getElementById('genericAuthEmailGroup').classList.toggle('hidden', !(completedFormMaster || completedSubAdmin || completedPrincipal));
+    document.getElementById('genericAuthEmailGroup').classList.toggle('hidden', !(completedFormMaster || completedSubAdmin));
     document.getElementById('adminLoginFields').classList.add('hidden');
     document.getElementById('principalLoginFields').classList.toggle('hidden', !completedPrincipal);
     document.getElementById('formmasterFields').classList.toggle('hidden', !completedFormMaster);
