@@ -2015,7 +2015,7 @@ async function loadSchoolData() {
   portalStaffSelections = Array.isArray(loadedPortalStaffSelections) ? loadedPortalStaffSelections : [];
   prefects = Array.isArray(loadedPrefects) ? loadedPrefects : [];
   dutyRoster = Array.isArray(loadedDutyRoster) ? loadedDutyRoster : [];
-  if (loadedPortalSettings && typeof loadedPortalSettings === 'object') portalSettings = Object.assign(portalSettings, loadedPortalSettings);
+  // Legacy portalSettings JSON is intentionally ignored. The relational school_portal_settings row is authoritative.
 
   var meta = await cloudStorage.load('students_meta');
   students = [];
