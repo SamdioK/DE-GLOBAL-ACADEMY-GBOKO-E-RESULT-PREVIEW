@@ -166,6 +166,7 @@ th { background: #f5f5f5; font-weight: 600; }
         <select id="userType">
           <option value="">Select Login Type</option>
           <option value="admin">School Administrator</option>
+          <option value="principal">Principal</option>
           <option value="formmaster">Form Master / Form Mistress</option>
           <option value="subjectteacher">Subject Teacher (existing staff login)</option>
           <option value="subadmin">Sub-Administrator</option>
@@ -175,6 +176,8 @@ th { background: #f5f5f5; font-weight: 600; }
           </option>
         </select>
       </div>
+
+      <div id="principalLoginFields" class="hidden"><div class="input-group"><label>Email</label><input type="email" id="principalEmail" autocomplete="username" placeholder="Principal account email"></div><div class="input-group"><label>Password</label><input type="password" id="principalPassword" autocomplete="current-password" placeholder="Enter password"></div></div>
 
       <div id="adminLoginFields" class="hidden">
         <div class="input-group"><label>Email</label><input type="text" id="adminUsername" placeholder="Enter admin email"></div>
@@ -297,6 +300,13 @@ th { background: #f5f5f5; font-weight: 600; }
     >&#8250;</button>
   </div>
   <div class="main-content">
+    <div id="principalDashboardTab" class="hidden"></div>
+    <div id="principalStudentsTab" class="hidden"></div>
+    <div id="principalStaffTab" class="hidden"></div>
+    <div id="principalResultsTab" class="hidden"></div>
+    <div id="principalReportsTab" class="hidden"></div>
+    <div id="principalRequestsTab" class="hidden"></div>
+    <div id="principalProfileTab" class="hidden"></div>
     <div id="dashboardTab" class="hidden"></div>
     <div id="armsTab" class="hidden"></div>
     <div id="mastersTab" class="hidden"></div>
@@ -1161,6 +1171,7 @@ async function handleUserTypeChange(e) {
       userType === 'student' || userType === 'developer'
     );
   }
+  var principalFields = document.getElementById('principalLoginFields');
   var adminFields = document.getElementById('adminLoginFields');
   var fmFields = document.getElementById('formmasterFields');
   var stFields = document.getElementById('subjectTeacherFields');
@@ -1168,6 +1179,7 @@ async function handleUserTypeChange(e) {
   var studentFields = document.getElementById('studentLoginFields');
   var developerFields = document.getElementById('developerLoginFields');
 
+  principalFields.classList.add('hidden');
   adminFields.classList.add('hidden');
   fmFields.classList.add('hidden');
   stFields.classList.add('hidden');
@@ -1175,7 +1187,9 @@ async function handleUserTypeChange(e) {
   studentFields.classList.add('hidden');
   developerFields.classList.add('hidden');
 
-  if (userType === 'admin') {
+  if (userType === 'principal') {
+    principalFields.classList.remove('hidden');
+  } else if (userType === 'admin') {
     adminFields.classList.remove('hidden');
   } else if (userType === 'formmaster') {
     fmFields.classList.remove('hidden');
@@ -1493,14 +1507,12 @@ async function handleSupabaseLogin(userType, errorDiv) {
     await handleStudentAdmissionLogin(errorDiv);
     return;
   }
-  var emailInputId = userType === 'developer'
-    ? 'developerEmail'
-    : 'authEmail';
+  var emailInputId = userType === 'developer' ? 'developerEmail' : (userType === 'principal' ? 'principalEmail' : 'authEmail');
   var email = (
     document.getElementById(emailInputId)?.value || ''
   ).trim();
   var passwordInput = {
-    admin: 'adminPassword', formmaster: 'armPassword', subjectteacher: 'assignmentPassword',
+    admin: 'adminPassword', principal: 'principalPassword', formmaster: 'armPassword', subjectteacher: 'assignmentPassword',
     subadmin: 'subadminPassword', student: 'studentPassword', developer: 'developerPassword'
   }[userType];
   var password = passwordInput ? document.getElementById(passwordInput).value : '';
@@ -1511,7 +1523,7 @@ async function handleSupabaseLogin(userType, errorDiv) {
   }
 
   var expectedRoles = {
-    admin: ['administrator'], formmaster: ['form_master'], subjectteacher: ['subject_teacher'],
+    admin: ['administrator'], principal: ['principal'], formmaster: ['form_master'], subjectteacher: ['subject_teacher'], 
     subadmin: ['sub_administrator'], student: ['student'], developer: ['portal_developer']
   };
   try {
@@ -1575,7 +1587,13 @@ async function handleSupabaseLogin(userType, errorDiv) {
       active_roles: activeRoles
     });
     cloudStorage.setSchoolId(String(profile.school_id || 'DEVELOPER'));
-    if (dbSchool) {
+    if (dbSchool && appType === 'principal') {
+      schoolInfo = { name: dbSchool.name || '', address: dbSchool.address || '', email: dbSchool.email || '', phone: dbSchool.phone || '', logo: dbSchool.logo_url || '', motto: dbSchool.motto || '', session: '' };
+      activeAcademicSession = null;
+      activeAssessmentTerm = null;
+      availableAcademicSessions = [];
+      availableAssessmentTerms = [];
+    } else if (dbSchool) {
       await migrateLegacyBrowserStateOnce();
       await loadSchoolData();
       await loadSupabaseAssessmentConfigurations();
@@ -1588,7 +1606,7 @@ async function handleSupabaseLogin(userType, errorDiv) {
     }
 
     var selectedRole = expectedRoles[userType].find(function(role) { return activeRoles.indexOf(role) !== -1; });
-    var appType = { administrator: 'admin', sub_administrator: 'subadmin', form_master: 'formmaster', subject_teacher: 'subjectteacher', portal_developer: 'developer', student: 'student' }[selectedRole];
+    var appType = { administrator: 'admin', principal: 'principal', sub_administrator: 'subadmin', form_master: 'formmaster', subject_teacher: 'subjectteacher', portal_developer: 'developer', student: 'student' }[selectedRole];
     currentUser = { type: appType, role: selectedRole, id: profile.id, name: profile.full_name, email: authResult.data.user.email, profile: profile };
     if (appType === 'subadmin' && profile.must_change_password === true) {
       subAdminPasswordChangePending = true;
@@ -3554,6 +3572,8 @@ function showApp() {
   var tabs;
   if (currentUser.type === 'admin') {
     tabs = ['dashboard', 'arms', 'masters', 'school', 'profile', 'assessment', 'teacherSignatures', 'management', 'staffDatabase', 'studentDatabase', 'passportRegistration', 'userManagement', 'release', 'view', 'compute', 'print', 'portalContent', 'schoolIdCard'];
+  } else if (currentUser.type === 'principal') {
+    tabs = ['principalDashboard', 'principalStudents', 'principalStaff', 'principalResults', 'principalReports', 'principalRequests', 'principalProfile'];
   } else if (currentUser.type === 'subadmin') {
     tabs = [];
     if (hasSubAdminPermission('enterResults') || hasSubAdminPermission('editResults')) tabs.push('input');
@@ -3581,7 +3601,7 @@ function showApp() {
     var btn = document.createElement('button');
     btn.className = 'tab';
     if (idx === 0) btn.classList.add('active');
-    var tabLabels = { profile: 'Admin Profile', teacherSignatures: "Teachers' Signature", management: 'Management Staff', staffDatabase: 'Staff Database', studentDatabase: 'Student Database', subjectRegistration: 'Subject Registration', passportRegistration: 'Student Passport Registration', userManagement: 'User Management', release: 'Release Results', studentResults: 'Student Results', portalContent: 'Portal Options', developerDashboard: 'Developer Dashboard', developer: 'Developer Console', schoolIdCard: 'School ID Card' };
+    var tabLabels = { principalDashboard: 'Overview', principalStudents: 'Students', principalStaff: 'Staff & Teachers', principalResults: 'Results Monitoring', principalReports: 'Academic Reports', principalRequests: 'Requests & Activity', principalProfile: 'School Profile', profile: 'Admin Profile', teacherSignatures: "Teachers' Signature", management: 'Management Staff', staffDatabase: 'Staff Database', studentDatabase: 'Student Database', subjectRegistration: 'Subject Registration', passportRegistration: 'Student Passport Registration', userManagement: 'User Management', release: 'Release Results', studentResults: 'Student Results', portalContent: 'Portal Options', developerDashboard: 'Developer Dashboard', developer: 'Developer Console', schoolIdCard: 'School ID Card' };
     btn.textContent = tabLabels[tab] || tab.charAt(0).toUpperCase() + tab.slice(1);
     btn.addEventListener('click', function() {
       document.querySelectorAll('.tab').forEach(function(t) { t.classList.remove('active'); });
@@ -3683,14 +3703,16 @@ function showTab(tabName) {
     }
   }
 
+  if (currentUser && currentUser.type === 'principal' && ['principalDashboard','principalStudents','principalStaff','principalResults','principalReports','principalRequests','principalProfile'].indexOf(tabName) === -1) return;
   var requiredPermission = { input: 'enterResults', view: 'manageStudents', masters: 'manageTeachers', school: 'manageSchool', management: 'manageBoard', userManagement: 'createAdmins', release: 'publishResults', print: 'generateSheets' };
   if (currentUser && currentUser.type === 'subadmin' && (!requiredPermission[tabName] || (!hasSubAdminPermission(requiredPermission[tabName]) && !(tabName === 'input' && hasSubAdminPermission('editResults'))))) return;
   if (currentUser && currentUser.type === 'student' && tabName !== 'studentResults') return;
-  ['dashboard', 'arms', 'masters', 'school', 'profile', 'assessment', 'teacherSignatures', 'management', 'staffDatabase', 'studentDatabase', 'subjectRegistration', 'passportRegistration', 'input', 'compute', 'view', 'print', 'userManagement', 'release', 'studentResults', 'portalContent', 'developerDashboard', 'developer', 'schoolIdCard'].forEach(function(t) {
+  ['principalDashboard','principalStudents','principalStaff','principalResults','principalReports','principalRequests','principalProfile','dashboard', 'arms', 'masters', 'school', 'profile',  'assessment', 'teacherSignatures', 'management', 'staffDatabase', 'studentDatabase', 'subjectRegistration', 'passportRegistration', 'input', 'compute', 'view', 'print', 'userManagement', 'release', 'studentResults', 'portalContent', 'developerDashboard', 'developer', 'schoolIdCard'].forEach(function(t) {
     document.getElementById(t + 'Tab').classList.add('hidden');
   });
   document.getElementById(tabName + 'Tab').classList.remove('hidden');
-  if (tabName === 'dashboard') renderDashboard();
+  if (tabName.indexOf('principal') === 0) renderPrincipalWorkspace(tabName);
+  else if (tabName === 'dashboard') renderDashboard();
   else if (tabName === 'arms') renderArms();
   else if (tabName === 'masters') renderMasters();
   else if (tabName === 'school') renderSchool();
@@ -12715,5 +12737,6 @@ async function renderSubjectTeacherInput() {
 }
 </script>
 <script src="passport-registration.js"></script>
+<script src="principal-dashboard.js?v=20261112"></script>
 </body>
 </html>
