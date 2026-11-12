@@ -320,3 +320,70 @@ button {
         flex-basis: 28px;
     }
 }
+
+
+/* ==========================================
+   ADMIN USER MANAGEMENT WORKSPACE
+   ========================================== */
+#userManagementTab .um-shell{display:grid;gap:18px;min-width:0}
+#userManagementTab .um-hero{display:flex;align-items:center;justify-content:space-between;gap:20px;padding:26px 30px;border-radius:16px;background:linear-gradient(115deg,#173f38 0%,#176b59 58%,#25816b 100%);color:#fff;box-shadow:0 9px 24px rgba(19,72,61,.14)}
+#userManagementTab .um-hero h2{margin:5px 0 8px;color:#fff;font-size:clamp(22px,3vw,29px);letter-spacing:-.5px}
+#userManagementTab .um-hero p{max-width:650px;margin:0;color:rgba(255,255,255,.82);font-size:13px;line-height:1.65}
+#userManagementTab .um-eyebrow,#userManagementTab .um-section-kicker{display:block;font-size:10px;font-weight:800;letter-spacing:1.5px}
+#userManagementTab .um-eyebrow{color:#c6e8dc}
+#userManagementTab .um-hero-symbol{display:grid;place-items:center;flex:0 0 66px;width:66px;height:66px;border:1px solid rgba(255,255,255,.35);border-radius:18px;background:rgba(255,255,255,.12);font-size:20px;font-weight:800;letter-spacing:1px}
+#userManagementTab .um-overview{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
+#userManagementTab .um-stat{display:flex;align-items:center;gap:12px;min-width:0;padding:15px 17px;border:1px solid #e5eaf0;border-radius:12px;background:#fff;box-shadow:0 3px 12px rgba(24,39,75,.035)}
+#userManagementTab .um-stat-icon{display:grid;place-items:center;flex:0 0 38px;width:38px;height:38px;border-radius:11px;background:#eaf4f0;color:#176b59;font-size:11px;font-weight:800}
+#userManagementTab .um-stat strong,#userManagementTab .um-stat small{display:block}
+#userManagementTab .um-stat strong{color:#253449;font-size:13px}
+#userManagementTab .um-stat small{margin-top:4px;color:#778397;font-size:11px}
+#userManagementTab .um-panel{min-width:0;padding:22px;border:1px solid #e5eaf0;border-radius:15px;background:#fff;box-shadow:0 4px 16px rgba(24,39,75,.045)}
+#userManagementTab .um-panel-heading{display:flex;align-items:flex-start;justify-content:space-between;gap:14px;margin-bottom:16px}
+#userManagementTab .um-section-kicker{margin-bottom:6px;color:#718096}
+#userManagementTab .um-panel-heading h2{margin:0;color:#223247;font-size:20px;letter-spacing:-.3px}
+#userManagementTab .um-panel-heading p{margin:6px 0 0;color:#718096;font-size:12px;line-height:1.6}
+#userManagementTab .um-role-tag,#userManagementTab .um-count-pill{flex:0 0 auto;padding:7px 10px;border-radius:20px;background:#eaf4f0;color:#176b59;font-size:10px;font-weight:800;letter-spacing:.6px}
+#userManagementTab .um-muted-tag{background:#eef1f6;color:#526174}
+#userManagementTab .um-security-note{display:flex;align-items:flex-start;gap:10px;margin:0 0 17px;padding:11px 13px;border:1px solid #dcece5;border-radius:9px;background:#f5faf7;color:#526b60;font-size:12px;line-height:1.55}
+#userManagementTab .um-security-note span{display:grid;place-items:center;flex:0 0 20px;width:20px;height:20px;border-radius:50%;background:#dcefe5;color:#176b59;font-weight:800}
+#userManagementTab .um-create-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:2px 16px}
+#userManagementTab .um-create-grid .input-group{min-width:0}
+#userManagementTab .um-create-grid input,#userManagementTab .um-create-grid textarea{width:100%;min-width:0;border:1px solid #dce3eb;border-radius:8px;background:#fff}
+#userManagementTab .um-create-grid input:focus,#userManagementTab .um-create-grid textarea:focus{border-color:#388775;outline:3px solid rgba(56,135,117,.12)}
+#userManagementTab .um-full-width{grid-column:1/-1}
+#userManagementTab .um-form-footer{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-top:12px;padding-top:14px;border-top:1px solid #edf0f4}
+#userManagementTab .um-form-footer>span{color:#8993a2;font-size:11px}
+#userManagementTab .um-form-footer .btn{min-height:40px;padding:10px 17px;border-radius:8px;font-weight:700}
+#userManagementTab .um-existing-section{margin-top:22px;padding-top:18px;border-top:1px solid #edf0f4}
+#userManagementTab .um-existing-heading{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:12px}
+#userManagementTab .um-existing-heading h3,#userManagementTab .um-subadmin-form h3{margin:0;color:#27364a;font-size:16px}
+#userManagementTab .um-table-wrap{max-width:100%;overflow-x:auto;border:1px solid #e8edf2;border-radius:10px}
+#userManagementTab .um-table-wrap table{margin:0;border:0}
+#userManagementTab .um-table-wrap th{background:#f5f8f7;color:#536579;font-size:10px;text-transform:uppercase;letter-spacing:.5px}
+#userManagementTab .um-table-wrap td{font-size:12px;vertical-align:middle}
+#userManagementTab .um-status{display:inline-flex;padding:5px 9px;border-radius:20px;font-size:10px;font-weight:800}
+#userManagementTab .um-status.is-active{background:#e8f6ed;color:#187344}
+#userManagementTab .um-status.is-inactive{background:#fff3e6;color:#9a5b12}
+#userManagementTab .um-actions{white-space:nowrap}
+#userManagementTab .um-actions .btn{margin:2px;padding:7px 10px;border-radius:7px;font-size:11px}
+#userManagementTab .um-subadmin-form{margin-top:4px;padding:17px;border:1px solid #e8edf2;border-radius:11px;background:#fafbfd}
+#userManagementTab .um-permissions-panel{margin-top:16px;background:#fbfcfe}
+#userManagementTab .um-credential-notice{margin-top:15px;padding:14px;border:1px solid #cde5d8;border-radius:10px;background:#f4faf6}
+#userManagementTab .um-credential-notice .um-credential-body{white-space:pre-wrap;color:#254b3b;font-size:13px;line-height:1.7}
+#userManagementTab .um-credential-notice .btn{margin-top:10px}
+@media(max-width:760px){
+ #userManagementTab .um-hero{padding:20px;border-radius:12px}
+ #userManagementTab .um-overview{grid-template-columns:1fr}
+ #userManagementTab .um-stat{padding:12px 14px}
+ #userManagementTab .um-panel{padding:16px}
+ #userManagementTab .um-create-grid{grid-template-columns:minmax(0,1fr)}
+ #userManagementTab .um-full-width{grid-column:auto}
+ #userManagementTab .um-panel-heading h2{font-size:18px}
+}
+@media(max-width:420px){
+ #userManagementTab .um-hero-symbol{flex-basis:48px;width:48px;height:48px;border-radius:13px}
+ #userManagementTab .um-form-footer{align-items:stretch}
+ #userManagementTab .um-form-footer .btn{width:100%}
+ #userManagementTab .um-existing-heading{align-items:flex-start;flex-direction:column}
+}
