@@ -4051,7 +4051,13 @@ async function renderReleaseResults() {
       });
       if (result.error) throw result.error;
       if (!result.data || result.data.success !== true) throw new Error(result.data && result.data.error || 'Could not load release records.');
-      var studentsForRelease = result.data.students || [];
+      var studentsForRelease = (result.data.students || []).slice().sort(function(a, b) {
+        var aNumber = Number(a.register_number);
+        var bNumber = Number(b.register_number);
+        if (Number.isFinite(aNumber) && Number.isFinite(bNumber) && aNumber !== bNumber) return aNumber - bNumber;
+        if (Number.isFinite(aNumber) !== Number.isFinite(bNumber)) return Number.isFinite(aNumber) ? -1 : 1;
+        return String(a.admission_number || '').localeCompare(String(b.admission_number || ''));
+      });
       if (!studentsForRelease.length) {
         status.textContent = 'No active enrolments were found for this selection.';
         return;
