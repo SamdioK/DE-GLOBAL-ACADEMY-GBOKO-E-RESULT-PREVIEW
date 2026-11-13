@@ -11449,54 +11449,129 @@ async function loadAdminCa1ResultsView() {
 async function loadFormMasterSubjectResultsView() {
   var panel = document.getElementById('formMasterSubjectResultsPanel');
   if (!panel || !supabaseClient || !authenticatedProfile || !activeAcademicSession || !currentUser || currentUser.type !== 'formmaster') return;
-  panel.innerHTML = '<p style="color:#64748b">Loading saved subject scores for your assigned class…</p>';
+  panel.innerHTML = '<p style="color:#64748b">Loading your class subject register…</p>';
   try {
     var classId = currentUser.classId;
     var schoolId = authenticatedProfile.school_id;
     var terms = availableAssessmentTerms || [];
     var termIds = terms.map(function(item) { return item.id; });
     if (!classId || !termIds.length) throw new Error('Your assigned class or configured terms could not be resolved.');
-    var result = await supabaseClient.from('results')
-      .select('id,student_id,subject_id,academic_session_id,term_id,ca1,ca2,ca3,examination,total,grade,remark,status,updated_at')
-      .eq('school_id', schoolId).eq('class_id', classId)
-      .eq('academic_session_id', activeAcademicSession.id).in('term_id', termIds)
-      .order('updated_at', { ascending: false });
-    if (result.error) throw result.error;
-    var rows = result.data || [];
-    var studentIds = Array.from(new Set(rows.map(function(row) { return row.student_id; })));
-    var subjectIds = Array.from(new Set(rows.map(function(row) { return row.subject_id; })));
+
+    // Use the official subject-registration records for this assigned class.
+    var registrations = await supabaseClient.from('class_subject_registrations')
+      .select('id,term_id').eq('school_id', schoolId).eq('class_id', classId)
+      .eq('academic_session_id', activeAcademicSession.id).in('term_id', termIds);
+    if (registrations.error) throw registrations.error;
+    var registrationRows = registrations.data || [];
+    var registrationIds = registrationRows.map(function(item) { return item.id; });
+    if (!registrationIds.length) {
+      panel.innerHTML = '<div><h3 style="margin:0;color:#293968">Subject Score Register</h3><p class="alert alert-info" style="margin-top:12px">No subjects have been registered for your assigned class and academic session. Please contact the School Administrator.</p></div>';
+      return;
+    }
+    var registrationItems = await supabaseClient.from('class_subject_registration_items')
+      .select('registration_id,subject_id').eq('school_id', schoolId).in('registration_id', registrationIds);
+    if (registrationItems.error) throw registrationItems.error;
+    var subjectIds = Array.from(new Set((registrationItems.data || []).map(function(item) { return String(item.subject_id); })));
+    if (!subjectIds.length) {
+      panel.innerHTML = '<h3 style="margin:0;color:#293968">Subject Score Register</h3><p class="alert alert-info" style="margin-top:12px">The registered subject list is empty. Ask the School Administrator to complete subject registration.</p>';
+      return;
+    }
     var lookups = await Promise.all([
-      studentIds.length ? supabaseClient.from('students').select('id,admission_number,first_name,middle_name,last_name').eq('school_id', schoolId).in('id', studentIds) : Promise.resolve({data:[],error:null}),
-      subjectIds.length ? supabaseClient.from('subjects').select('id,name').eq('school_id', schoolId).in('id', subjectIds) : Promise.resolve({data:[],error:null})
+      supabaseClient.from('subjects').select('id,name').eq('school_id', schoolId).in('id', subjectIds),
+      loadFormMasterOfficialEnrolments()
     ]);
     if (lookups[0].error) throw lookups[0].error;
-    if (lookups[1].error) throw lookups[1].error;
-    var studentMap = {}, subjectMap = {}, termMap = {};
-    (lookups[0].data || []).forEach(function(s) { studentMap[String(s.id)] = s; });
-    (lookups[1].data || []).forEach(function(s) { subjectMap[String(s.id)] = s.name; });
-    terms.forEach(function(t) { termMap[String(t.id)] = t.name; });
+    var subjectMap = {};
+    (lookups[0].data || []).forEach(function(item) { subjectMap[String(item.id)] = item.name; });
+    var enrolments = Array.isArray(lookups[1]) ? lookups[1] : [];
+    var students = enrolments.map(function(item) {
+      return { student:item.student, enrolment:item.enrolment };
+    }).filter(function(item) { return item.student && item.enrolment; });
+    students.sort(function(a,b) {
+      var an = Number(a.enrolment.register_number), bn = Number(b.enrolment.register_number);
+      if (Number.isFinite(an) && Number.isFinite(bn) && an !== bn) return an-bn;
+      return String(a.enrolment.sid || a.enrolment.register_number || '').localeCompare(String(b.enrolment.sid || b.enrolment.register_number || ''), undefined, {numeric:true});
+    });
+    var result = await supabaseClient.from('results')
+      .select('id,student_id,subject_id,term_id,ca1,ca2,ca3,examination,total,grade,remark,status,updated_at')
+      .eq('school_id', schoolId).eq('class_id', classId)
+      .eq('academic_session_id', activeAcademicSession.id).in('term_id', termIds)
+      .in('subject_id', subjectIds);
+    if (result.error) throw result.error;
+    var scoreRows = result.data || [];
+    var termSubjects = {};
+    (registrationItems.data || []).forEach(function(item) {
+      var registration = registrationRows.find(function(r) { return String(r.id) === String(item.registration_id); });
+      if (!registration) return;
+      var key = String(registration.term_id);
+      if (!termSubjects[key]) termSubjects[key] = {};
+      termSubjects[key][String(item.subject_id)] = true;
+    });
+    var selectedTermId = panel.getAttribute('data-selected-term') || (activeAssessmentTerm && String(activeAssessmentTerm.id)) || String(terms[0].id);
+    if (!termSubjects[selectedTermId]) selectedTermId = String(registrationRows[0].term_id);
+    var activeSubjectIds = Object.keys(termSubjects[selectedTermId] || {});
+    var selectedSubjectId = panel.getAttribute('data-selected-subject') || activeSubjectIds[0] || '';
+    if (activeSubjectIds.indexOf(selectedSubjectId) === -1) selectedSubjectId = activeSubjectIds[0] || '';
+    var selectedTerm = terms.find(function(t) { return String(t.id) === selectedTermId; });
+    var selectedSubjectName = subjectMap[selectedSubjectId] || 'Selected subject';
+    var termScoreRows = scoreRows.filter(function(row) { return String(row.term_id) === selectedTermId; });
+    var subjectScoreRows = termScoreRows.filter(function(row) { return String(row.subject_id) === selectedSubjectId; });
+    var scoreMap = {};
+    subjectScoreRows.forEach(function(row) { scoreMap[String(row.student_id)] = row; });
+    var savedCount = students.filter(function(item) { return !!scoreMap[String(item.student.id)]; }).length;
+    var pendingCount = Math.max(0, students.length - savedCount);
     var esc = escapeManagementText;
-    var html = '<div style="display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;align-items:center"><div><h3 style="margin:0;color:#293968">Subject Scores Submitted by Subject Teachers</h3><p style="font-size:12px;color:#64748b;margin-top:5px">A live read-only view of saved draft and submitted scores for your class. This is the subject-score foundation for the class result sheet.</p></div><button type="button" class="btn btn-primary" id="refreshFormMasterSubjectResults">Refresh</button></div>';
-    if (!rows.length) {
-      html += '<p class="alert alert-info" style="margin-top:12px">No subject scores have been saved for your class in this academic session yet.</p>';
+    var html = '<div style="display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;align-items:center"><div><h3 style="margin:0;color:#293968">Subject Score Register</h3><p style="font-size:12px;color:#64748b;margin:5px 0">Select a registered subject to inspect every student in official serial-ID order. This view is read-only.</p></div><button type="button" class="btn btn-primary" id="refreshFormMasterSubjectResults">Refresh</button></div>';
+    html += '<div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin:14px 0"><label for="fmViewTerm"><strong>Term</strong></label><select id="fmViewTerm" class="form-control" style="max-width:220px">' +
+      terms.filter(function(t) { return !!termSubjects[String(t.id)]; }).map(function(t) { return '<option value="'+esc(t.id)+'"'+(String(t.id)===selectedTermId?' selected':'')+'>'+esc(t.name || ('Term '+t.term_number))+'</option>'; }).join('') +
+      '</select><span style="font-size:12px;color:#64748b">Class: <strong>'+esc(currentUser.arm || '')+'</strong></span></div>';
+    html += '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(145px,1fr));gap:9px;margin:12px 0" id="fmViewSubjectTiles">';
+    activeSubjectIds.forEach(function(id) {
+      var count = termScoreRows.filter(function(row) { return String(row.subject_id) === id; }).length;
+      var active = id === selectedSubjectId;
+      html += '<button type="button" class="fm-view-subject-tile" data-subject-id="'+esc(id)+'" style="text-align:left;padding:12px;border:2px solid '+(active?'#536fe5':'#e2e8f0')+';border-radius:10px;background:'+(active?'#eef2ff':'#fff')+';color:#24345b;cursor:pointer"><strong style="display:block">'+esc(subjectMap[id] || 'Subject')+'</strong><small style="display:block;margin-top:6px;color:#64748b">'+count+' score record(s)</small></button>';
+    });
+    html += '</div>';
+    if (!selectedSubjectId) {
+      html += '<p class="alert alert-info">No subjects are registered for this term.</p>';
     } else {
-      html += '<p style="margin:10px 0;color:#475569;font-size:12px"><strong>'+rows.length+'</strong> student-subject score record(s) found.</p><div style="overflow-x:auto"><table><thead><tr><th>Student</th><th>Admission No.</th><th>Subject</th><th>Term</th><th>CA1</th><th>CA2</th><th>CA3</th><th>Exam</th><th>Total</th><th>Grade</th><th>Status</th><th>Last Saved</th></tr></thead><tbody>';
-      rows.forEach(function(row) {
-        var s = studentMap[String(row.student_id)] || {};
-        var name = [s.first_name,s.middle_name,s.last_name].filter(Boolean).join(' ') || 'Student record unavailable';
-        html += '<tr><td>'+esc(name)+'</td><td>'+esc(s.admission_number || '—')+'</td><td>'+esc(subjectMap[String(row.subject_id)] || '—')+'</td><td>'+esc(termMap[String(row.term_id)] || '—')+'</td><td>'+esc(row.ca1 == null ? '—' : row.ca1)+'</td><td>'+esc(row.ca2 == null ? '—' : row.ca2)+'</td><td>'+esc(row.ca3 == null ? '—' : row.ca3)+'</td><td>'+esc(row.examination == null ? '—' : row.examination)+'</td><td><strong>'+esc(row.total == null ? '—' : row.total)+'</strong></td><td>'+esc(row.grade || '—')+'</td><td><strong>'+esc(row.status || 'draft')+'</strong></td><td>'+esc(row.updated_at ? new Date(row.updated_at).toLocaleString() : '—')+'</td></tr>';
+      html += '<div style="display:flex;gap:12px;flex-wrap:wrap;margin:12px 0"><span style="padding:7px 10px;background:#ecfdf3;border-radius:7px;color:#067647"><strong>'+savedCount+'</strong> with saved scores</span><span style="padding:7px 10px;background:#fff7ed;border-radius:7px;color:#c2410c"><strong>'+pendingCount+'</strong> not yet entered</span><span style="padding:7px 10px;background:#eff6ff;border-radius:7px;color:#1d4ed8"><strong>'+students.length+'</strong> enrolled students</span></div>';
+      html += '<h4 style="margin:12px 0 8px;color:#293968">'+esc(selectedSubjectName)+' — '+esc(selectedTerm ? selectedTerm.name : '')+'</h4>';
+      html += '<div style="overflow-x:auto"><table style="min-width:900px;width:100%"><thead><tr><th>Serial ID (SID)</th><th>Register No.</th><th>Student</th><th>CA1</th><th>CA2</th><th>CA3</th><th>Exam</th><th>Total</th><th>Grade</th><th>Status</th><th>Last Saved</th></tr></thead><tbody>';
+      students.forEach(function(item) {
+        var student = item.student, enrolment = item.enrolment, row = scoreMap[String(student.id)];
+        var name = [student.first_name,student.middle_name,student.last_name].filter(Boolean).join(' ') || 'Student';
+        var status = row ? String(row.status || 'draft').toLowerCase() : 'pending';
+        var badgeStyle = status === 'published' || status === 'approved' || status === 'submitted'
+          ? 'background:#ecfdf3;color:#067647' : status === 'draft' ? 'background:#eff6ff;color:#1d4ed8' : 'background:#fff7ed;color:#c2410c';
+        html += '<tr><td><strong>'+esc(enrolment.sid || '—')+'</strong></td><td>'+esc(enrolment.register_number || '—')+'</td><td>'+esc(name)+'</td>';
+        html += '<td>'+esc(row && row.ca1 != null ? row.ca1 : '—')+'</td><td>'+esc(row && row.ca2 != null ? row.ca2 : '—')+'</td><td>'+esc(row && row.ca3 != null ? row.ca3 : '—')+'</td><td>'+esc(row && row.examination != null ? row.examination : '—')+'</td><td><strong>'+esc(row && row.total != null ? row.total : '—')+'</strong></td><td>'+esc(row && row.grade || '—')+'</td><td><span style="display:inline-block;padding:4px 8px;border-radius:20px;font-size:11px;font-weight:700;'+badgeStyle+'">'+esc(status === 'pending' ? 'NOT ENTERED' : status.toUpperCase())+'</span></td><td>'+esc(row && row.updated_at ? new Date(row.updated_at).toLocaleString() : '—')+'</td></tr>';
       });
       html += '</tbody></table></div>';
+      if (!students.length) html += '<p class="alert alert-info">There are no active students enrolled in this class for the current session.</p>';
     }
     panel.innerHTML = html;
+    panel.setAttribute('data-selected-term', selectedTermId);
+    panel.setAttribute('data-selected-subject', selectedSubjectId);
     var refresh = panel.querySelector('#refreshFormMasterSubjectResults');
     if (refresh) refresh.addEventListener('click', loadFormMasterSubjectResultsView);
+    var termSelect = panel.querySelector('#fmViewTerm');
+    if (termSelect) termSelect.addEventListener('change', function() {
+      panel.setAttribute('data-selected-term', this.value);
+      panel.removeAttribute('data-selected-subject');
+      loadFormMasterSubjectResultsView();
+    });
+    panel.querySelectorAll('.fm-view-subject-tile').forEach(function(tile) {
+      tile.addEventListener('click', function() {
+        panel.setAttribute('data-selected-subject', this.getAttribute('data-subject-id'));
+        loadFormMasterSubjectResultsView();
+      });
+    });
   } catch (error) {
-    console.error('Form Master subject results view failed:', error);
-    panel.innerHTML = '<p class="alert alert-error">Could not load subject scores: '+escapeManagementText(error.message || 'Unknown error')+'</p>';
+    console.error('Form Master subject register failed:', error);
+    panel.innerHTML = '<p class="alert alert-error">Could not load the subject register: '+escapeManagementText(error.message || 'Unknown error')+'</p>';
   }
 }
-
 function renderView() {
   var userStudents = currentUser.type === 'admin' || currentUser.type === 'subadmin' ? students : students.filter(function(s) { return s.className === currentUser.arm; });
   var canDeleteStudents = currentUser.type === 'admin' || currentUser.type === 'formmaster' || (currentUser.type === 'subadmin' && hasSubAdminPermission('deleteRecords'));
