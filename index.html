@@ -2314,6 +2314,29 @@ async function loadFormMasterOverallResult(studentId, termId) {
   if (!config) throw new Error('The active assessment configuration for this class is unavailable.');
   var maximumPerSubject = Number(config.ca1) + Number(config.ca2) + Number(config.ca3) + Number(config.exam);
   if (!Number.isFinite(maximumPerSubject) || maximumPerSubject <= 0) throw new Error('The configured maximum subject score is invalid.');
+  var registrationResult = await supabaseClient.from('class_subject_registrations')
+    .select('id')
+    .eq('school_id', authenticatedProfile.school_id)
+    .eq('class_id', currentUser.classId)
+    .eq('academic_session_id', activeAcademicSession.id)
+    .eq('term_id', termId).maybeSingle();
+  if (registrationResult.error) throw registrationResult.error;
+  if (!registrationResult.data) {
+    if (summary) summary.textContent = 'The registered subject list for this class and term is not available. Ask the School Administrator to confirm class subject registration.';
+    if (commentSelect) commentSelect.innerHTML = '<option value="">Subject registration unavailable</option>';
+    return null;
+  }
+  var registeredSubjectsResult = await supabaseClient.from('class_subject_registration_items')
+    .select('subject_id')
+    .eq('school_id', authenticatedProfile.school_id)
+    .eq('registration_id', registrationResult.data.id);
+  if (registeredSubjectsResult.error) throw registeredSubjectsResult.error;
+  var expectedSubjectCount = (registeredSubjectsResult.data || []).length;
+  if (!expectedSubjectCount) {
+    if (summary) summary.textContent = 'No subjects are registered for this class and term. The overall average cannot be calculated.';
+    if (commentSelect) commentSelect.innerHTML = '<option value="">No registered subjects</option>';
+    return null;
+  }
   var result = await supabaseClient.from('results')
     .select('id,subject_id,total,status')
     .eq('school_id', authenticatedProfile.school_id)
@@ -2327,10 +2350,17 @@ async function loadFormMasterOverallResult(studentId, termId) {
     return ['submitted','approved','published'].indexOf(String(row.status || '').toLowerCase()) !== -1;
   });
   var pending = rows.filter(function(row) { return String(row.status || '').toLowerCase() === 'draft'; }).length;
-  if (!eligible.length) {
-    if (summary) summary.innerHTML = 'No submitted, approved or published subject results are available for this student and term.' +
-      (pending ? '<br><strong>' + pending + '</strong> subject result(s) are still in draft and are not included in the overall average.' : '');
-    if (commentSelect) commentSelect.innerHTML = '<option value="">No finalised results available</option>';
+  var completedSubjectIds = {};
+  eligible.forEach(function(row) { completedSubjectIds[String(row.subject_id)] = true; });
+  var missingSubjects = (registeredSubjectsResult.data || []).filter(function(item) {
+    return !completedSubjectIds[String(item.subject_id)];
+  }).length;
+  if (eligible.length !== expectedSubjectCount || missingSubjects > 0 || pending > 0) {
+    if (summary) summary.innerHTML = '<strong>' + eligible.length + ' of ' + expectedSubjectCount + '</strong> registered subjects have submitted, approved or published results.' +
+      '<br>The overall average and Form Master comment will become available when every registered subject result has been submitted.' +
+      (pending ? '<br><strong>' + pending + '</strong> draft subject result(s) are still pending.' : '') +
+      (missingSubjects ? '<br><strong>' + missingSubjects + '</strong> registered subject result(s) are not yet finalised.' : '');
+    if (commentSelect) commentSelect.innerHTML = '<option value="">Waiting for all subject results</option>';
     return null;
   }
   var totalObtained = eligible.reduce(function(sum, row) {
@@ -2373,12 +2403,13 @@ function renderFormMasterInput() {
     '<div class="fm-assessment-section"><h3 style="margin-bottom:12px">Student &amp; Term</h3><div class="grid grid-2"><div class="input-group"><label for="fmAssessmentTerm">Term</label><select id="fmAssessmentTerm"></select></div>' +
     '<div class="input-group"><label for="fmAssessmentStudent">Official Student</label><select id="fmAssessmentStudent"><option value="">Loading official enrolments…</option></select></div></div>' +
     '<div id="fmOfficialStudentProfile" class="fm-student-summary">Select an officially enrolled student.</div>' +
-    '<div id="formMasterPassportPreview" class="card" style="margin:14px 0 0"><p>Select a student to view their registered passport.</p></div></div>' +
+    '<div id="formMasterPassportPreview" class="card" style="margin:14px 0 0"><p>Select a student to view their registered passport.</p></div>' +
+    '<div class="fm-assessment-section" id="fmOverallResultPanel"><h3>Overall Academic Performance</h3><p style="color:#667085;font-size:12px">The overall average is calculated from all registered subjects with submitted, approved or published results for the selected term.</p><div id="fmOverallResultSummary" class="fm-student-summary">Select a student and term to load the academic results.</div></div></div>' +
     '<div class="fm-assessment-section"><h3 style="margin-bottom:12px">Attendance &amp; Fees</h3><div class="grid grid-2"><div class="input-group"><label for="fmAttendanceDays">Days Present (out of ' + ((Number(portalSettings.termWeeks) || 12) * 5) + ' school days)</label><input type="number" id="fmAttendanceDays" min="0" max="' + ((Number(portalSettings.termWeeks) || 12) * 5) + '"></div>' +
     '<div class="input-group"><label for="fmNextTermFees">Next Term School Fees Amount</label><input type="number" id="fmNextTermFees" min="0" step="0.01" placeholder="Enter amount"></div></div></div>' +
     '<div class="fm-assessment-section"><h3>Affective Domain</h3><p style="color:#667085;font-size:12px;margin:5px 0 10px">Rate each learner behaviour from 1 (needs support) to 5 (excellent).</p><div id="affectiveSection"></div></div>' +
     '<div class="fm-assessment-section"><h3>Psychomotor Domain</h3><p style="color:#667085;font-size:12px;margin:5px 0 10px">Rate practical, physical and creative skills from 1 to 5.</p><div id="psychomotorSection"></div></div>' +
-    '<div class="fm-assessment-section"><div class="input-group"><label for="formMasterComment">Form Master Comment</label><textarea id="formMasterComment" rows="3" placeholder="Add a concise comment on the student’s progress"></textarea></div>' +
+    '<div class="fm-assessment-section"><h3>Form Master’s Overall Comment</h3><p style="color:#667085;font-size:12px;margin:5px 0 10px">Choose one of the ten encouraging comments assigned to the student’s overall-average rating.</p><div class="input-group"><label for="formMasterComment">Comment options for calculated rating</label><select id="formMasterComment" disabled><option value="">Select a student with available results first</option></select></div><div id="fmCommentPreview" class="fm-student-summary" aria-live="polite">The selected comment will appear here.</div></div>' +
     '<button type="button" class="btn btn-success" id="saveStudentBtn">Save Form Master Assessment</button><div id="fmAssessmentStatus" role="status" aria-live="polite" style="margin-top:10px"></div></div></div>';
 
   var termSelect = root.querySelector('#fmAssessmentTerm');
