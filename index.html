@@ -2263,6 +2263,7 @@ function renderFormMasterInput() {
     root.querySelector('#fmAttendanceDays').value = '';
     root.querySelector('#fmNextTermFees').value = '';
     if (selected) {
+      var savedFormMasterComment = '';
       var student = selected.student;
       var fullName = [student.first_name, student.middle_name, student.last_name].filter(Boolean).join(' ');
       profile.innerHTML = '<strong>' + escapeManagementText(fullName || 'Student') + '</strong><br>' +
@@ -2282,7 +2283,7 @@ function renderFormMasterInput() {
         if (saved) {
           if (saved.affective_ratings) affectiveRatings = Object.assign(affectiveRatings, saved.affective_ratings);
           if (saved.psychomotor_ratings) psychomotorRatings = Object.assign(psychomotorRatings, saved.psychomotor_ratings);
-          root.querySelector('#formMasterComment').value = saved.form_master_comment || '';
+          savedFormMasterComment = saved.form_master_comment || '';
           root.querySelector('#fmAttendanceDays').value = saved.attendance_days == null ? '' : saved.attendance_days;
           root.querySelector('#fmNextTermFees').value = saved.next_term_fees == null ? '' : saved.next_term_fees;
         }
@@ -2290,7 +2291,26 @@ function renderFormMasterInput() {
         status.className = 'alert alert-error';
         status.textContent = 'Could not load the saved Form Master assessment: ' + (error.message || 'Unknown error');
       }
+      try {
+        var overallState = await loadFormMasterOverallResult(student.id, termId);
+        var commentSelect = root.querySelector('#formMasterComment');
+        var commentPreview = root.querySelector('#fmCommentPreview');
+        if (overallState && savedFormMasterComment) {
+          if (FORM_MASTER_OVERALL_COMMENTS[overallState.rating].indexOf(savedFormMasterComment) !== -1) {
+            commentSelect.value = savedFormMasterComment;
+            if (commentPreview) commentPreview.textContent = savedFormMasterComment;
+          } else if (commentPreview) {
+            commentPreview.textContent = 'A previously saved comment is not in the approved overall-average comment list. Please select a current comment before saving this assessment.';
+          }
+        }
+      } catch (overallError) {
+        var overallSummary = root.querySelector('#fmOverallResultSummary');
+        if (overallSummary) overallSummary.textContent = 'Could not calculate the overall average: ' + (overallError.message || 'Unknown error.');
+        status.className = 'alert alert-error';
+        status.textContent = 'Academic result review failed: ' + (overallError.message || 'Unknown error.');
+      }
     } else {
+      formMasterOverallResultState = null;
       profile.textContent = 'Select an officially enrolled student.';
       await showFormMasterStudentPassport(null);
     }
@@ -2304,6 +2324,10 @@ function renderFormMasterInput() {
     loadSavedAssessment();
   });
   termSelect.addEventListener('change', loadSavedAssessment);
+  root.querySelector('#formMasterComment').addEventListener('change', function() {
+    var preview = root.querySelector('#fmCommentPreview');
+    if (preview) preview.textContent = this.value || 'Select a comment to preview it here.';
+  });
   root.querySelector('#saveStudentBtn').addEventListener('click', function() {
     if (currentUser.type === 'formmaster') {
       saveFormMasterAssessment();
@@ -2361,6 +2385,18 @@ async function saveFormMasterAssessment() {
     fail('Select an official student and a configured term before saving.');
     return;
   }
+  var selectedOverallComment = document.getElementById('formMasterComment').value.trim();
+  if (formMasterOverallResultState &&
+      (formMasterOverallResultState.studentId !== String(studentId) ||
+       formMasterOverallResultState.termId !== String(termId) ||
+       FORM_MASTER_OVERALL_COMMENTS[formMasterOverallResultState.rating].indexOf(selectedOverallComment) === -1)) {
+    fail('Choose one of the approved comments for the student’s current overall-average rating.');
+    return;
+  }
+  if (!formMasterOverallResultState && selectedOverallComment) {
+    fail('The overall average has not been confirmed. Reload the student’s results before selecting a comment.');
+    return;
+  }
   var attendanceInput = document.getElementById('fmAttendanceDays').value;
   var attendanceDays = attendanceInput === '' ? null : Number(attendanceInput);
   var schoolDays = (Number(portalSettings.termWeeks) || 12) * 5;
@@ -2413,7 +2449,7 @@ async function saveFormMasterAssessment() {
       term_id: term.id,
       affective_ratings: JSON.parse(JSON.stringify(affectiveRatings)),
       psychomotor_ratings: JSON.parse(JSON.stringify(psychomotorRatings)),
-      form_master_comment: document.getElementById('formMasterComment').value.trim(),
+      form_master_comment: selectedOverallComment,
       attendance_days: attendanceDays,
       school_days: schoolDays,
       next_term_fees: nextTermFees,
@@ -12655,6 +12691,6 @@ async function renderSubjectTeacherInput() {
 }
 </script>
 <script src="passport-registration.js"></script>
-<script src="principal-dashboard.js?v=20261113"></script>
+<script src="principal-dashboard.js?v=20261113&result-comments=20261113"></script>
 </body>
 </html>
