@@ -2564,15 +2564,15 @@ async function saveFormMasterAssessment() {
     return;
   }
   var selectedOverallComment = document.getElementById('formMasterComment').value.trim();
-  if (formMasterOverallResultState &&
-      (formMasterOverallResultState.studentId !== String(studentId) ||
-       formMasterOverallResultState.termId !== String(termId) ||
-       FORM_MASTER_OVERALL_COMMENTS[formMasterOverallResultState.rating].indexOf(selectedOverallComment) === -1)) {
-    fail('Choose one of the approved comments for the student’s current overall-average rating.');
+  if (!formMasterOverallResultState) {
+    fail('The overall average is not yet confirmed. All registered subject results must be submitted, approved or published before the Form Master assessment and overall comment can be saved.');
     return;
   }
-  if (!formMasterOverallResultState && selectedOverallComment) {
-    fail('The overall average has not been confirmed. Reload the student’s results before selecting a comment.');
+  if (formMasterOverallResultState.studentId !== String(studentId) ||
+      formMasterOverallResultState.termId !== String(termId) ||
+      !selectedOverallComment ||
+      FORM_MASTER_OVERALL_COMMENTS[formMasterOverallResultState.rating].indexOf(selectedOverallComment) === -1) {
+    fail('Choose one of the approved comments for the student’s current overall-average rating before saving.');
     return;
   }
   var attendanceInput = document.getElementById('fmAttendanceDays').value;
