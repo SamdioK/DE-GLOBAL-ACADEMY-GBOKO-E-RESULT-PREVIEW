@@ -2432,6 +2432,10 @@ function renderFormMasterInput() {
     });
     affectiveDomains.forEach(function(domain) { affectiveRatings[domain] = 5; });
     psychomotorDomains.forEach(function(domain) { psychomotorRatings[domain] = 5; });
+    formMasterOverallResultState = null;
+    root.querySelector('#formMasterComment').disabled = true;
+    root.querySelector('#formMasterComment').innerHTML = '<option value="">Loading result comments…</option>';
+    root.querySelector('#fmCommentPreview').textContent = 'A comment will be available when the overall average is confirmed.';
     root.querySelector('#formMasterComment').value = '';
     root.querySelector('#fmAttendanceDays').value = '';
     root.querySelector('#fmNextTermFees').value = '';
