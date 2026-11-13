@@ -2484,6 +2484,7 @@ function renderFormMasterInput() {
       }
     } else {
       formMasterOverallResultState = null;
+      await loadFormMasterOverallResult(null, null);
       profile.textContent = 'Select an officially enrolled student.';
       await showFormMasterStudentPassport(null);
     }
