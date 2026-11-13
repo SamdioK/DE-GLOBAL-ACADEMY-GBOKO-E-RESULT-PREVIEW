@@ -134,6 +134,17 @@
         '<button data-principal-go="principalResults">Monitor results</button><button data-principal-go="principalReports">Academic reports</button>'+
         '<button data-principal-go="principalRequests">Requests & activity</button></div></div>'+
         '<p class="principal-muted">Figures are read from Supabase when this page loads. They are not editable from the Principal account.</p>');
+      // Delegate the Overview quick-access actions to the existing authorised tab router.
+      // Assigning onclick replaces any previous handler, avoiding duplicate listeners on refresh.
+      root.onclick = function(event) {
+        var button = event.target && event.target.closest ? event.target.closest('[data-principal-go]') : null;
+        if (!button || !root.contains(button)) return;
+        var destination = button.getAttribute('data-principal-go');
+        var allowed = ['principalStudents','principalStaff','principalResults','principalReports','principalRequests'];
+        if (allowed.indexOf(destination) === -1) return;
+        if (typeof showTab === 'function') showTab(destination);
+        else showToast('Navigation is temporarily unavailable. Please refresh and try again.', 'error');
+      };
     } catch(e) { root.innerHTML=frame('principalDashboard','<div class="principal-error">Dashboard data could not be loaded: '+esc(e.message||e)+'</div>'); }
   }
   async function renderStudents(root) {
