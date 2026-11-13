@@ -2223,6 +2223,148 @@ async function loadFormMasterOfficialEnrolments() {
   return formMasterStudentEnrolments;
 }
 
+var formMasterOverallResultState = null;
+var FORM_MASTER_OVERALL_COMMENTS = {
+  5: [
+    'An outstanding performance; keep the ball rolling.',
+    'An excellent performance; you are indeed our pride.',
+    'A remarkable achievement; continue to shine.',
+    'An exceptional performance; keep raising the standard.',
+    'Brilliant result! Your hard work is truly rewarding.',
+    'You have demonstrated excellence; keep reaching for greater heights.',
+    'A splendid performance; the sky is your limit.',
+    'Excellent achievement; maintain this impressive standard.',
+    'You have made us proud; keep up the excellent work.',
+    'An exceptional result; remain focused and continue to excel.'
+  ],
+  4: [
+    'A very good performance; keep up the good work.',
+    'An impressive achievement; you are doing wonderfully well.',
+    'A commendable performance; keep aiming higher.',
+    'Very good effort; you are steadily moving towards excellence.',
+    'A pleasing result; continue working hard.',
+    'You have demonstrated great potential; keep shining.',
+    'A very encouraging performance; greater achievements await you.',
+    'Well done! Keep building on this impressive performance.',
+    'Your effort is commendable; continue striving for excellence.',
+    'A good achievement; remain consistent and keep improving.'
+  ],
+  3: [
+    'A good performance; keep working towards excellence.',
+    'You have done well; greater effort will take you higher.',
+    'A commendable effort; keep pushing for better results.',
+    'You are making good progress; do not relent.',
+    'A good achievement; remain focused and aim higher.',
+    'You have shown encouraging potential; keep developing it.',
+    'Good effort! With more dedication, you can achieve even more.',
+    'You are on the right track; keep moving forward.',
+    'A fair achievement; greater commitment will bring better results.',
+    'Well done! Keep improving, for you are capable of more.'
+  ],
+  2: [
+    'A fair performance; with more effort, you can do better.',
+    'You have the potential to excel; give your studies greater attention.',
+    'A modest achievement; keep working hard towards improvement.',
+    'Do not be discouraged; greater commitment will produce better results.',
+    'You can achieve more; remain focused and study consistently.',
+    'A fair attempt; make the next result a better one.',
+    'Keep believing in yourself; improvement begins with determination.',
+    'More effort and concentration will help you reach greater heights.',
+    'You are capable of better performance; keep striving.',
+    'Do not give up; consistent effort will bring encouraging results.'
+  ],
+  1: [
+    'You can do better; sit up, work hard and believe in yourself.',
+    'Every great achievement begins with determination; make a fresh start.',
+    'Do not lose hope; greater effort can change your story.',
+    'You have the ability to improve; give your studies more attention.',
+    'This is an opportunity to work harder and achieve better results.',
+    'Keep your head up; with dedication and regular practice, you can improve.',
+    'Believe in your ability; remain focused and never give up.',
+    'Let this result motivate you to work harder and aim higher.',
+    'You are capable of achieving more; take your studies seriously and keep trying.',
+    'A better result is possible; be determined, seek guidance and keep working hard.'
+  ]
+};
+
+function getFormMasterOverallRating(average) {
+  if (average >= 75) return 5;
+  if (average >= 65) return 4;
+  if (average >= 55) return 3;
+  if (average >= 40) return 2;
+  return 1;
+}
+
+async function loadFormMasterOverallResult(studentId, termId) {
+  var summary = document.getElementById('fmOverallResultSummary');
+  var commentSelect = document.getElementById('formMasterComment');
+  var commentPreview = document.getElementById('fmCommentPreview');
+  formMasterOverallResultState = null;
+  if (commentSelect) {
+    commentSelect.disabled = true;
+    commentSelect.innerHTML = '<option value="">Loading result comments…</option>';
+  }
+  if (summary) summary.textContent = 'Loading submitted subject results from Supabase…';
+  if (commentPreview) commentPreview.textContent = 'A comment will be available when the overall average is confirmed.';
+  if (!studentId || !termId) {
+    if (summary) summary.textContent = 'Select a student and term to load the academic results.';
+    return null;
+  }
+  var config = getAssessmentConfiguration(currentUser && currentUser.arm);
+  if (!config) throw new Error('The active assessment configuration for this class is unavailable.');
+  var maximumPerSubject = Number(config.ca1) + Number(config.ca2) + Number(config.ca3) + Number(config.exam);
+  if (!Number.isFinite(maximumPerSubject) || maximumPerSubject <= 0) throw new Error('The configured maximum subject score is invalid.');
+  var result = await supabaseClient.from('results')
+    .select('id,subject_id,total,status')
+    .eq('school_id', authenticatedProfile.school_id)
+    .eq('student_id', studentId)
+    .eq('class_id', currentUser.classId)
+    .eq('academic_session_id', activeAcademicSession.id)
+    .eq('term_id', termId);
+  if (result.error) throw result.error;
+  var rows = result.data || [];
+  var eligible = rows.filter(function(row) {
+    return ['submitted','approved','published'].indexOf(String(row.status || '').toLowerCase()) !== -1;
+  });
+  var pending = rows.filter(function(row) { return String(row.status || '').toLowerCase() === 'draft'; }).length;
+  if (!eligible.length) {
+    if (summary) summary.innerHTML = 'No submitted, approved or published subject results are available for this student and term.' +
+      (pending ? '<br><strong>' + pending + '</strong> subject result(s) are still in draft and are not included in the overall average.' : '');
+    if (commentSelect) commentSelect.innerHTML = '<option value="">No finalised results available</option>';
+    return null;
+  }
+  var totalObtained = eligible.reduce(function(sum, row) {
+    var value = Number(row.total);
+    if (!Number.isFinite(value) || value < 0 || value > maximumPerSubject) throw new Error('A subject result contains an invalid total. Please ask the score-entry administrator to review it.');
+    return sum + value;
+  }, 0);
+  var totalObtainable = maximumPerSubject * eligible.length;
+  var average = totalObtained / totalObtainable * 100;
+  var rating = getFormMasterOverallRating(average);
+  formMasterOverallResultState = {
+    studentId: String(studentId), termId: String(termId), subjectCount: eligible.length,
+    totalObtained: totalObtained, totalObtainable: totalObtainable,
+    average: average, rating: rating, pendingCount: pending
+  };
+  if (summary) {
+    summary.innerHTML = '<div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px">' +
+      '<div><small>Subjects counted</small><strong style="display:block;font-size:20px">' + eligible.length + '</strong></div>' +
+      '<div><small>Total obtained</small><strong style="display:block;font-size:20px">' + totalObtained.toFixed(1) + '</strong></div>' +
+      '<div><small>Overall average</small><strong style="display:block;font-size:20px">' + average.toFixed(2) + '%</strong></div></div>' +
+      '<p style="margin:10px 0 0"><strong>Form Master rating: ' + rating + '/5</strong> — ' +
+      (rating === 5 ? 'Outstanding Academic Performance' : rating === 4 ? 'Very Good Academic Performance' : rating === 3 ? 'Good Academic Performance' : rating === 2 ? 'Fair Performance; Needs Improvement' : 'Needs Greater Academic Attention') +
+      '</p>' + (pending ? '<p style="margin:8px 0 0;color:#9a6700">' + pending + ' draft subject result(s) are excluded until submitted.</p>' : '');
+  }
+  if (commentSelect) {
+    commentSelect.innerHTML = '<option value="">Choose a comment…</option>' +
+      FORM_MASTER_OVERALL_COMMENTS[rating].map(function(comment, index) {
+        return '<option value="' + escapeManagementText(comment) + '">' + (index + 1) + '. ' + escapeManagementText(comment) + '</option>';
+      }).join('');
+    commentSelect.disabled = false;
+  }
+  return formMasterOverallResultState;
+}
+
 function renderFormMasterInput() {
   var root = document.getElementById('inputTab');
   if (!root) return;
