@@ -11815,6 +11815,36 @@ async function attachRegisteredSupabasePassport(student) {
       student.passportLoadStatus = 'student_not_found_in_supabase';
       return student;
     }
+    // Attach the saved Form Master overall-average comment to the result
+    // sheet using the official Supabase student/session/term identifiers.
+    try {
+      var resultSessionName = String(student.session || schoolInfo.session || currentSchool.session || '').trim();
+      var resultSession = await supabaseClient.from('academic_sessions').select('id')
+        .eq('school_id', authenticatedProfile.school_id).eq('name', resultSessionName).maybeSingle();
+      var resultTerm = await supabaseClient.from('terms').select('id')
+        .eq('school_id', authenticatedProfile.school_id).eq('term_number', Number(student.term)).maybeSingle();
+      if (resultSession.error) throw resultSession.error;
+      if (resultTerm.error) throw resultTerm.error;
+      if (resultSession.data && resultTerm.data) {
+        var formAssessment = await supabaseClient.from('form_master_student_assessments')
+          .select('form_master_comment,affective_ratings,psychomotor_ratings,attendance_days,school_days,next_term_fees')
+          .eq('school_id', authenticatedProfile.school_id)
+          .eq('student_id', studentLookup.data.id)
+          .eq('academic_session_id', resultSession.data.id)
+          .eq('term_id', resultTerm.data.id).maybeSingle();
+        if (formAssessment.error) throw formAssessment.error;
+        if (formAssessment.data) {
+          student.formMasterComment = formAssessment.data.form_master_comment || '';
+          student.affective = formAssessment.data.affective_ratings || student.affective || {};
+          student.psychomotor = formAssessment.data.psychomotor_ratings || student.psychomotor || {};
+          student.attendanceDays = formAssessment.data.attendance_days;
+          student.schoolDays = formAssessment.data.school_days;
+          student.nextTermFees = formAssessment.data.next_term_fees;
+        }
+      }
+    } catch (formAssessmentError) {
+      console.error('Saved Form Master comment could not be attached to the result sheet:', formAssessmentError);
+    }
     var passportLookup = await supabaseClient.from('student_passports')
       .select('storage_path')
       .eq('school_id', authenticatedProfile.school_id)
