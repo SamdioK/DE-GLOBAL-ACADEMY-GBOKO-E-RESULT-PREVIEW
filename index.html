@@ -557,8 +557,10 @@ async function saveScoreEntryPreferences(keyboardStyle, direction) {
     updated_at: new Date().toISOString()
   };
   var result = await supabaseClient.from('score_entry_preferences')
-    .upsert(payload, { onConflict: 'profile_id' });
+    .upsert(payload, { onConflict: 'profile_id' })
+    .select('profile_id,keyboard_style,entry_direction').single();
   if (result.error) throw result.error;
+  if (!result.data || result.data.profile_id !== authenticatedProfile.id) throw new Error('Supabase did not confirm score-entry preferences.');
   return true;
 }
 
@@ -2116,8 +2118,9 @@ async function renderSubjectRegistration() {
             if (selected.length) {
               var insertResult = await supabaseClient.from('class_subject_registration_items').insert(selected.map(function(subjectId) {
                 return { registration_id: registrationId, school_id: schoolId, subject_id: subjectId };
-              }));
+              })).select('registration_id,subject_id');
               if (insertResult.error) throw insertResult.error;
+              if (!Array.isArray(insertResult.data) || insertResult.data.length !== selected.length) throw new Error('Supabase did not confirm every subject registration.');
             }
             showToast('Subject registration saved for the whole class.', 'success');
           } catch (error) {
@@ -6352,9 +6355,10 @@ async function submitStudentForApproval(rows, classId, submissionType) {
 
   var rowResult = await supabaseClient
     .from('student_import_rows')
-    .insert(payload);
+    .insert(payload)
+    .select('id');
 
-  if (rowResult.error) {
+  if (rowResult.error || !Array.isArray(rowResult.data) || rowResult.data.length !== payload.length) {
     // Mark the failed batch for investigation.
     await supabaseClient
       .from('student_import_batches')
@@ -6602,8 +6606,9 @@ function openInlineStudentCorrection(root, student) {
     try {
       var requestResult = await supabaseClient.from('student_change_requests').insert({ school_id: authenticatedProfile.school_id, student_id: student.id, submitted_by: authenticatedProfile.id, reason: reason, status: 'pending' }).select('id').single();
       if (requestResult.error) throw requestResult.error;
-      var itemsResult = await supabaseClient.from('student_change_request_items').insert(changes.map(function(change) { return { request_id: requestResult.data.id, field_name: change.field_name, old_value: change.old_value, new_value: change.new_value }; }));
+      var itemsResult = await supabaseClient.from('student_change_request_items').insert(changes.map(function(change) { return { request_id: requestResult.data.id, field_name: change.field_name, old_value: change.old_value, new_value: change.new_value }; })).select('id');
       if (itemsResult.error) throw itemsResult.error;
+      if (!Array.isArray(itemsResult.data) || itemsResult.data.length !== changes.length) throw new Error('Supabase did not confirm every correction item.');
       var historyResult = await supabaseClient.rpc('record_student_change_submission', { p_request_id: requestResult.data.id });
       if (historyResult.error) throw historyResult.error;
       var historyData = Array.isArray(historyResult.data) ? historyResult.data[0] : historyResult.data;
@@ -6905,8 +6910,9 @@ function bindStudentDatabaseEvents(root) {
         if (!reason) throw new Error('Enter a reason for the correction request.');
         var requestResult = await supabaseClient.from('student_change_requests').insert({ school_id: authenticatedProfile.school_id, student_id: student.id, submitted_by: authenticatedProfile.id, reason: reason, status: 'pending' }).select('id').single();
         if (requestResult.error) throw requestResult.error;
-        var itemsResult = await supabaseClient.from('student_change_request_items').insert(changes.map(function(change) { return { request_id: requestResult.data.id, field_name: change.field_name, old_value: change.old_value, new_value: change.new_value }; }));
+        var itemsResult = await supabaseClient.from('student_change_request_items').insert(changes.map(function(change) { return { request_id: requestResult.data.id, field_name: change.field_name, old_value: change.old_value, new_value: change.new_value }; })).select('id');
         if (itemsResult.error) throw itemsResult.error;
+        if (!Array.isArray(itemsResult.data) || itemsResult.data.length !== changes.length) throw new Error('Supabase did not confirm every correction item.');
         var historyResult = await supabaseClient.rpc('record_student_change_submission', { p_request_id: requestResult.data.id });
         if (historyResult.error) {
           await loadFormMasterChangeRequests();
@@ -10140,8 +10146,9 @@ function renderAdminProfile() {
           var authUpdate = await supabaseClient.auth.updateUser(authUpdates);
           if (authUpdate.error) throw authUpdate.error;
         }
-        var profileUpdate = await supabaseClient.from('profiles').update({ full_name: newName, email: newEmail, phone: newPhone }).eq('id', authenticatedProfile.id);
+        var profileUpdate = await supabaseClient.from('profiles').update({ full_name: newName, email: newEmail, phone: newPhone }).eq('id', authenticatedProfile.id).select('id,full_name,email,phone').single();
         if (profileUpdate.error) throw profileUpdate.error;
+        if (!profileUpdate.data || profileUpdate.data.id !== authenticatedProfile.id) throw new Error('Supabase did not confirm the profile update.');
         authenticatedProfile.full_name = newName;
         authenticatedProfile.email = newEmail;
         authenticatedProfile.phone = newPhone;
@@ -10240,8 +10247,9 @@ function renderAssessment() {
     });
     if (invalid) return;
     try {
-      var result = await supabaseClient.from('assessment_configurations').upsert(payload, { onConflict: 'school_id,academic_session_id,term_id,class_level' });
+      var result = await supabaseClient.from('assessment_configurations').upsert(payload, { onConflict: 'school_id,academic_session_id,term_id,class_level' }).select('id,class_level');
       if (result.error) throw result.error;
+      if (!Array.isArray(result.data) || result.data.length !== payload.length) throw new Error('Supabase did not confirm all six assessment configurations.');
       await loadSupabaseAssessmentConfigurations(activeAcademicSession.id, activeAssessmentTerm.id);
       showToast('Assessment configurations saved to Supabase for all six class levels.', 'success');
       renderAssessment();
