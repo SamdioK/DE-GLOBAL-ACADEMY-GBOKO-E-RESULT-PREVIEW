@@ -12650,18 +12650,24 @@ async function renderSubjectTeacherInput() {
         }
         values[item.key] = number;
       });
-      if (!hasAnyScore) {
+      // A completely blank row with no prior database record is genuinely not started.
+      // If a draft already exists, however, blank values are an intentional correction:
+      // continue to upsert NULLs so a previously saved mark is actually removed in Supabase.
+      if (!hasAnyScore && !existing) {
         setDraftRowStatus(row, 'Not started', false);
         return;
       }
       var total = activeAssessmentFields.reduce(function(sum, item) {
         return sum + (values[item.key] == null ? 0 : values[item.key]);
       }, 0);
-      var grade = 'F', remark = 'Failed';
-      if (total >= configuredTotalMaximum * 0.8) { grade = 'A'; remark = 'Excellent'; }
-      else if (total >= configuredTotalMaximum * 0.7) { grade = 'B'; remark = 'Very Good'; }
-      else if (total >= configuredTotalMaximum * 0.6) { grade = 'C'; remark = 'Good'; }
-      else if (total >= configuredTotalMaximum * 0.5) { grade = 'D'; remark = 'Pass'; }
+      var grade = null, remark = null;
+      if (hasAnyScore) {
+        grade = 'F'; remark = 'Failed';
+        if (total >= configuredTotalMaximum * 0.8) { grade = 'A'; remark = 'Excellent'; }
+        else if (total >= configuredTotalMaximum * 0.7) { grade = 'B'; remark = 'Very Good'; }
+        else if (total >= configuredTotalMaximum * 0.6) { grade = 'C'; remark = 'Good'; }
+        else if (total >= configuredTotalMaximum * 0.5) { grade = 'D'; remark = 'Pass'; }
+      }
       var payload = {
         school_id: schoolId, student_id: studentId, class_id: classId,
         subject_id: subjectId, academic_session_id: sessionId, term_id: selectedTerm.id,
