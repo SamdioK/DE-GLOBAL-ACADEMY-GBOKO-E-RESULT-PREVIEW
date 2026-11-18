@@ -9149,7 +9149,7 @@ async function printArmScoreSheet(className, sessionOverride, termOverride) {
       '.score-table tbody tr{height:'+rowHeight.toFixed(2)+'mm;break-inside:avoid;page-break-inside:avoid}.score-table td{height:'+rowHeight.toFixed(2)+'mm}.score-table td.student,.score-table td.subject{text-align:left;padding-left:.8mm;font-weight:600}'+
       '.sheet-footer{flex:0 0 auto;display:flex;justify-content:space-between;gap:3mm;border-top:.25mm solid #333;margin-top:2mm;padding-top:2mm;font-size:7pt}.page-number{position:absolute;right:0;bottom:0;font-size:5.5pt;color:#555}'+
       '@media print{html,body{width:100%;height:auto}.subject-sheet{height:196mm;max-height:196mm;break-after:page;page-break-after:always}.subject-sheet:last-child{break-after:auto;page-break-after:auto}.score-table th{print-color-adjust:exact;-webkit-print-color-adjust:exact}}'+
-      '</style></head><body>'+pageSections+'<script>window.onload=function(){window.print();};<\\/script></body></html>';
+      '</style></head><body>'+pageSections+'<script>window.onload=function(){window.print();};<\/script></body></html>';
     printWindow.document.open();printWindow.document.write(html);printWindow.document.close();
   }catch(error){
     printWindow.close();
