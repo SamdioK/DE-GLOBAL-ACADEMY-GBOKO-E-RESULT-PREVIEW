@@ -8795,54 +8795,56 @@ var armAssignmentMinimized = false;
 
 async function renderPrincipalWorkspace(tabName) {
   var root = document.getElementById(tabName + 'Tab');
-  if (!root) return;
-  if (!currentUser || currentUser.type !== 'principal') return;
-  if (tabName !== 'principalScoreSheet') {
-    root.innerHTML = '<div class="card"><p>Loading Principal workspace…</p></div>';
-    return;
-  }
-  root.innerHTML = '<div class="card"><h2>Score Sheet</h2><p>Choose a class arm to generate its official printable score sheet. Student names and register numbers are retrieved directly from the school database. No subject results are included.</p><div id="principalScoreSheetStatus" role="status" style="margin:12px 0">Loading class arms from Supabase…</div><div id="principalScoreSheetClasses" class="grid grid-2"></div></div>';
+  if (!root || !currentUser || currentUser.type !== 'principal' || tabName !== 'principalScoreSheet') return;
+  root.innerHTML = '<div class="card"><h2>Score Sheet</h2><p>Choose the academic session, term and class arm. The printable sheet uses the official student register and registered subjects retrieved from Supabase. It contains blank score fields, not student results.</p><div class="grid grid-3"><div class="input-group"><label for="principalSheetSession">Academic Session</label><select id="principalSheetSession"><option value="">Loading sessions…</option></select></div><div class="input-group"><label for="principalSheetTerm">Term</label><select id="principalSheetTerm"><option value="">Loading terms…</option></select></div><div class="input-group"><label for="principalSheetClass">Class Arm</label><select id="principalSheetClass"><option value="">Loading class arms…</option></select></div></div><div id="principalScoreSheetStatus" role="status" style="margin:12px 0">Loading official records from Supabase…</div><button type="button" class="btn btn-success" id="principalPrintScoreSheet" disabled>Print Score Sheet</button></div>';
+  var sessionSelect = root.querySelector('#principalSheetSession');
+  var termSelect = root.querySelector('#principalSheetTerm');
+  var classSelect = root.querySelector('#principalSheetClass');
   var status = root.querySelector('#principalScoreSheetStatus');
-  var list = root.querySelector('#principalScoreSheetClasses');
+  var printButton = root.querySelector('#principalPrintScoreSheet');
   try {
     if (!supabaseClient || !authenticatedProfile || !authenticatedProfile.school_id) throw new Error('An authenticated Principal account is required.');
-    var result = await supabaseClient.from('classes').select('id,class_name,level').eq('school_id', authenticatedProfile.school_id).order('class_name');
-    if (result.error) throw result.error;
-    var classes = result.data || [];
-    if (!classes.length) {
-      status.textContent = 'No class arms are registered for this school.';
-      return;
-    }
-    status.textContent = classes.length + ' class arm(s) loaded from Supabase.';
-    list.innerHTML = classes.map(function(item) {
-      return '<section class="card" style="margin:0;border:1px solid #e3e8ef"><h3 style="margin:0 0 8px">' + escapeManagementText(item.class_name) + '</h3><p style="font-size:12px;color:#64748b;margin:0 0 12px">Generate a blank score sheet with the official student register.</p><button type="button" class="btn btn-success principal-score-sheet-print" data-class-name="' + escapeManagementText(item.class_name) + '">Print Score Sheet</button></section>';
-    }).join('');
-    list.querySelectorAll('.principal-score-sheet-print').forEach(function(button) {
-      button.addEventListener('click', function() {
-        printArmScoreSheet(button.getAttribute('data-class-name'));
-      });
+    var loaded = await Promise.all([
+      supabaseClient.from('academic_sessions').select('id,name,is_current').eq('school_id', authenticatedProfile.school_id).order('created_at', { ascending: false }),
+      supabaseClient.from('terms').select('id,name,term_number,is_current').eq('school_id', authenticatedProfile.school_id).order('term_number'),
+      supabaseClient.from('classes').select('id,class_name,level').eq('school_id', authenticatedProfile.school_id).order('class_name')
+    ]);
+    loaded.forEach(function(result) { if (result.error) throw result.error; });
+    var sessions = loaded[0].data || [], terms = loaded[1].data || [], classes = loaded[2].data || [];
+    sessionSelect.innerHTML = '<option value="">Select session</option>' + sessions.map(function(x) { return '<option value="' + escapeManagementText(x.id) + '"' + (x.is_current ? ' selected' : '') + '>' + escapeManagementText(x.name) + '</option>'; }).join('');
+    termSelect.innerHTML = '<option value="">Select term</option>' + terms.map(function(x) { return '<option value="' + escapeManagementText(x.id) + '"' + (x.is_current ? ' selected' : '') + '>' + escapeManagementText(x.name) + '</option>'; }).join('');
+    classSelect.innerHTML = '<option value="">Select class arm</option>' + classes.map(function(x) { return '<option value="' + escapeManagementText(x.id) + '">' + escapeManagementText(x.class_name) + '</option>'; }).join('');
+    status.textContent = sessions.length + ' session(s), ' + terms.length + ' term(s) and ' + classes.length + ' class arm(s) retrieved from Supabase.';
+    printButton.disabled = !sessions.length || !terms.length || !classes.length;
+    printButton.addEventListener('click', function() {
+      var session = sessions.find(function(x) { return String(x.id) === String(sessionSelect.value); });
+      var term = terms.find(function(x) { return String(x.id) === String(termSelect.value); });
+      var cls = classes.find(function(x) { return String(x.id) === String(classSelect.value); });
+      if (!session || !term || !cls) { showToast('Select an academic session, term and class arm.','error'); return; }
+      printArmScoreSheet(cls.class_name, session, term);
     });
   } catch (error) {
-    status.textContent = error && error.message ? error.message : 'Unable to load class arms.';
+    status.textContent = error && error.message ? error.message : 'Unable to load the Principal Score Sheet.';
     status.className = 'alert alert-error';
+    printButton.disabled = true;
   }
 }
 
-async function printArmScoreSheet(className) {
+async function printArmScoreSheet(className, sessionOverride, termOverride) {\n  var sheetSession = sessionOverride || activeAcademicSession;\n  var sheetTerm = termOverride || activeAssessmentTerm;
   var printWindow=window.open('','_blank');
   if(!printWindow){showToast('Allow pop-ups to print the Score Sheet.','error');return;}
   printWindow.document.write('<!doctype html><title>Preparing Score Sheet</title><p style="font-family:Arial;padding:24px">Retrieving official student names and registered subjects…</p>');
   printWindow.document.close();
   try{
-    if(!supabaseClient||!authenticatedProfile||!authenticatedProfile.school_id||!activeAcademicSession||!activeAcademicSession.id||!activeAssessmentTerm||!activeAssessmentTerm.id)throw new Error('An active academic session and term are required.');
+    if(!supabaseClient||!authenticatedProfile||!authenticatedProfile.school_id||!sheetSession||!sheetSession.id||!sheetTerm||!sheetTerm.id)throw new Error('An active academic session and term are required.');
     var schoolId=authenticatedProfile.school_id;
     var cls=await supabaseClient.from('classes').select('id,class_name,level').eq('school_id',schoolId).eq('class_name',className).maybeSingle();
     if(cls.error)throw cls.error;if(!cls.data)throw new Error('Class arm not found in Supabase.');
-    var enrol=await supabaseClient.from('student_enrolments').select('student_id,register_number,sid').eq('school_id',schoolId).eq('academic_session_id',activeAcademicSession.id).eq('class_id',cls.data.id).is('archived_at',null).order('register_number',{ascending:true});
+    var enrol=await supabaseClient.from('student_enrolments').select('student_id,register_number,sid').eq('school_id',schoolId).eq('academic_session_id',sheetSession.id).eq('class_id',cls.data.id).is('archived_at',null).order('register_number',{ascending:true});
     if(enrol.error)throw enrol.error;
     var ids=enrol.data.map(function(x){return x.student_id;}).filter(Boolean),studentsById={};
     if(ids.length){var st=await supabaseClient.from('students').select('id,first_name,middle_name,last_name,admission_number').eq('school_id',schoolId).in('id',ids);if(st.error)throw st.error;(st.data||[]).forEach(function(x){studentsById[String(x.id)]=x;});}
-    var registration=await supabaseClient.from('class_subject_registrations').select('id').eq('school_id',schoolId).eq('academic_session_id',activeAcademicSession.id).eq('term_id',activeAssessmentTerm.id).eq('class_id',cls.data.id).maybeSingle();
+    var registration=await supabaseClient.from('class_subject_registrations').select('id').eq('school_id',schoolId).eq('academic_session_id',activeAcademicSession.id).eq('term_id',sheetTerm.id).eq('class_id',cls.data.id).maybeSingle();
     if(registration.error)throw registration.error;
     var subjectNames=[];
     if(registration.data){
@@ -8855,7 +8857,7 @@ async function printArmScoreSheet(className) {
     var school=schoolInfo||{},title=school.name||currentSchool&&currentSchool.schoolName||'DE-GLOBAL ACADEMY, GBOKO';
     var safe=function(v){return escapeManagementText(v==null?'':String(v));};
     var pages=(subjectNames.length?subjectNames:['All Subjects / General Score Sheet']).map(function(subject){
-      return '<section class="sheet"><header><h1>'+safe(title)+'</h1><h2>STUDENT SCORE SHEET</h2><p>Class Arm: '+safe(className)+' | Session: '+safe(activeAcademicSession.name)+' | Term: '+safe(activeAssessmentTerm.name)+'</p><h3>Subject: '+safe(subject)+'</h3></header><table><thead><tr><th>S/N</th><th>Register No.</th><th>Student Name</th><th>CA 1</th><th>CA 2</th><th>CA 3</th><th>Examination</th><th>Total</th><th>Grade</th><th>Teacher Remark</th></tr></thead><tbody>'+roster.map(function(x,i){return '<tr><td>'+(i+1)+'</td><td>'+safe(x.register==null?'':x.register)+'</td><td>'+safe(x.name)+'</td><td></td><td></td><td></td><td></td><td></td><td></td><td></td></tr>';}).join('')+'</tbody></table><footer>Subject Teacher: ___________________________ &nbsp;&nbsp; Signature: __________________ &nbsp;&nbsp; Date: __________</footer></section>';
+      return '<section class="sheet"><header><h1>'+safe(title)+'</h1><h2>STUDENT SCORE SHEET</h2><p>Class Arm: '+safe(className)+' | Session: '+safe(sheetSession.name)+' | Term: '+safe(sheetTerm.name)+'</p><h3>Subject: '+safe(subject)+'</h3></header><table><thead><tr><th>S/N</th><th>Register No.</th><th>Student Name</th><th>CA 1</th><th>CA 2</th><th>CA 3</th><th>Examination</th><th>Total</th><th>Grade</th><th>Teacher Remark</th></tr></thead><tbody>'+roster.map(function(x,i){return '<tr><td>'+(i+1)+'</td><td>'+safe(x.register==null?'':x.register)+'</td><td>'+safe(x.name)+'</td><td></td><td></td><td></td><td></td><td></td><td></td><td></td></tr>';}).join('')+'</tbody></table><footer>Subject Teacher: ___________________________ &nbsp;&nbsp; Signature: __________________ &nbsp;&nbsp; Date: __________</footer></section>';
     }).join('');
     var html='<!doctype html><html><head><meta charset="utf-8"><title>'+safe(className)+' Score Sheet</title><style>@page{size:A4 landscape;margin:9mm}*{box-sizing:border-box}body{font-family:Arial,sans-serif;color:#111;margin:0}.sheet{page-break-after:always;break-after:page}.sheet:last-child{page-break-after:auto}header{text-align:center;margin-bottom:15px;border-bottom:2px solid #183f35;padding-bottom:9px}h1{font-size:19px;margin:0 0 4px}h2{font-size:16px;margin:4px 0}header p{font-size:11px;margin:5px}header h3{font-size:13px;margin:9px 0 0}table{width:100%;border-collapse:collapse;font-size:10px}th,td{border:1px solid #333;padding:6px 5px;text-align:center;height:28px}th{background:#eaf0ec}td:nth-child(3){text-align:left;width:25%}footer{margin-top:20px;font-size:10px}@media print{print-color-adjust:exact;-webkit-print-color-adjust:exact}</style></head><body>'+pages+'<script>window.onload=function(){window.print();};<\/script></body></html>';
     printWindow.document.open();printWindow.document.write(html);printWindow.document.close();
