@@ -338,6 +338,7 @@ th { background: #f5f5f5; font-weight: 600; }
     <div id="staffDatabaseTab" class="hidden"></div>
     <div id="userManagementTab" class="hidden"></div>
     <div id="releaseTab" class="hidden"></div>
+    <div id="scoreApprovalTab" class="hidden"></div>
     <div id="studentResultsTab" class="hidden"></div>
     <div id="portalContentTab" class="hidden"></div>
     <div id="developerDashboardTab" class="hidden"></div>
@@ -3464,7 +3465,7 @@ function showApp() {
 
   var tabs;
   if (currentUser.type === 'admin') {
-    tabs = ['dashboard', 'masters', 'school', 'profile', 'assessment', 'arms', 'teacherSignatures', 'management', 'staffDatabase', 'studentDatabase', 'passportRegistration', 'userManagement', 'release', 'view', 'compute', 'print', 'portalContent', 'schoolIdCard'];
+    tabs = ['dashboard', 'masters', 'school', 'profile', 'assessment', 'arms', 'teacherSignatures', 'management', 'staffDatabase', 'studentDatabase', 'passportRegistration', 'userManagement', 'scoreApproval', 'release', 'view', 'compute', 'print', 'portalContent', 'schoolIdCard'];
   } else if (currentUser.type === 'principal') {
     tabs = ['principalDashboard', 'principalStudents', 'principalScoreSheet', 'principalResults', 'principalSubmission', 'principalReports', 'principalStaff', 'principalRequests', 'principalProfile'];
   } else if (currentUser.type === 'subadmin') {
@@ -3494,7 +3495,7 @@ function showApp() {
     var btn = document.createElement('button');
     btn.className = 'tab';
     if (idx === 0) btn.classList.add('active');
-    var tabLabels = { arms: 'Score Sheet', principalDashboard: 'Overview', principalStudents: 'Student Database', principalScoreSheet: 'Score Sheet', principalStaff: 'Staff & Teachers', principalResults: 'Broadsheet Review', principalSubmission: 'Submission Tracker', principalReports: 'Statistical Analysis', principalRequests: 'Requests & Activity', principalProfile: 'School Profile', profile: 'Admin Profile', teacherSignatures: "Teachers' Signature", management: 'Management Staff', staffDatabase: 'Staff Database', studentDatabase: 'Student Database', subjectRegistration: 'Subject Registration', passportRegistration: 'Student Passport Registration', userManagement: 'User Management', release: 'Release Results', studentResults: 'Student Results', portalContent: 'Portal Options', developerDashboard: 'Developer Dashboard', developer: 'Developer Console', schoolIdCard: 'School ID Card' };
+    var tabLabels = { arms: 'Score Sheet', principalDashboard: 'Overview', principalStudents: 'Student Database', principalScoreSheet: 'Score Sheet', principalStaff: 'Staff & Teachers', principalResults: 'Broadsheet Review', principalSubmission: 'Submission Tracker', principalReports: 'Statistical Analysis', principalRequests: 'Requests & Activity', principalProfile: 'School Profile', profile: 'Admin Profile', teacherSignatures: "Teachers' Signature", management: 'Management Staff', staffDatabase: 'Staff Database', studentDatabase: 'Student Database', subjectRegistration: 'Subject Registration', passportRegistration: 'Student Passport Registration', userManagement: 'User Management', release: 'Release Results', scoreApproval: 'Score Approval', studentResults: 'Student Results', portalContent: 'Portal Options', developerDashboard: 'Developer Dashboard', developer: 'Developer Console', schoolIdCard: 'School ID Card' };
     btn.textContent = tabLabels[tab] || tab.charAt(0).toUpperCase() + tab.slice(1);
     btn.addEventListener('click', function() {
       document.querySelectorAll('.tab').forEach(function(t) { t.classList.remove('active'); });
@@ -3600,7 +3601,7 @@ function showTab(tabName) {
   var requiredPermission = { input: 'enterResults', view: 'manageStudents', masters: 'manageTeachers', school: 'manageSchool', management: 'manageBoard', userManagement: 'createAdmins', release: 'publishResults', print: 'generateSheets' };
   if (currentUser && currentUser.type === 'subadmin' && (!requiredPermission[tabName] || (!hasSubAdminPermission(requiredPermission[tabName]) && !(tabName === 'input' && hasSubAdminPermission('editResults'))))) return;
   if (currentUser && currentUser.type === 'student' && tabName !== 'studentResults') return;
-  ['principalDashboard','principalStudents','principalScoreSheet','principalStaff','principalResults','principalSubmission','principalReports','principalRequests','principalProfile','dashboard', 'arms', 'masters', 'school', 'profile',  'assessment', 'teacherSignatures', 'management', 'staffDatabase', 'studentDatabase', 'subjectRegistration', 'passportRegistration', 'input', 'compute', 'view', 'print', 'userManagement', 'release', 'studentResults', 'portalContent', 'developerDashboard', 'developer', 'schoolIdCard'].forEach(function(t) {
+  ['principalDashboard','principalStudents','principalScoreSheet','principalStaff','principalResults','principalSubmission','principalReports','principalRequests','principalProfile','dashboard', 'arms', 'masters', 'school', 'profile',  'assessment', 'teacherSignatures', 'management', 'staffDatabase', 'studentDatabase', 'subjectRegistration', 'passportRegistration', 'input', 'compute', 'view', 'print', 'userManagement', 'scoreApproval', 'release', 'studentResults', 'portalContent', 'developerDashboard', 'developer', 'schoolIdCard'].forEach(function(t) {
     document.getElementById(t + 'Tab').classList.add('hidden');
   });
   document.getElementById(tabName + 'Tab').classList.remove('hidden');
@@ -3622,6 +3623,7 @@ function showTab(tabName) {
   else if (tabName === 'passportRegistration') renderPassportRegistration();
   else if (tabName === 'print') renderPrint();
   else if (tabName === 'userManagement') renderUserManagement();
+  else if (tabName === 'scoreApproval') renderScoreApproval();
   else if (tabName === 'release') renderReleaseResults();
   else if (tabName === 'studentResults') renderStudentResults();
   else if (tabName === 'portalContent') renderPortalContentAdmin();
@@ -3992,6 +3994,68 @@ function getSubjectPerformanceStats(student, subjectName) {
     highest: Math.max.apply(null, totals),
     lowest: Math.min.apply(null, totals)
   };
+}
+
+
+async function renderScoreApproval() {
+  var root = document.getElementById('scoreApprovalTab');
+  if (!root || !currentUser || currentUser.type !== 'admin' || !authenticatedProfile || !authenticatedProfile.school_id) return;
+  root.innerHTML = '<div class="card"><h2>Score Approval</h2><p>Review scores submitted by teachers. Approval is recorded in Supabase with the Administrator and approval timestamp. Select the scope for one approval action.</p><div class="grid grid-3"><div class="input-group"><label>Academic Session</label><select id="scoreApprovalSession"></select></div><div class="input-group"><label>Term</label><select id="scoreApprovalTerm"></select></div><div class="input-group"><label>Approval Scope</label><select id="scoreApprovalScope"><option value="class">Selected Class Arm</option><option value="all_arms">All Arms in Selected Class Level</option><option value="school">Entire School</option></select></div><div class="input-group" id="scoreApprovalClassWrap"><label>Class Arm / Level Reference</label><select id="scoreApprovalClass"></select></div></div><div style="display:flex;gap:8px;flex-wrap:wrap;margin:12px 0"><button type="button" class="btn btn-primary" id="scoreApprovalRefresh">Refresh Submitted Scores</button><button type="button" class="btn btn-success" id="scoreApprovalRun">Approve Selected Scope</button></div><div id="scoreApprovalSummary" role="status" aria-live="polite">Loading approval records…</div><div id="scoreApprovalRows" style="overflow-x:auto"></div></div>';
+  var session=root.querySelector('#scoreApprovalSession'), term=root.querySelector('#scoreApprovalTerm'), scope=root.querySelector('#scoreApprovalScope'), cls=root.querySelector('#scoreApprovalClass'), wrap=root.querySelector('#scoreApprovalClassWrap'), summary=root.querySelector('#scoreApprovalSummary'), rows=root.querySelector('#scoreApprovalRows'), approve=root.querySelector('#scoreApprovalRun');
+  try {
+    var loaded=await Promise.all([
+      supabaseClient.from('academic_sessions').select('id,name,is_current').eq('school_id',authenticatedProfile.school_id).order('created_at',{ascending:false}),
+      supabaseClient.from('terms').select('id,name,term_number,is_current').eq('school_id',authenticatedProfile.school_id).order('term_number'),
+      supabaseClient.from('classes').select('id,class_name,level').eq('school_id',authenticatedProfile.school_id).order('class_name')
+    ]);
+    loaded.forEach(function(x){if(x.error)throw x.error;});
+    var sessions=loaded[0].data||[],terms=loaded[1].data||[],classes=loaded[2].data||[];
+    session.innerHTML=sessions.map(function(x){return '<option value="'+x.id+'"'+(x.is_current?' selected':'')+'>'+escapeManagementText(x.name)+'</option>';}).join('');
+    term.innerHTML=terms.map(function(x){return '<option value="'+x.id+'"'+(x.is_current?' selected':'')+'>'+escapeManagementText(x.name)+'</option>';}).join('');
+    cls.innerHTML=classes.map(function(x){return '<option value="'+x.id+'">'+escapeManagementText(x.class_name)+' — '+escapeManagementText(x.level)+'</option>';}).join('');
+    if(!sessions.length||!terms.length){summary.textContent='Create an academic session and term before approving scores.';return;}
+    async function loadRows(){
+      summary.textContent='Loading submitted scores from Supabase…'; rows.innerHTML='';
+      var query=supabaseClient.from('results').select('id,student_id,class_id,subject_id,academic_session_id,term_id,ca1,ca2,ca3,examination,total,status,submitted_at').eq('school_id',authenticatedProfile.school_id).eq('academic_session_id',session.value).eq('term_id',term.value).eq('status','submitted').order('submitted_at',{ascending:true});
+      if(scope.value==='class'&&cls.value)query=query.eq('class_id',cls.value);
+      if(scope.value==='all_arms'&&cls.value){var selectedClass=classes.find(function(x){return String(x.id)===String(cls.value);});var peers=classes.filter(function(x){return selectedClass&&String(x.level)===String(selectedClass.level);}).map(function(x){return x.id;});query=query.in('class_id',peers);}
+      var result=await query; if(result.error)throw result.error;
+      var records=result.data||[];
+      if(!records.length){summary.textContent='No submitted scores are awaiting approval for this selection.';return;}
+      var ids=function(key){return Array.from(new Set(records.map(function(x){return x[key];}).filter(Boolean)));};
+      var [students,subjects,classRows,teachers]=await Promise.all([
+        supabaseClient.from('students').select('id,first_name,middle_name,last_name').eq('school_id',authenticatedProfile.school_id).in('id',ids('student_id')),
+        supabaseClient.from('subjects').select('id,name').eq('school_id',authenticatedProfile.school_id).in('id',ids('subject_id')),
+        supabaseClient.from('classes').select('id,class_name').eq('school_id',authenticatedProfile.school_id).in('id',ids('class_id')),
+        supabaseClient.from('profiles').select('id,full_name').eq('school_id',authenticatedProfile.school_id).in('id',Array.from(new Set(records.map(function(x){return x.entered_by;}).filter(Boolean))))
+      ]);
+      [students,subjects,classRows,teachers].forEach(function(x){if(x.error)throw x.error;});
+      var maps=[students,subjects,classRows,teachers].map(function(x){var m={};(x.data||[]).forEach(function(v){m[String(v.id)]=v;});return m;});
+      summary.textContent=records.length+' submitted subject result(s) awaiting approval. Scope: '+(scope.value==='school'?'Entire School':scope.value==='all_arms'?'All arms in selected level':'Selected class arm')+'.';
+      rows.innerHTML='<table style="width:100%;min-width:720px"><thead><tr><th>Student</th><th>Class</th><th>Subject</th><th>Teacher</th><th>CA1</th><th>CA2</th><th>CA3</th><th>Exam</th><th>Total</th><th>Submitted</th></tr></thead><tbody>'+records.map(function(x){var st=maps[0][String(x.student_id)]||{},su=maps[1][String(x.subject_id)]||{},cl=maps[2][String(x.class_id)]||{},te=maps[3][String(x.entered_by)]||{};return '<tr><td>'+escapeManagementText([st.first_name,st.middle_name,st.last_name].filter(Boolean).join(' '))+'</td><td>'+escapeManagementText(cl.class_name||'—')+'</td><td>'+escapeManagementText(su.name||'—')+'</td><td>'+escapeManagementText(te.full_name||'—')+'</td><td>'+x.ca1+'</td><td>'+x.ca2+'</td><td>'+x.ca3+'</td><td>'+x.examination+'</td><td><strong>'+x.total+'</strong></td><td>'+escapeManagementText(x.submitted_at?new Date(x.submitted_at).toLocaleString():'—')+'</td></tr>';}).join('')+'</tbody></table>';
+      approve.dataset.count=String(records.length);
+    }
+    scope.addEventListener('change',function(){wrap.style.display=scope.value==='school'?'none':'';loadRows().catch(function(e){summary.textContent=e.message;});});
+    [session,term,cls].forEach(function(el){el.addEventListener('change',function(){loadRows().catch(function(e){summary.textContent=e.message;});});});
+    root.querySelector('#scoreApprovalRefresh').addEventListener('click',function(){loadRows().catch(function(e){summary.textContent=e.message;});});
+    approve.addEventListener('click',async function(){
+      if(!session.value||!term.value){showToast('Select an academic session and term.','error');return;}
+      if(scope.value!=='school'&&!cls.value){showToast('Select a class arm or level reference.','error');return;}
+      var count=Number(approve.dataset.count||0);if(!count){showToast('There are no submitted scores in this scope to approve.','info');return;}
+      var description=scope.value==='school'?'all submitted scores across the entire school':scope.value==='all_arms'?'all submitted scores across every arm in the selected class level':'all submitted scores in the selected class arm';
+      if(!window.confirm('Approve '+description+' ('+count+' currently listed)? This action records your Administrator approval in Supabase.'))return;
+      approve.disabled=true;approve.textContent='Approving…';
+      try{
+        var saved=await supabaseClient.rpc('approve_submitted_results_bulk',{p_academic_session_id:session.value,p_term_id:term.value,p_scope:scope.value,p_class_id:scope.value==='school'?null:cls.value});
+        if(saved.error)throw saved.error;
+        var data=Array.isArray(saved.data)?saved.data[0]:saved.data;
+        if(!data||data.approved_count===undefined)throw new Error('Supabase did not confirm the number of approved results.');
+        showToast(data.approved_count+' result(s) approved successfully.','success');await loadRows();
+      }catch(error){showToast('Approval failed: '+(error.message||'Unknown error'),'error');}
+      finally{approve.disabled=false;approve.textContent='Approve Selected Scope';}
+    });
+    await loadRows();
+  }catch(error){summary.className='alert alert-error';summary.textContent='Unable to load Score Approval: '+(error.message||'Unknown error');}
 }
 
 async function renderReleaseResults() {
