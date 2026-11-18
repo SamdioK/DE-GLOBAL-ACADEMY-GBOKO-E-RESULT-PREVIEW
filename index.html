@@ -8793,6 +8793,41 @@ window.deactivateAllInClass = async function(classLevel) {
 var activeArmAssignment = '';
 var armAssignmentMinimized = false;
 
+async function renderPrincipalWorkspace(tabName) {
+  var root = document.getElementById(tabName + 'Tab');
+  if (!root) return;
+  if (!currentUser || currentUser.type !== 'principal') return;
+  if (tabName !== 'principalScoreSheet') {
+    root.innerHTML = '<div class="card"><p>Loading Principal workspace…</p></div>';
+    return;
+  }
+  root.innerHTML = '<div class="card"><h2>Score Sheet</h2><p>Choose a class arm to generate its official printable score sheet. Student names and register numbers are retrieved directly from the school database. No subject results are included.</p><div id="principalScoreSheetStatus" role="status" style="margin:12px 0">Loading class arms from Supabase…</div><div id="principalScoreSheetClasses" class="grid grid-2"></div></div>';
+  var status = root.querySelector('#principalScoreSheetStatus');
+  var list = root.querySelector('#principalScoreSheetClasses');
+  try {
+    if (!supabaseClient || !authenticatedProfile || !authenticatedProfile.school_id) throw new Error('An authenticated Principal account is required.');
+    var result = await supabaseClient.from('classes').select('id,class_name,level').eq('school_id', authenticatedProfile.school_id).order('class_name');
+    if (result.error) throw result.error;
+    var classes = result.data || [];
+    if (!classes.length) {
+      status.textContent = 'No class arms are registered for this school.';
+      return;
+    }
+    status.textContent = classes.length + ' class arm(s) loaded from Supabase.';
+    list.innerHTML = classes.map(function(item) {
+      return '<section class="card" style="margin:0;border:1px solid #e3e8ef"><h3 style="margin:0 0 8px">' + escapeManagementText(item.class_name) + '</h3><p style="font-size:12px;color:#64748b;margin:0 0 12px">Generate a blank score sheet with the official student register.</p><button type="button" class="btn btn-success principal-score-sheet-print" data-class-name="' + escapeManagementText(item.class_name) + '">Print Score Sheet</button></section>';
+    }).join('');
+    list.querySelectorAll('.principal-score-sheet-print').forEach(function(button) {
+      button.addEventListener('click', function() {
+        printArmScoreSheet(button.getAttribute('data-class-name'));
+      });
+    });
+  } catch (error) {
+    status.textContent = error && error.message ? error.message : 'Unable to load class arms.';
+    status.className = 'alert alert-error';
+  }
+}
+
 async function printArmScoreSheet(className) {
   var printWindow=window.open('','_blank');
   if(!printWindow){showToast('Allow pop-ups to print the Score Sheet.','error');return;}
