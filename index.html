@@ -6100,10 +6100,13 @@ function studentChangeStatusLabel(status) {
 }
 
 function renderAdminChangeRequests() {
-  return '<h3>Student Change Requests</h3><div style="overflow-x:auto"><table><thead><tr><th>Student</th><th>Requested By</th><th>Date</th><th>Status</th><th>Cycle</th><th>Action</th></tr></thead><tbody>' + studentDbState.requests.map(function(request) {
+  var pending=(studentDbState.requests||[]).filter(function(r){return String(r.status||'').toLowerCase()==='pending';});
+  return '<h3>Student Change Requests</h3><p>Select pending corrections individually or approve all pending corrections together. Each approval updates the relevant student record and writes its own audit history.</p>' +
+    (pending.length ? '<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:10px 0"><label><input type="checkbox" id="selectAllPendingCorrections"> Select all pending ('+pending.length+')</label><button type="button" class="btn btn-success" id="approveSelectedCorrections">Approve Selected / All</button></div>' : '') +
+    '<div style="overflow-x:auto"><table><thead><tr><th>Select</th><th>Student</th><th>Requested By</th><th>Date</th><th>Status</th><th>Cycle</th><th>Action</th></tr></thead><tbody>' + (studentDbState.requests||[]).map(function(request) {
     var status = String(request.status || '').toLowerCase();
-    var reason = status === 'rejected_for_rectification' && request.rejection_reason ? '<br><small><strong>Administrator\'s Reason:</strong> ' + escapeManagementText(request.rejection_reason) + '</small>' : '';
-    return '<tr><td>' + escapeManagementText(request.student_id || '—') + '</td><td>' + escapeManagementText(request.submitted_by || '—') + '</td><td>' + escapeManagementText(studentDbDate(request.created_at)) + '</td><td>' + escapeManagementText(studentChangeStatusLabel(status)) + reason + '</td><td>' + escapeManagementText(request.revision_number == null ? '—' : request.revision_number) + '</td><td><button class="btn btn-primary change-request-view" data-id="' + escapeManagementText(request.id) + '">Review</button> <button class="btn" style="background:#eee" data-history-request="' + escapeManagementText(request.id) + '">View Correction History</button></td></tr>';
+    var reason = status === 'rejected_for_rectification' && request.rejection_reason ? '<br><small><strong>Administrator\\'s Reason:</strong> ' + escapeManagementText(request.rejection_reason) + '</small>' : '';
+    return '<tr><td>'+(status==='pending'?'<input type="checkbox" class="bulk-correction-check" value="'+escapeManagementText(request.id)+'" aria-label="Select correction request">':'—')+'</td><td>' + escapeManagementText(request.student_id || '—') + '</td><td>' + escapeManagementText(request.submitted_by || '—') + '</td><td>' + escapeManagementText(studentDbDate(request.created_at)) + '</td><td>' + escapeManagementText(studentChangeStatusLabel(status)) + reason + '</td><td>' + escapeManagementText(request.revision_number == null ? '—' : request.revision_number) + '</td><td><button class="btn btn-primary change-request-view" data-id="' + escapeManagementText(request.id) + '">Review</button> <button class="btn" style="background:#eee" data-history-request="' + escapeManagementText(request.id) + '">View Correction History</button></td></tr>';
   }).join('') + '</tbody></table></div>';
 }
 
@@ -7120,6 +7123,24 @@ function openInlineStudentCorrection(root, student) {
 
 function bindStudentDatabaseEvents(root) {
   bindFormMasterSubmissionEvents(root);
+  var selectAllCorrections=root.querySelector('#selectAllPendingCorrections');
+  var correctionChecks=function(){return Array.from(root.querySelectorAll('.bulk-correction-check'));};
+  if(selectAllCorrections)selectAllCorrections.addEventListener('change',function(){correctionChecks().forEach(function(x){x.checked=selectAllCorrections.checked;});});
+  var bulkApprove=root.querySelector('#approveSelectedCorrections');
+  if(bulkApprove)bulkApprove.addEventListener('click',async function(){
+    var ids=correctionChecks().filter(function(x){return x.checked;}).map(function(x){return x.value;});
+    if(!ids.length){showToast('Select at least one pending correction request.','error');return;}
+    if(!window.confirm('Approve '+ids.length+' selected student correction(s) together? Each student record will be updated and audited.'))return;
+    bulkApprove.disabled=true;bulkApprove.textContent='Approving…';
+    try{
+      var result=await supabaseClient.rpc('approve_student_change_requests_bulk',{p_request_ids:ids});
+      if(result.error)throw result.error;
+      var data=Array.isArray(result.data)?result.data[0]:result.data;
+      if(!data||data.approved_count===undefined)throw new Error('Supabase did not confirm the approved correction count.');
+      await loadStudentChangeRequests();renderStudentDatabaseWorkspace();
+      showToast(data.approved_count+' student correction(s) approved successfully.','success');
+    }catch(error){showToast('Bulk correction approval failed: '+(error.message||'Unknown error'),'error');bulkApprove.disabled=false;bulkApprove.textContent='Approve Selected / All';}
+  });
   root.querySelectorAll('[data-history-request]').forEach(function(button) {
     button.addEventListener('click', function() { showStudentChangeHistory(button.getAttribute('data-history-request')); });
   });
