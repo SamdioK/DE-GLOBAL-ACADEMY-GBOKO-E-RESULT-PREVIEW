@@ -5129,7 +5129,7 @@ function renderOfficialStudentRows(isAdmin, query) {
 
     var actionCell = isAdmin
       ? '<td class="student-login-account-cell">' +
-          renderOfficialStudentLoginAction(item) + '<div style="margin-top:6px"><button type="button" class="btn btn-primary student-photo-card-print" data-student-id="' + escapeManagementText(student.id) + '">Print Photo Card</button> <button type="button" class="btn btn-success student-photo-card-pdf" data-student-id="' + escapeManagementText(student.id) + '">Download PDF</button></div></td>'
+          renderOfficialStudentLoginAction(item) + '<div style="margin-top:6px"><button type="button" class="btn btn-primary student-photo-card-print" data-student-id="' + escapeManagementText(student.id) + '">Print Photo Card</button> <button type="button" class="btn btn-success student-photo-card-jpg" data-student-id="' + escapeManagementText(student.id) + '">Download JPG</button> <button type="button" class="btn btn-success student-photo-card-pdf" data-student-id="' + escapeManagementText(student.id) + '">Download PDF</button></div></td>'
       : '<td><button class="btn btn-primary student-correction-start" data-student="' +
           escapeManagementText(student.id) +
           '">Request Correction</button></td>';
@@ -5536,6 +5536,22 @@ async function buildOfficialStudentPhotoCard(studentId, sessionOverride, termOve
 }
 function bindStudentPhotoCardPrintEvents(root){
   if(!root)return;
+  root.querySelectorAll('.student-photo-card-jpg').forEach(function(button){
+    if(button.dataset.bound==='true')return;
+    button.dataset.bound='true';
+    button.addEventListener('click',async function(){
+      var win=window.open('','_blank');
+      if(!win){showToast('Allow pop-ups to prepare the photo-card JPG.','error');return;}
+      win.document.write('<!doctype html><title>Preparing photo card JPG</title><p style="font-family:Arial;padding:24px">Preparing official student photo card…</p>'); win.document.close();
+      button.disabled=true;button.textContent='Preparing JPG…';
+      try{
+        var html=await buildOfficialStudentPhotoCard(button.getAttribute('data-student-id'));
+        html=html.replace('setTimeout(function(){window.print();},250);','setTimeout(function(){if(window.opener&&window.opener.downloadRenderedCard){window.opener.downloadRenderedCard(document.querySelector(".card"),"jpg","Student-Photo-Card");}},300);');
+        win.document.open();win.document.write(html);win.document.close();
+      }catch(error){win.close();showToast(error&&error.message||'Unable to prepare student photo-card JPG.','error');}
+      finally{button.disabled=false;button.textContent='Download JPG';}
+    });
+  });
   root.querySelectorAll('.student-photo-card-pdf').forEach(function(button){
     if(button.dataset.bound==='true')return;
     button.dataset.bound='true';
