@@ -8846,7 +8846,7 @@ async function printArmScoreSheet(className, sessionOverride, termOverride) {
     if(enrol.error)throw enrol.error;
     var ids=enrol.data.map(function(x){return x.student_id;}).filter(Boolean),studentsById={};
     if(ids.length){var st=await supabaseClient.from('students').select('id,first_name,middle_name,last_name,admission_number').eq('school_id',schoolId).in('id',ids);if(st.error)throw st.error;(st.data||[]).forEach(function(x){studentsById[String(x.id)]=x;});}
-    var registration=await supabaseClient.from('class_subject_registrations').select('id').eq('school_id',schoolId).eq('academic_session_id',activeAcademicSession.id).eq('term_id',sheetTerm.id).eq('class_id',cls.data.id).maybeSingle();
+    var registration=await supabaseClient.from('class_subject_registrations').select('id').eq('school_id',schoolId).eq('academic_session_id',sheetSession.id).eq('term_id',sheetTerm.id).eq('class_id',cls.data.id).maybeSingle();
     if(registration.error)throw registration.error;
     var subjectNames=[];
     if(registration.data){
