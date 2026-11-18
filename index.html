@@ -8947,97 +8947,81 @@ function renderArms() {
   ];
   var grouped = {};
   var otherArms = [];
-  classArms.forEach(function(arm) {
+  (classArms || []).forEach(function(arm) {
     var name = String(arm.name || '').toUpperCase().replace(/\\s+/g, '');
     var level = levels.find(function(item) { return name.indexOf(item.key) === 0; });
     if (level) (grouped[level.key] = grouped[level.key] || []).push(arm);
     else otherArms.push(arm);
   });
-  var html = '<div class="card"><h2 style="margin-bottom:8px;">Score Sheet</h2><p style="color:#666;margin-bottom:16px">Select a class arm to assign its Form Master or edit the student register.</p><div class="student-class-picker-group basic">';
-  function renderArmAssignmentPanel(selectedArm) {
-    var controls = '<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap"><h3 style="margin:0">' + escapeManagementText(selectedArm.name) + ' Assignment</h3><div><button type="button" class="btn btn-primary arm-assignment-minimize">' + (armAssignmentMinimized ? 'Expand' : 'Minimize') + '</button> <button type="button" class="btn btn-danger arm-assignment-close">Close</button></div></div>';
-    if (armAssignmentMinimized) return '<div class="card" style="grid-column:1/-1;margin:14px 0 0;border:1px solid #e1e6f2">' + controls + '</div>';
-    return '<div class="card" style="grid-column:1/-1;margin:14px 0 0;border:1px solid #e1e6f2">' + controls + '<div style="margin-top:14px"><div class="input-group"><label for="arm-select-' + selectedArm.id + '">Assign Form Master</label><select id="arm-select-' + selectedArm.id + '" style="max-width:420px"><option value="">Select Form Master</option>' + formMasters.map(function(fm) { return '<option value="' + escapeManagementText(fm.name) + '"' + (selectedArm.formMaster === fm.name ? ' selected' : '') + '>' + escapeManagementText(fm.name) + '</option>'; }).join('') + '</select></div>' + (selectedArm.formMaster ? '<p style="font-size:13px;color:#23753b;margin:4px 0 12px">✓ ' + escapeManagementText(selectedArm.formMaster) + '</p>' : '') + '<button class="btn btn-primary edit-names-btn" data-arm-id="' + selectedArm.id + '">Edit Student Names</button> <button type="button" class="btn btn-success arm-score-sheet-print" data-score-sheet-arm="' + escapeManagementText(selectedArm.name) + '">Print Score Sheet</button></div></div>';
+
+  var html = '<div class="card"><h2 style="margin-bottom:8px;">Score Sheet</h2>' +
+    '<p style="color:#666;margin-bottom:16px">Select a class arm to print its official student score sheet.</p>' +
+    '<div class="student-class-picker-group basic">';
+  function renderLevel(level) {
+    var arms = (grouped[level.key] || []).slice().sort(function(a, b) {
+      return String(a.name).localeCompare(String(b.name), undefined, { numeric: true });
+    });
+    var selectedArm = arms.find(function(arm) {
+      return String(arm.name) === String(activeArmAssignment);
+    });
+    return '<section class="student-class-level" aria-label="' + level.label + ' classes">' +
+      '<div class="student-class-level-banner">' + level.label + '</div>' +
+      '<div class="student-class-arms">' +
+      (arms.length ? arms.map(function(arm) {
+        var name = String(arm.name).toUpperCase().replace(/\\s+/g, '');
+        var label = name.slice(level.key.length) || arm.name;
+        var selected = String(activeArmAssignment) === String(arm.name);
+        return '<button type="button" class="student-class-arm' + (selected ? ' selected' : '') +
+          '" data-score-sheet-select="' + escapeManagementText(arm.name) +
+          '" aria-pressed="' + selected + '" aria-label="Select ' +
+          escapeManagementText(arm.name) + '">' + escapeManagementText(label) + '</button>';
+      }).join('') : '<span style="color:#8a93a8;font-size:12px;padding:10px">No arms available</span>') +
+      '</div></section>' +
+      (selectedArm ? '<div class="card" style="grid-column:1/-1;margin:12px 0 0;border:1px solid #e1e6f2">' +
+        '<h3 style="margin:0 0 12px">' + escapeManagementText(selectedArm.name) + ' Score Sheet</h3>' +
+        '<button type="button" class="btn btn-success arm-score-sheet-print" data-score-sheet-arm="' +
+        escapeManagementText(selectedArm.name) + '">Print Score Sheet</button></div>' : '');
   }
-  function renderLevel(level, senior) {
-    var arms = (grouped[level.key] || []).slice().sort(function(a, b) { return String(a.name).localeCompare(String(b.name), undefined, { numeric: true }); });
-    var levelHtml = '<section class="student-class-level" aria-label="' + level.label + ' classes"><div class="student-class-level-banner">' + level.label + '</div><div class="student-class-arms">' + (arms.length ? arms.map(function(arm) {
-      var label = String(arm.name).toUpperCase().replace(/\\s+/g, '').slice(level.key.length) || arm.name;
-      var selected = String(activeArmAssignment) === String(arm.name);
-      return '<button type="button" class="student-class-arm' + (selected ? ' selected' : '') + '" data-arm-assignment="' + escapeManagementText(arm.name) + '" aria-pressed="' + selected + '" aria-label="Select ' + escapeManagementText(arm.name) + '">' + escapeManagementText(label) + '</button>';
-    }).join('') : '<span style="color:#8a93a8;font-size:12px;padding:10px">No arms available</span>') + '</div></section>';
-    var selectedArm = classArms.find(function(arm) { return String(arm.name) === String(activeArmAssignment); });
-    if (selectedArm && String(selectedArm.name).indexOf(level.key) === 0) {
-      levelHtml += renderArmAssignmentPanel(selectedArm);
-    }
-    return levelHtml;
-  }
-  levels.slice(0, 3).forEach(function(level) { html += renderLevel(level, false); });
+
+  levels.slice(0, 3).forEach(function(level) { html += renderLevel(level); });
   html += '</div><div class="student-class-picker-group senior" style="margin-top:18px">';
-  levels.slice(3).forEach(function(level) { html += renderLevel(level, true); });
+  levels.slice(3).forEach(function(level) { html += renderLevel(level); });
   html += '</div>';
+
+  var selectedOtherArm = otherArms.find(function(arm) {
+    return String(arm.name) === String(activeArmAssignment);
+  });
   if (otherArms.length) {
-    html += '<section class="student-class-level student-class-other"><div class="student-class-level-banner">Other Classes</div><div class="student-class-arms">' + otherArms.map(function(arm) {
-      var selected = String(activeArmAssignment) === String(arm.name);
-      return '<button type="button" class="student-class-arm' + (selected ? ' selected' : '') + '" data-arm-assignment="' + escapeManagementText(arm.name) + '" aria-pressed="' + selected + '">' + escapeManagementText(arm.name) + '</button>';
-    }).join('') + '</div></section>';
+    html += '<section class="student-class-level student-class-other">' +
+      '<div class="student-class-level-banner">Other Classes</div><div class="student-class-arms">' +
+      otherArms.map(function(arm) {
+        var selected = String(activeArmAssignment) === String(arm.name);
+        return '<button type="button" class="student-class-arm' + (selected ? ' selected' : '') +
+          '" data-score-sheet-select="' + escapeManagementText(arm.name) +
+          '" aria-pressed="' + selected + '">' + escapeManagementText(arm.name) + '</button>';
+      }).join('') + '</div></section>';
+    if (selectedOtherArm) {
+      html += '<div class="card" style="margin-top:12px;border:1px solid #e1e6f2">' +
+        '<h3 style="margin:0 0 12px">' + escapeManagementText(selectedOtherArm.name) + ' Score Sheet</h3>' +
+        '<button type="button" class="btn btn-success arm-score-sheet-print" data-score-sheet-arm="' +
+        escapeManagementText(selectedOtherArm.name) + '">Print Score Sheet</button></div>';
+    }
   }
+
   html += '</div>';
-  document.getElementById('armsTab').innerHTML = html;
-  document.querySelectorAll('.arm-score-sheet-print').forEach(function(button) { button.addEventListener('click', function() { printArmScoreSheet(button.getAttribute('data-score-sheet-arm')); }); });
+  var root = document.getElementById('armsTab');
+  if (!root) return;
+  root.innerHTML = html;
 
-  document.querySelectorAll('[data-arm-assignment]').forEach(function(button) {
+  root.querySelectorAll('[data-score-sheet-select]').forEach(function(button) {
     button.addEventListener('click', function() {
-      var armName = this.getAttribute('data-arm-assignment');
-      if (String(activeArmAssignment) === String(armName) && armAssignmentMinimized) {
-        armAssignmentMinimized = false;
-      } else {
-        activeArmAssignment = armName;
-        armAssignmentMinimized = false;
-      }
+      activeArmAssignment = button.getAttribute('data-score-sheet-select') || '';
       renderArms();
     });
   });
-  document.querySelectorAll('.arm-assignment-minimize').forEach(function(button) {
+  root.querySelectorAll('.arm-score-sheet-print').forEach(function(button) {
     button.addEventListener('click', function() {
-      armAssignmentMinimized = !armAssignmentMinimized;
-      renderArms();
-    });
-  });
-  document.querySelectorAll('.arm-assignment-close').forEach(function(button) {
-    button.addEventListener('click', function() {
-      activeArmAssignment = '';
-      armAssignmentMinimized = false;
-      renderArms();
-    });
-  });
-  document.querySelectorAll('[id^="arm-select-"]').forEach(function(select) {
-    select.addEventListener('change', async function() {
-      var armId = this.id.replace('arm-select-', '');
-      var selectedArm = classArms.find(function(arm) { return String(arm.id) === String(armId); });
-      if (!selectedArm) return;
-      var fm = formMasters.find(function(item) { return item.name === this.value; }.bind(this));
-      selectedArm.formMaster = this.value;
-      selectedArm.formMasterEmail = fm ? fm.email : '';
-      await saveAllData();
-      renderArms();
-    });
-  });
-
-  document.querySelectorAll('.edit-names-btn').forEach(function(btn) {
-    btn.addEventListener('click', function() {
-      var armId = parseInt(this.getAttribute('data-arm-id'));
-      var arm = classArms.find(function(a) { return a.id === armId; });
-      var namesHtml = '<div class="card"><h2>' + escapeManagementText(arm.name) + ' - Student Names</h2><div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:10px;margin-top:20px">';
-      arm.studentNames.forEach(function(name, idx) { namesHtml += '<input type="text" id="student-name-' + idx + '" value="' + escapeManagementText(name) + '" placeholder="' + (idx + 1) + '." style="padding:8px;border:1px solid #ddd;border-radius:4px;font-size:12px">'; });
-      namesHtml += '</div><button class="btn btn-success" id="saveNames" style="margin-top:15px;margin-right:10px">Save Names</button><button class="btn btn-primary" id="backToArms" style="margin-top:15px">Back</button></div>';
-      document.getElementById('armsTab').innerHTML = namesHtml;
-      arm.studentNames.forEach(function(name, idx) {
-        var input = document.getElementById('student-name-' + idx);
-        if (input) input.addEventListener('change', function() { arm.studentNames[idx] = this.value; });
-      });
-      document.getElementById('saveNames').addEventListener('click', async function() { await saveAllData(); showToast('Student names saved!', 'success'); });
-      document.getElementById('backToArms').addEventListener('click', renderArms);
+      printArmScoreSheet(button.getAttribute('data-score-sheet-arm'));
     });
   });
 }
