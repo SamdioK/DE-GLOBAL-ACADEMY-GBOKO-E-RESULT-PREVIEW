@@ -8833,6 +8833,7 @@ async function renderPrincipalWorkspace(tabName) {
 async function printArmScoreSheet(className, sessionOverride, termOverride) {
   var sheetSession = sessionOverride || activeAcademicSession;
   var sheetTerm = termOverride || activeAssessmentTerm;
+  if (!currentUser || ['admin','principal'].indexOf(currentUser.type) === -1 || !authenticatedProfile || authenticatedProfile.is_active !== true) { showToast('An active Administrator or Principal account is required to print score sheets.','error'); return; }
   var printWindow=window.open('','_blank');
   if(!printWindow){showToast('Allow pop-ups to print the Score Sheet.','error');return;}
   printWindow.document.write('<!doctype html><title>Preparing Score Sheet</title><p style="font-family:Arial;padding:24px">Retrieving official student names and registered subjects…</p>');
