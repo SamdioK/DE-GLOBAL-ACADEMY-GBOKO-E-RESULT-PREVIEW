@@ -267,12 +267,25 @@
         queryAll('results','id,student_id,class_id,subject_id,academic_session_id,term_id,ca1,ca2,ca3,examination,status','created_at'),
         queryAll('student_enrolments','id,student_id,class_id,academic_session_id,archived_at','created_at'),
         query('assessment_configurations','class_level,ca1_max,ca2_max,ca3_max',{eq:{academic_session_id:principalFilters.sessionId,term_id:principalFilters.termId},limit:100}),
-        query('profiles','id,full_name,role,is_active',{limit:1000}),
         query('classes','id,class_name,level'),
         query('subjects','id,name')
       ]);
-      var assignments=vals[0].filter(function(a){return a.academic_session_id===principalFilters.sessionId&&a.is_active!==false;}),results=vals[1].filter(function(r){return r.academic_session_id===principalFilters.sessionId&&r.term_id===principalFilters.termId;}),enrol=vals[2].filter(function(e){return e.academic_session_id===principalFilters.sessionId&&!e.archived_at;}),configs=vals[3],profiles=vals[4],classes=vals[5],subjects=vals[6],teacherMap={},classMap={},subjectMap={},countMap={},configMap={};
-      profiles.forEach(function(p){teacherMap[p.id]=p.full_name;});classes.forEach(function(c){classMap[c.id]=c;});subjects.forEach(function(x){subjectMap[x.id]=x.name;});enrol.forEach(function(e){countMap[e.class_id]=(countMap[e.class_id]||0)+1;});configs.forEach(function(c){configMap[String(c.class_level)]=c;});
+      var assignments=vals[0].filter(function(a){return a.academic_session_id===principalFilters.sessionId&&a.is_active!==false;}),results=vals[1].filter(function(r){return r.academic_session_id===principalFilters.sessionId&&r.term_id===principalFilters.termId;}),enrol=vals[2].filter(function(e){return e.academic_session_id===principalFilters.sessionId&&!e.archived_at;}),configs=vals[3],classes=vals[4],subjects=vals[5],teacherMap={},classMap={},subjectMap={},countMap={},configMap={};
+      // Resolve only the teacher profiles referenced by the live assignment rows.
+      // This mirrors the administrator's assignment lookup and avoids an unfiltered
+      // profiles query returning an incomplete/empty set under Principal RLS.
+      var teacherIds=Array.from(new Set(assignments.map(function(a){return a.teacher_id;}).filter(Boolean)));
+      var teacherProfiles=[];
+      if(teacherIds.length){
+        var teacherProfilesResult=await supabaseClient.from('profiles')
+          .select('id,full_name')
+          .eq('school_id',authenticatedProfile.school_id)
+          .in('id',teacherIds);
+        if(teacherProfilesResult.error)throw teacherProfilesResult.error;
+        teacherProfiles=teacherProfilesResult.data||[];
+      }
+      teacherProfiles.forEach(function(p){teacherMap[String(p.id)]=p.full_name;});
+      classes.forEach(function(c){classMap[c.id]=c;});subjects.forEach(function(x){subjectMap[x.id]=x.name;});enrol.forEach(function(e){countMap[e.class_id]=(countMap[e.class_id]||0)+1;});configs.forEach(function(c){configMap[String(c.class_level)]=c;});
       var rows=assignments.map(function(a){var c=classMap[a.class_id]||{},cfg=configMap[String(c.level||'')]||{},caFields=['ca1','ca2','ca3'].filter(function(k){return Number(cfg[k+'_max']||0)>0;}),total=countMap[a.class_id]||0,records=results.filter(function(r){return r.class_id===a.class_id&&r.subject_id===a.subject_id;});var ca=records.filter(function(r){return caFields.length?caFields.every(function(k){return r[k]!==null&&r[k]!==undefined&&r[k]!=='';}):[r.ca1,r.ca2,r.ca3].some(function(v){return v!==null&&v!==undefined&&v!=='';});}).length,exam=records.filter(function(r){return r.examination!==null&&r.examination!==undefined&&r.examination!=='';}).length;return {className:c.class_name||'Class',subject:subjectMap[a.subject_id]||'Subject',teacher:teacherMap[a.teacher_id]||'Unassigned teacher',total:total,ca:Math.min(ca,total),exam:Math.min(exam,total)};}).sort(function(a,b){return a.className.localeCompare(b.className)||a.subject.localeCompare(b.subject);});
       var total=rows.reduce(function(n,x){return n+x.total;},0),ca=rows.reduce(function(n,x){return n+x.ca;},0),exam=rows.reduce(function(n,x){return n+x.exam;},0);
       var body=filterMarkup(f,false)+'<div class="principal-grid">'+stat('Teacher-subject assignments',rows.length,'Active teaching allocations')+stat('Expected student entries',total,'Across assigned class subjects')+stat('CA entries completed',ca,'Based on configured CA components')+stat('Examination entries completed',exam,'Examination score records')+'</div><div class="principal-panel"><div class="principal-section-title"><h3>Submission Progress by Teacher</h3><div style="display:flex;align-items:center;gap:8px"><span class="principal-pill">'+rows.length+' assignments</span><button type="button" class="principal-refresh" id="principalTrackerRefresh">Refresh</button></div></div>'+table(['Class Arm','Subject','Teacher','CA Progress','Exam Progress','Status'],rows.map(function(x){var cp=x.total?Math.round(x.ca/x.total*100):0,ep=x.total?Math.round(x.exam/x.total*100):0,done=x.total>0&&x.ca>=x.total&&x.exam>=x.total;return row([esc(x.className),esc(x.subject),esc(x.teacher),'<div class="principal-progress"><div class="principal-progress-label">CA · '+x.ca+'/'+x.total+'</div><div class="principal-bar"><span style="width:'+cp+'%"></span></div></div>','<div class="principal-progress"><div class="principal-progress-label">Exam · '+x.exam+'/'+x.total+'</div><div class="principal-bar"><span style="width:'+ep+'%"></span></div></div>','<span class="principal-pill '+(done?'principal-done':'principal-pending')+'">'+(done?'Complete':'Outstanding')+'</span>']);}),'No active teacher-subject assignments were found.')+'</div>';
