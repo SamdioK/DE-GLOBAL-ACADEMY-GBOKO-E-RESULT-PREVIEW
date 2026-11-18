@@ -8795,39 +8795,108 @@ var armAssignmentMinimized = false;
 
 async function renderPrincipalWorkspace(tabName) {
   var root = document.getElementById(tabName + 'Tab');
-  if (!root || !currentUser || currentUser.type !== 'principal' || tabName !== 'principalScoreSheet') return;
-  root.innerHTML = '<div class="card"><h2>Score Sheet</h2><p>Choose the academic session, term and class arm. The printable sheet uses the official student register and registered subjects retrieved from Supabase. It contains blank score fields, not student results.</p><div class="grid grid-3"><div class="input-group"><label for="principalSheetSession">Academic Session</label><select id="principalSheetSession"><option value="">Loading sessions…</option></select></div><div class="input-group"><label for="principalSheetTerm">Term</label><select id="principalSheetTerm"><option value="">Loading terms…</option></select></div><div class="input-group"><label for="principalSheetClass">Class Arm</label><select id="principalSheetClass"><option value="">Loading class arms…</option></select></div></div><div id="principalScoreSheetStatus" role="status" style="margin:12px 0">Loading official records from Supabase…</div><button type="button" class="btn btn-success" id="principalPrintScoreSheet" disabled>Print Score Sheet</button></div>';
-  var sessionSelect = root.querySelector('#principalSheetSession');
-  var termSelect = root.querySelector('#principalSheetTerm');
-  var classSelect = root.querySelector('#principalSheetClass');
-  var status = root.querySelector('#principalScoreSheetStatus');
-  var printButton = root.querySelector('#principalPrintScoreSheet');
+  if (!root || !currentUser || currentUser.type !== 'principal') return;
+  if (tabName === 'principalStudents') return renderPrincipalStudentDirectory(root);
+  if (tabName === 'principalScoreSheet') return renderPrincipalScoreSheet(root);
+  if (tabName === 'principalResults') return renderPrincipalBroadsheet(root);
+  root.innerHTML = '<div class="card"><h2>' + escapeManagementText(tabName.replace('principal','')) + '</h2><p>This Principal workspace is available through its dedicated section.</p></div>';
+}
+
+async function loadPrincipalPrintContext() {
+  if (!supabaseClient || !authenticatedProfile || !authenticatedProfile.school_id) throw new Error('An authenticated Principal account is required.');
+  var schoolId = authenticatedProfile.school_id;
+  var data = await Promise.all([
+    supabaseClient.from('academic_sessions').select('id,name,is_current').eq('school_id',schoolId).order('created_at',{ascending:false}),
+    supabaseClient.from('terms').select('id,name,term_number,is_current').eq('school_id',schoolId).order('term_number'),
+    supabaseClient.from('classes').select('id,class_name,level,arm').eq('school_id',schoolId).order('class_name')
+  ]);
+  data.forEach(function(result){if(result.error)throw result.error;});
+  return {sessions:data[0].data||[],terms:data[1].data||[],classes:data[2].data||[]};
+}
+
+async function renderPrincipalStudentDirectory(root) {
+  root.innerHTML = '<div class="card"><h2>Student Database</h2><p>Browse the official student register and print each student’s complete photo card. Records are retrieved from Supabase.</p><div class="grid grid-3"><div class="input-group"><label for="principalStudentSession">Academic Session</label><select id="principalStudentSession"><option value="">Loading…</option></select></div><div class="input-group"><label for="principalStudentTerm">Term</label><select id="principalStudentTerm"><option value="">Loading…</option></select></div><div class="input-group"><label for="principalStudentClass">Class Arm</label><select id="principalStudentClass"><option value="">Loading…</option></select></div></div><div id="principalStudentStatus" role="status" style="margin:12px 0">Loading official register…</div><div id="principalStudentRows" style="overflow-x:auto"></div></div>';
+  var sessionSelect=root.querySelector('#principalStudentSession'),termSelect=root.querySelector('#principalStudentTerm'),classSelect=root.querySelector('#principalStudentClass'),status=root.querySelector('#principalStudentStatus'),rows=root.querySelector('#principalStudentRows');
   try {
-    if (!supabaseClient || !authenticatedProfile || !authenticatedProfile.school_id) throw new Error('An authenticated Principal account is required.');
-    var loaded = await Promise.all([
-      supabaseClient.from('academic_sessions').select('id,name,is_current').eq('school_id', authenticatedProfile.school_id).order('created_at', { ascending: false }),
-      supabaseClient.from('terms').select('id,name,term_number,is_current').eq('school_id', authenticatedProfile.school_id).order('term_number'),
-      supabaseClient.from('classes').select('id,class_name,level').eq('school_id', authenticatedProfile.school_id).order('class_name')
-    ]);
-    loaded.forEach(function(result) { if (result.error) throw result.error; });
-    var sessions = loaded[0].data || [], terms = loaded[1].data || [], classes = loaded[2].data || [];
-    sessionSelect.innerHTML = '<option value="">Select session</option>' + sessions.map(function(x) { return '<option value="' + escapeManagementText(x.id) + '"' + (x.is_current ? ' selected' : '') + '>' + escapeManagementText(x.name) + '</option>'; }).join('');
-    termSelect.innerHTML = '<option value="">Select term</option>' + terms.map(function(x) { return '<option value="' + escapeManagementText(x.id) + '"' + (x.is_current ? ' selected' : '') + '>' + escapeManagementText(x.name) + '</option>'; }).join('');
-    classSelect.innerHTML = '<option value="">Select class arm</option>' + classes.map(function(x) { return '<option value="' + escapeManagementText(x.id) + '">' + escapeManagementText(x.class_name) + '</option>'; }).join('');
-    status.textContent = sessions.length + ' session(s), ' + terms.length + ' term(s) and ' + classes.length + ' class arm(s) retrieved from Supabase.';
-    printButton.disabled = !sessions.length || !terms.length || !classes.length;
-    printButton.addEventListener('click', function() {
-      var session = sessions.find(function(x) { return String(x.id) === String(sessionSelect.value); });
-      var term = terms.find(function(x) { return String(x.id) === String(termSelect.value); });
-      var cls = classes.find(function(x) { return String(x.id) === String(classSelect.value); });
-      if (!session || !term || !cls) { showToast('Select an academic session, term and class arm.','error'); return; }
-      printArmScoreSheet(cls.class_name, session, term);
-    });
-  } catch (error) {
-    status.textContent = error && error.message ? error.message : 'Unable to load the Principal Score Sheet.';
-    status.className = 'alert alert-error';
-    printButton.disabled = true;
-  }
+    var context=await loadPrincipalPrintContext();
+    var sessions=context.sessions,terms=context.terms,classes=context.classes;
+    sessionSelect.innerHTML='<option value="">Select session</option>'+sessions.map(function(x){return '<option value="'+escapeManagementText(x.id)+'"'+(x.is_current?' selected':'')+'>'+escapeManagementText(x.name)+'</option>';}).join('');
+    termSelect.innerHTML='<option value="">Select term</option>'+terms.map(function(x){return '<option value="'+escapeManagementText(x.id)+'"'+(x.is_current?' selected':'')+'>'+escapeManagementText(x.name)+'</option>';}).join('');
+    classSelect.innerHTML='<option value="">Select class arm</option>'+classes.map(function(x){return '<option value="'+escapeManagementText(x.id)+'">'+escapeManagementText(x.class_name)+'</option>';}).join('');
+    studentDbState.classes=classes; studentDbState.assignedClasses=classes;
+    async function loadRows(){
+      rows.innerHTML=''; var session=sessions.find(function(x){return String(x.id)===String(sessionSelect.value);});
+      var cls=classes.find(function(x){return String(x.id)===String(classSelect.value);});
+      if(!session||!cls){status.textContent='Select an academic session and class arm.';return;}
+      status.textContent='Retrieving enrolled students…';
+      var er=await supabaseClient.from('student_enrolments').select('id,student_id,register_number,sid,class_id,academic_session_id').eq('school_id',authenticatedProfile.school_id).eq('academic_session_id',session.id).eq('class_id',cls.id).is('archived_at',null).order('register_number',{ascending:true});
+      if(er.error)throw er.error;
+      var ids=(er.data||[]).map(function(x){return x.student_id;}).filter(Boolean),byId={};
+      if(ids.length){var sr=await supabaseClient.from('students').select('*').eq('school_id',authenticatedProfile.school_id).in('id',ids);if(sr.error)throw sr.error;(sr.data||[]).forEach(function(x){byId[String(x.id)]=x;});}
+      studentDbState.official=(er.data||[]).map(function(en){return {enrolment:en,student:byId[String(en.student_id)]};}).filter(function(x){return !!x.student;});
+      status.textContent=studentDbState.official.length+' official student(s) loaded for '+cls.class_name+'.';
+      if(!studentDbState.official.length){rows.innerHTML='<p class="alert alert-info">No active students are enrolled in this class for the selected session.</p>';return;}
+      rows.innerHTML='<table style="min-width:850px;width:100%"><thead><tr><th>S/N</th><th>SID</th><th>Register No.</th><th>Student Name</th><th>Admission No.</th><th>Gender</th><th>Action</th></tr></thead><tbody>'+studentDbState.official.map(function(item,i){return '<tr><td>'+(i+1)+'</td><td>'+escapeManagementText(item.enrolment.sid||'—')+'</td><td>'+escapeManagementText(item.enrolment.register_number||'—')+'</td><td>'+escapeManagementText(studentDbName(item.student))+'</td><td>'+escapeManagementText(item.student.admission_number||'—')+'</td><td>'+escapeManagementText(item.student.gender||'—')+'</td><td><button type="button" class="btn btn-primary student-photo-card-print" data-student-id="'+escapeManagementText(item.student.id)+'" data-session-id="'+escapeManagementText(session.id)+'" data-term-id="'+escapeManagementText(termSelect.value)+'">Print Photo Card</button></td></tr>';}).join('')+'</tbody></table>';
+      bindStudentPhotoCardPrintEvents(rows);
+    }
+    [sessionSelect,termSelect,classSelect].forEach(function(el){el.addEventListener('change',function(){loadRows().catch(function(e){status.textContent=e.message||'Unable to retrieve students.';status.className='alert alert-error';});});});
+    if(sessionSelect.value&&classSelect.options.length>1){if(!classSelect.value)classSelect.selectedIndex=1;await loadRows();}
+    else status.textContent='Select an academic session and class arm to view students.';
+  } catch(error){status.textContent=error.message||'Unable to load Principal Student Database.';status.className='alert alert-error';}
+}
+
+async function renderPrincipalScoreSheet(root) {
+  root.innerHTML='<div class="card"><h2>Score Sheet</h2><p>Select the academic session and term, then choose a class arm from the same class-level arrangement used in the Administrator workspace. Each registered subject receives a separate blank score-entry sheet.</p><div class="grid grid-2"><div class="input-group"><label for="principalSheetSession">Academic Session</label><select id="principalSheetSession"><option value="">Loading…</option></select></div><div class="input-group"><label for="principalSheetTerm">Term</label><select id="principalSheetTerm"><option value="">Loading…</option></select></div></div><div id="principalScoreSheetStatus" role="status" style="margin:12px 0">Loading class arms…</div><div id="principalScoreSheetLevels"></div></div>';
+  var sessionSelect=root.querySelector('#principalSheetSession'),termSelect=root.querySelector('#principalSheetTerm'),status=root.querySelector('#principalScoreSheetStatus'),levelsRoot=root.querySelector('#principalScoreSheetLevels');
+  try{
+    var context=await loadPrincipalPrintContext(),sessions=context.sessions,terms=context.terms,classes=context.classes;
+    sessionSelect.innerHTML='<option value="">Select session</option>'+sessions.map(function(x){return '<option value="'+escapeManagementText(x.id)+'"'+(x.is_current?' selected':'')+'>'+escapeManagementText(x.name)+'</option>';}).join('');
+    termSelect.innerHTML='<option value="">Select term</option>'+terms.map(function(x){return '<option value="'+escapeManagementText(x.id)+'"'+(x.is_current?' selected':'')+'>'+escapeManagementText(x.name)+'</option>';}).join('');
+    var levels=[{key:'BASIC7',label:'BASIC 7'},{key:'BASIC8',label:'BASIC 8'},{key:'BASIC9',label:'BASIC 9'},{key:'SS1',label:'SS 1'},{key:'SS2',label:'SS 2'},{key:'SS3',label:'SS 3'}],groups={};
+    classes.forEach(function(cls){var n=String(cls.class_name||'').toUpperCase().replace(/\s+/g,'');var lv=levels.find(function(x){return n.indexOf(x.key)===0;});if(lv)(groups[lv.key]=groups[lv.key]||[]).push(cls);});
+    function renderLevel(level){var arms=(groups[level.key]||[]).slice().sort(function(a,b){return String(a.class_name).localeCompare(String(b.class_name),undefined,{numeric:true});});return '<section class="student-class-level" aria-label="'+level.label+' classes"><div class="student-class-level-banner">'+level.label+'</div><div class="student-class-arms">'+(arms.length?arms.map(function(cls){var n=String(cls.class_name).toUpperCase().replace(/\s+/g,'');var label=n.slice(level.key.length)||cls.class_name;return '<button type="button" class="student-class-arm principal-print-arm" data-class-id="'+escapeManagementText(cls.id)+'" data-class-name="'+escapeManagementText(cls.class_name)+'">'+escapeManagementText(label)+'</button>';}).join(''):'<span style="color:#8a93a8;font-size:12px;padding:10px">No arms available</span>')+'</div></section>';}
+    levelsRoot.innerHTML='<div class="student-class-picker-group basic">'+levels.slice(0,3).map(renderLevel).join('')+'</div><div class="student-class-picker-group senior" style="margin-top:18px">'+levels.slice(3).map(renderLevel).join('')+'</div>'+classes.filter(function(cls){var n=String(cls.class_name||'').toUpperCase().replace(/\s+/g,'');return !levels.some(function(l){return n.indexOf(l.key)===0;});}).map(function(cls){return '<section class="student-class-level"><div class="student-class-level-banner">Other Classes</div><div class="student-class-arms"><button type="button" class="student-class-arm principal-print-arm" data-class-id="'+escapeManagementText(cls.id)+'" data-class-name="'+escapeManagementText(cls.class_name)+'">'+escapeManagementText(cls.class_name)+'</button></div></section>';}).join('');
+    status.textContent=classes.length+' class arm(s) retrieved from Supabase. Select an arm to print its subject sheets.';
+    levelsRoot.querySelectorAll('.principal-print-arm').forEach(function(button){button.addEventListener('click',function(){
+      var session=sessions.find(function(x){return String(x.id)===String(sessionSelect.value);}),term=terms.find(function(x){return String(x.id)===String(termSelect.value);});
+      if(!session||!term){showToast('Select an academic session and term first.','error');return;}
+      printArmScoreSheet(button.getAttribute('data-class-name'),session,term);
+    });});
+  }catch(error){status.textContent=error.message||'Unable to load class arms.';status.className='alert alert-error';}
+}
+
+async function renderPrincipalBroadsheet(root) {
+  root.innerHTML='<div class="card"><h2>Broadsheet Review</h2><p>Read-only subject results retrieved from Supabase, with official serial numbers and student SIDs.</p><div class="grid grid-3"><div class="input-group"><label for="principalBoardSession">Academic Session</label><select id="principalBoardSession"><option value="">Loading…</option></select></div><div class="input-group"><label for="principalBoardTerm">Term</label><select id="principalBoardTerm"><option value="">Loading…</option></select></div><div class="input-group"><label for="principalBoardClass">Class Arm</label><select id="principalBoardClass"><option value="">Loading…</option></select></div></div><div id="principalBoardStatus" role="status" style="margin:12px 0">Loading broadsheet…</div><div id="principalBoardTable" style="overflow-x:auto"></div></div>';
+  var ss=root.querySelector('#principalBoardSession'),ts=root.querySelector('#principalBoardTerm'),cs=root.querySelector('#principalBoardClass'),status=root.querySelector('#principalBoardStatus'),table=root.querySelector('#principalBoardTable');
+  try{
+    var context=await loadPrincipalPrintContext(),sessions=context.sessions,terms=context.terms,classes=context.classes;
+    ss.innerHTML='<option value="">Select session</option>'+sessions.map(function(x){return '<option value="'+escapeManagementText(x.id)+'"'+(x.is_current?' selected':'')+'>'+escapeManagementText(x.name)+'</option>';}).join('');
+    ts.innerHTML='<option value="">Select term</option>'+terms.map(function(x){return '<option value="'+escapeManagementText(x.id)+'"'+(x.is_current?' selected':'')+'>'+escapeManagementText(x.name)+'</option>';}).join('');
+    cs.innerHTML='<option value="">Select class arm</option>'+classes.map(function(x){return '<option value="'+escapeManagementText(x.id)+'">'+escapeManagementText(x.class_name)+'</option>';}).join('');
+    async function loadBoard(){
+      var session=sessions.find(function(x){return String(x.id)===String(ss.value);}),term=terms.find(function(x){return String(x.id)===String(ts.value);}),cls=classes.find(function(x){return String(x.id)===String(cs.value);});
+      if(!session||!term||!cls){status.textContent='Select an academic session, term and class arm.';table.innerHTML='';return;}
+      status.textContent='Retrieving official enrolments and saved subject scores…';table.innerHTML='';
+      var schoolId=authenticatedProfile.school_id;
+      var er=await supabaseClient.from('student_enrolments').select('student_id,register_number,sid').eq('school_id',schoolId).eq('academic_session_id',session.id).eq('class_id',cls.id).is('archived_at',null).order('register_number',{ascending:true});
+      if(er.error)throw er.error;
+      var enrolments=er.data||[],studentIds=enrolments.map(function(x){return x.student_id;}).filter(Boolean),studentMap={};
+      if(studentIds.length){var sr=await supabaseClient.from('students').select('id,first_name,middle_name,last_name,admission_number').eq('school_id',schoolId).in('id',studentIds);if(sr.error)throw sr.error;(sr.data||[]).forEach(function(x){studentMap[String(x.id)]=x;});}
+      var reg=await supabaseClient.from('class_subject_registrations').select('id').eq('school_id',schoolId).eq('academic_session_id',session.id).eq('term_id',term.id).eq('class_id',cls.id).maybeSingle();if(reg.error)throw reg.error;
+      var subjectIds=[];
+      if(reg.data){var ri=await supabaseClient.from('class_subject_registration_items').select('subject_id').eq('school_id',schoolId).eq('registration_id',reg.data.id);if(ri.error)throw ri.error;subjectIds=(ri.data||[]).map(function(x){return x.subject_id;}).filter(Boolean);}
+      var subjectMap={};
+      if(subjectIds.length){var su=await supabaseClient.from('subjects').select('id,name').eq('school_id',schoolId).in('id',subjectIds).order('name');if(su.error)throw su.error;(su.data||[]).forEach(function(x){subjectMap[String(x.id)]=x.name;});}
+      var result=await supabaseClient.from('results').select('student_id,subject_id,ca1,ca2,ca3,examination,total,grade,remark,status').eq('school_id',schoolId).eq('class_id',cls.id).eq('academic_session_id',session.id).eq('term_id',term.id);if(result.error)throw result.error;
+      var scoreMap={};(result.data||[]).forEach(function(x){scoreMap[String(x.student_id)+'|'+String(x.subject_id)]=x;});
+      var subjects=Object.keys(subjectMap).sort(function(a,b){return subjectMap[a].localeCompare(subjectMap[b]);});
+      var html='<table style="min-width:1000px;width:100%"><thead><tr><th>S/N</th><th>Student SID</th><th>Register No.</th><th>Student Name</th>'+subjects.map(function(id){return '<th>'+escapeManagementText(subjectMap[id])+'</th>';}).join('')+'</tr></thead><tbody>';
+      enrolments.forEach(function(en,i){var st=studentMap[String(en.student_id)]||{};var name=[st.first_name,st.middle_name,st.last_name].filter(Boolean).join(' ')||'Student';html+='<tr><td>'+(i+1)+'</td><td>'+escapeManagementText(en.sid||'—')+'</td><td>'+escapeManagementText(en.register_number||'—')+'</td><td>'+escapeManagementText(name)+'</td>'+subjects.map(function(id){var row=scoreMap[String(en.student_id)+'|'+id];return '<td>'+(row&&row.total!=null?escapeManagementText(row.total):'—')+'</td>';}).join('')+'</tr>';});
+      html+='</tbody></table>';table.innerHTML=html;status.textContent=enrolments.length+' enrolled student(s), '+subjects.length+' registered subject(s). Broadsheet is read-only.';
+    }
+    [ss,ts,cs].forEach(function(el){el.addEventListener('change',function(){loadBoard().catch(function(e){status.textContent=e.message||'Unable to load broadsheet.';status.className='alert alert-error';});});});
+    if(ss.value&&ts.value&&cs.options.length>1){cs.selectedIndex=1;await loadBoard();}else status.textContent='Select a session, term and class arm to view the broadsheet.';
+  }catch(error){status.textContent=error.message||'Unable to load broadsheet.';status.className='alert alert-error';}
 }
 
 async function printArmScoreSheet(className, sessionOverride, termOverride) {
