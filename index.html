@@ -8830,7 +8830,9 @@ async function renderPrincipalWorkspace(tabName) {
   }
 }
 
-async function printArmScoreSheet(className, sessionOverride, termOverride) {\n  var sheetSession = sessionOverride || activeAcademicSession;\n  var sheetTerm = termOverride || activeAssessmentTerm;
+async function printArmScoreSheet(className, sessionOverride, termOverride) {
+  var sheetSession = sessionOverride || activeAcademicSession;
+  var sheetTerm = termOverride || activeAssessmentTerm;
   var printWindow=window.open('','_blank');
   if(!printWindow){showToast('Allow pop-ups to print the Score Sheet.','error');return;}
   printWindow.document.write('<!doctype html><title>Preparing Score Sheet</title><p style="font-family:Arial;padding:24px">Retrieving official student names and registered subjects…</p>');
