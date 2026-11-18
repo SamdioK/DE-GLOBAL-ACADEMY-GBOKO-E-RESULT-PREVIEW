@@ -5445,12 +5445,14 @@ async function buildOfficialStudentPhotoCard(studentId, sessionOverride, termOve
       var teacherDirectory=directoryResult.data||{};
       formTeacherName=String(teacherProfile.full_name||teacherDirectory.full_name||'').trim();
       formTeacherGender=String(teacherProfile.gender||teacherDirectory.gender||'').trim().toLowerCase();
-      var teacherSignaturePath=teacherProfile.signature_path||teacherProfile.signature_storage_path||teacherProfile.signature_image_path||teacherDirectory.signature_path||teacherDirectory.signature_storage_path||teacherDirectory.signature_image_path||'';
-      var teacherSignatureUrl=teacherProfile.signature_url||teacherDirectory.signature_url||'';
-      if(teacherSignaturePath){
-        var signedTeacher=await supabaseClient.storage.from('school-private-assets').createSignedUrl(teacherSignaturePath,3600);
-        if(!signedTeacher.error)formTeacherSignature=signedTeacher.data.signedUrl;
-      }else if(/^https?:\/\//i.test(teacherSignatureUrl))formTeacherSignature=teacherSignatureUrl;
+      var formSignatureRecord=await supabaseClient.from('school_form_master_signatures').select('storage_path')
+        .eq('school_id',schoolId).eq('profile_id',teacherId).maybeSingle();
+      if(formSignatureRecord.error)throw formSignatureRecord.error;
+      if(formSignatureRecord.data&&formSignatureRecord.data.storage_path){
+        var signedTeacher=await supabaseClient.storage.from('school-private-assets').createSignedUrl(formSignatureRecord.data.storage_path,3600);
+        if(signedTeacher.error)throw signedTeacher.error;
+        formTeacherSignature=signedTeacher.data.signedUrl;
+      }
     }
   }catch(formTeacherError){console.warn('Form Master details/signature unavailable:',formTeacherError);}
   var formTeacherTitle=formTeacherGender==='female'?'Form Mistress':'Form Master';
