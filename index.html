@@ -10335,6 +10335,48 @@ function renderSchool() {
   var signaturePreviewDraft = stampSignature;
   var stampDateLabel = escapeValue(formatResultDate(stampDate));
 
+  // Resolve the active Principal's name from the authenticated Principal profile.
+  // Staff Directory is used only as a fallback when no active Principal login exists.
+  async function refreshSchoolPrincipalName() {
+    var field = document.getElementById('schoolPrincipal');
+    if (!field || !supabaseClient || !authenticatedProfile || !authenticatedProfile.school_id) return;
+    field.value = 'Loading Principal name…';
+    try {
+      var principalResult = await supabaseClient.from('profiles')
+        .select('id,full_name')
+        .eq('school_id', authenticatedProfile.school_id)
+        .eq('role', 'principal')
+        .eq('is_active', true)
+        .order('created_at', { ascending: false })
+        .limit(1);
+      if (principalResult.error) throw principalResult.error;
+      var principal = (principalResult.data || []).find(function(row) {
+        return String(row.full_name || '').trim() !== '';
+      });
+      var principalName = principal ? String(principal.full_name).trim() : '';
+      if (!principalName && Array.isArray(staffDatabase)) {
+        var staffPrincipal = staffDatabase.find(function(record) {
+          return String(record.designation || '').trim().toLowerCase() === 'principal' &&
+            String(record.status || 'Active').toLowerCase() === 'active' &&
+            String(record.fullName || '').trim() !== '';
+        });
+        principalName = staffPrincipal ? String(staffPrincipal.fullName).trim() : '';
+      }
+      field.value = principalName || 'No active Principal account found';
+      schoolInfo.principalName = principalName;
+    } catch (error) {
+      console.error('Principal name lookup failed:', error);
+      var fallback = Array.isArray(staffDatabase) ? staffDatabase.find(function(record) {
+        return String(record.designation || '').trim().toLowerCase() === 'principal' &&
+          String(record.status || 'Active').toLowerCase() === 'active' &&
+          String(record.fullName || '').trim() !== '';
+      }) : null;
+      var fallbackName = fallback ? String(fallback.fullName).trim() : '';
+      field.value = fallbackName || 'Unable to load Principal name';
+      schoolInfo.principalName = fallbackName;
+    }
+  }
+
   document.getElementById('schoolTab').innerHTML =
     '<style>' +
     '#schoolTab .school-hero{position:relative;overflow:hidden;padding:24px;border-radius:16px;background:linear-gradient(130deg,#263b82 0%,#536bd8 58%,#7352a6 100%);color:#fff;margin-bottom:18px;box-shadow:0 8px 24px rgba(48,62,130,.18)}' +
@@ -10357,9 +10399,10 @@ function renderSchool() {
       '<div class="input-group"><label for="schoolEmail">Email Address</label><input type="email" id="schoolEmail" maxlength="255" value="' + escapeValue(schoolInfo.email) + '"></div>' +
       '<div class="input-group"><label for="schoolPhone">Phone Number</label><input type="tel" id="schoolPhone" maxlength="255" value="' + escapeValue(schoolInfo.phone) + '"></div>' +
       '<div class="input-group"><label for="schoolAddress">School Address</label><input type="text" id="schoolAddress" maxlength="500" value="' + escapeValue(schoolInfo.address) + '"></div>' +
-      '<div class="input-group"><label for="schoolPrincipal">Principal Name</label><input class="school-readonly" type="text" id="schoolPrincipal" value="' + escapeValue(schoolInfo.principalName) + '" readonly></div>' +
+      '<div class="input-group"><label for="schoolMotto">School Motto</label><input type="text" id="schoolMotto" maxlength="300" value="' + escapeValue(schoolInfo.motto || '') + '" placeholder="Enter the official school motto"></div>' +
+      '<div class="input-group"><label for="schoolPrincipal">Principal Name</label><input class="school-readonly" type="text" id="schoolPrincipal" value="' + escapeValue(schoolInfo.principalName || '') + '" readonly></div>' +
       '<div class="input-group"><label for="schoolSession">Current Academic Session</label><input class="school-readonly" type="text" id="schoolSession" value="' + escapeValue(sessionName) + '" readonly></div>' +
-    '</div><p class="school-note">Principal name and academic session are controlled by the relevant school and academic settings.</p></section>' +
+    '</div><p class="school-note">Principal name is retrieved from the active Principal login profile, with the Staff Database as a fallback. The school motto is maintained here by the Administrator.</p></section>' +
     '<section class="school-panel"><div class="school-panel-title"><span>✦</span>Result sheet identity</div><div class="school-assets-grid">' +
       '<div class="school-asset"><h4>School Logo</h4><div class="school-preview-box">' + logoPreview + '</div><input type="file" id="brandingLogoFile" accept="image/png,image/jpeg,image/webp"></div>' +
       '<div class="school-asset school-protected-assets"><h4>Protected Result Signatures &amp; Stamp</h4><p class="school-note">Principal signature, official stamp and small stamp signature are hidden here. View or replace them only inside the protected settings gateway.</p><button type="button" class="btn btn-primary school-stamp-settings-btn" id="schoolStampSettingBtn">Open Stamp Settings &amp; Preview</button></div>' +
@@ -10377,6 +10420,8 @@ function renderSchool() {
       '<button type="button" class="btn btn-primary" id="saveSchoolStampBtn" style="margin-top:8px">Save Protected Branding Settings</button></div></div>' +
     '<section class="school-actions"><button class="btn btn-primary" id="saveSchoolBtn" type="button">Save School Information</button><span id="schoolSaveStatus" role="status" style="font-size:12px;color:#697386"></span></section>';
 
+  refreshSchoolPrincipalName();
+  
   var stampModal = document.getElementById('schoolStampModal');
   document.getElementById('schoolStampSettingBtn').addEventListener('click', function() { stampModal.classList.remove('hidden'); });
   document.getElementById('closeSchoolStampModalBtn').addEventListener('click', function() { stampModal.classList.add('hidden'); });
@@ -10471,7 +10516,8 @@ function renderSchool() {
       name: document.getElementById('schoolName').value.trim(),
       email: document.getElementById('schoolEmail').value.trim(),
       phone: document.getElementById('schoolPhone').value.trim(),
-      address: document.getElementById('schoolAddress').value.trim()
+      address: document.getElementById('schoolAddress').value.trim(),
+      motto: document.getElementById('schoolMotto').value.trim()
     };
     if (!patch.name) { showToast('School name is required.', 'error'); return; }
     saveBtn.disabled = true; saveBtn.textContent = 'Saving...';
@@ -10483,6 +10529,8 @@ function renderSchool() {
       schoolInfo.phone = savedProfile.phone || '';
       schoolInfo.address = savedProfile.address || '';
       schoolInfo.motto = savedProfile.motto || '';
+      schoolInfo.principalName = document.getElementById('schoolPrincipal').value || '';
+      currentSchool.motto = savedProfile.motto || '';
       currentSchool.schoolName = savedProfile.name || '';
       currentSchool.name = savedProfile.name || '';
       currentSchool.email = savedProfile.email || '';
