@@ -6976,6 +6976,7 @@ function bindStudentDatabaseEvents(root) {
     if (rows) {
       rows.innerHTML = renderOfficialStudentRows(currentUser.type === 'admin', this.value);
       bindOfficialStudentLoginEvents(root);
+      bindStudentPhotoCardPrintEvents(root);
       bindStudentHouseEvents(root);
     }
   });
@@ -8843,7 +8844,7 @@ function renderArms() {
   function renderArmAssignmentPanel(selectedArm) {
     var controls = '<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap"><h3 style="margin:0">' + escapeManagementText(selectedArm.name) + ' Assignment</h3><div><button type="button" class="btn btn-primary arm-assignment-minimize">' + (armAssignmentMinimized ? 'Expand' : 'Minimize') + '</button> <button type="button" class="btn btn-danger arm-assignment-close">Close</button></div></div>';
     if (armAssignmentMinimized) return '<div class="card" style="grid-column:1/-1;margin:14px 0 0;border:1px solid #e1e6f2">' + controls + '</div>';
-    return '<div class="card" style="grid-column:1/-1;margin:14px 0 0;border:1px solid #e1e6f2">' + controls + '<div style="margin-top:14px"><div class="input-group"><label for="arm-select-' + selectedArm.id + '">Assign Form Master</label><select id="arm-select-' + selectedArm.id + '" style="max-width:420px"><option value="">Select Form Master</option>' + formMasters.map(function(fm) { return '<option value="' + escapeManagementText(fm.name) + '"' + (selectedArm.formMaster === fm.name ? ' selected' : '') + '>' + escapeManagementText(fm.name) + '</option>'; }).join('') + '</select></div>' + (selectedArm.formMaster ? '<p style="font-size:13px;color:#23753b;margin:4px 0 12px">✓ ' + escapeManagementText(selectedArm.formMaster) + '</p>' : '') + '<button class="btn btn-primary edit-names-btn" data-arm-id="' + selectedArm.id + '">Edit Student Names</button> <button type="button" class="btn btn-success" onclick="printArmScoreSheet(\'' + escapeManagementText(selectedArm.name) + '\')">Print Score Sheet</button></div></div>';
+    return '<div class="card" style="grid-column:1/-1;margin:14px 0 0;border:1px solid #e1e6f2">' + controls + '<div style="margin-top:14px"><div class="input-group"><label for="arm-select-' + selectedArm.id + '">Assign Form Master</label><select id="arm-select-' + selectedArm.id + '" style="max-width:420px"><option value="">Select Form Master</option>' + formMasters.map(function(fm) { return '<option value="' + escapeManagementText(fm.name) + '"' + (selectedArm.formMaster === fm.name ? ' selected' : '') + '>' + escapeManagementText(fm.name) + '</option>'; }).join('') + '</select></div>' + (selectedArm.formMaster ? '<p style="font-size:13px;color:#23753b;margin:4px 0 12px">✓ ' + escapeManagementText(selectedArm.formMaster) + '</p>' : '') + '<button class="btn btn-primary edit-names-btn" data-arm-id="' + selectedArm.id + '">Edit Student Names</button> <button type="button" class="btn btn-success arm-score-sheet-print" data-score-sheet-arm="' + escapeManagementText(selectedArm.name) + '">Print Score Sheet</button></div></div>';
   }
   function renderLevel(level, senior) {
     var arms = (grouped[level.key] || []).slice().sort(function(a, b) { return String(a.name).localeCompare(String(b.name), undefined, { numeric: true }); });
@@ -8870,6 +8871,7 @@ function renderArms() {
   }
   html += '</div>';
   document.getElementById('armsTab').innerHTML = html;
+  document.querySelectorAll('.arm-score-sheet-print').forEach(function(button) { button.addEventListener('click', function() { printArmScoreSheet(button.getAttribute('data-score-sheet-arm')); }); });
 
   document.querySelectorAll('[data-arm-assignment]').forEach(function(button) {
     button.addEventListener('click', function() {
@@ -13085,6 +13087,6 @@ async function renderSubjectTeacherInput() {
 }
 </script>
 <script src="passport-registration.js"></script>
-<script src="principal-dashboard.js?v=20261118&principal-workspace=20261118"></script>
+<script src="principal-dashboard.js?v=20261118&principal-workspace=20261118-score-sheet"></script>
 </body>
 </html>
