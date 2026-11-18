@@ -3422,7 +3422,7 @@ function showApp() {
 
   var tabs;
   if (currentUser.type === 'admin') {
-    tabs = ['dashboard', 'arms', 'masters', 'school', 'profile', 'assessment', 'teacherSignatures', 'management', 'staffDatabase', 'studentDatabase', 'passportRegistration', 'userManagement', 'release', 'view', 'compute', 'print', 'portalContent', 'schoolIdCard'];
+    tabs = ['dashboard', 'masters', 'school', 'profile', 'assessment', 'arms', 'teacherSignatures', 'management', 'staffDatabase', 'studentDatabase', 'passportRegistration', 'userManagement', 'release', 'view', 'compute', 'print', 'portalContent', 'schoolIdCard'];
   } else if (currentUser.type === 'principal') {
     tabs = ['principalDashboard', 'principalStudents', 'principalResults', 'principalSubmission', 'principalReports', 'principalStaff', 'principalRequests', 'principalProfile'];
   } else if (currentUser.type === 'subadmin') {
@@ -3452,7 +3452,7 @@ function showApp() {
     var btn = document.createElement('button');
     btn.className = 'tab';
     if (idx === 0) btn.classList.add('active');
-    var tabLabels = { principalDashboard: 'Overview', principalStudents: 'Student Database', principalStaff: 'Staff & Teachers', principalResults: 'Broadsheet Review', principalSubmission: 'Submission Tracker', principalReports: 'Statistical Analysis', principalRequests: 'Requests & Activity', principalProfile: 'School Profile', profile: 'Admin Profile', teacherSignatures: "Teachers' Signature", management: 'Management Staff', staffDatabase: 'Staff Database', studentDatabase: 'Student Database', subjectRegistration: 'Subject Registration', passportRegistration: 'Student Passport Registration', userManagement: 'User Management', release: 'Release Results', studentResults: 'Student Results', portalContent: 'Portal Options', developerDashboard: 'Developer Dashboard', developer: 'Developer Console', schoolIdCard: 'School ID Card' };
+    var tabLabels = { arms: 'Score Sheet', principalDashboard: 'Overview', principalStudents: 'Student Database', principalStaff: 'Staff & Teachers', principalResults: 'Broadsheet Review', principalSubmission: 'Submission Tracker', principalReports: 'Statistical Analysis', principalRequests: 'Requests & Activity', principalProfile: 'School Profile', profile: 'Admin Profile', teacherSignatures: "Teachers' Signature", management: 'Management Staff', staffDatabase: 'Staff Database', studentDatabase: 'Student Database', subjectRegistration: 'Subject Registration', passportRegistration: 'Student Passport Registration', userManagement: 'User Management', release: 'Release Results', studentResults: 'Student Results', portalContent: 'Portal Options', developerDashboard: 'Developer Dashboard', developer: 'Developer Console', schoolIdCard: 'School ID Card' };
     btn.textContent = tabLabels[tab] || tab.charAt(0).toUpperCase() + tab.slice(1);
     btn.addEventListener('click', function() {
       document.querySelectorAll('.tab').forEach(function(t) { t.classList.remove('active'); });
@@ -4824,6 +4824,7 @@ if (studentDbState.view === 'replacementSubmissions') {
   workspace.innerHTML = html;
   workspace.querySelectorAll('.student-db-tab').forEach(function(button) { button.addEventListener('click', function() { studentDbState.view = button.dataset.view; renderStudentDatabaseWorkspace(); }); });
   bindOfficialStudentLoginEvents(workspace);
+  bindStudentPhotoCardPrintEvents(workspace);
   bindOfficialStudentProfileExportEvents(workspace);
   bindStudentHouseEvents(workspace);
   bindOfficialStudentListToggle(workspace);
@@ -5094,7 +5095,7 @@ function renderOfficialStudentRows(isAdmin, query) {
 
     var actionCell = isAdmin
       ? '<td class="student-login-account-cell">' +
-          renderOfficialStudentLoginAction(item) + '</td>'
+          renderOfficialStudentLoginAction(item) + '<div style="margin-top:6px"><button type="button" class="btn btn-primary student-photo-card-print" data-student-id="' + escapeManagementText(student.id) + '">Print Photo Card</button></div></td>'
       : '<td><button class="btn btn-primary student-correction-start" data-student="' +
           escapeManagementText(student.id) +
           '">Request Correction</button></td>';
@@ -5382,6 +5383,74 @@ function renderOfficialStudentLoginAction(item) {
   if (status === 'pending') return '<span style="color:#856404">Account creation in progress</span>';
   var isProvisioning = !!studentDbState.activeProvisioning[String(student.id)];
   return '<button type="button" class="btn btn-primary provision-student-login" data-student-id="' + escapeManagementText(student.id) + '"' + (isProvisioning ? ' disabled' : '') + '>' + (isProvisioning ? 'Creating…' : 'Create Login') + '</button><div class="student-login-action-status" role="status" aria-live="polite" style="margin-top:5px"></div>';
+}
+
+async function buildOfficialStudentPhotoCard(studentId) {
+  if (!currentUser || currentUser.type !== 'admin' || !authenticatedProfile || authenticatedProfile.role !== 'administrator' || authenticatedProfile.is_active !== true) {
+    throw new Error('An active School Administrator account is required to print student photo cards.');
+  }
+  var item=(studentDbState.official||[]).find(function(x){return String(x.student&&x.student.id)===String(studentId);});
+  if(!item||!item.student)throw new Error('Student record is no longer available. Refresh the Student Database.');
+  var student=item.student,enrolment=item.enrolment||{},schoolId=authenticatedProfile.school_id;
+  var passportUrl='';
+  var passport=await supabaseClient.from('student_passports').select('storage_path').eq('school_id',schoolId).eq('student_id',student.id).maybeSingle();
+  if(passport.error)throw passport.error;
+  if(passport.data&&passport.data.storage_path){
+    var signed=await supabaseClient.storage.from('student-passports').createSignedUrl(passport.data.storage_path,600);
+    if(signed.error)throw signed.error;
+    passportUrl=signed.data.signedUrl;
+  }
+  var subjectNames=[];
+  if(enrolment.class_id&&activeAcademicSession&&activeAcademicSession.id&&activeAssessmentTerm&&activeAssessmentTerm.id){
+    var registration=await supabaseClient.from('class_subject_registrations').select('id').eq('school_id',schoolId).eq('academic_session_id',activeAcademicSession.id).eq('term_id',activeAssessmentTerm.id).eq('class_id',enrolment.class_id).maybeSingle();
+    if(registration.error)throw registration.error;
+    if(registration.data){
+      var items=await supabaseClient.from('class_subject_registration_items').select('subject_id').eq('school_id',schoolId).eq('registration_id',registration.data.id);
+      if(items.error)throw items.error;
+      var ids=(items.data||[]).map(function(x){return x.subject_id;}).filter(Boolean);
+      if(ids.length){
+        var subjects=await supabaseClient.from('subjects').select('id,name').eq('school_id',schoolId).in('id',ids).order('name');
+        if(subjects.error)throw subjects.error;
+        subjectNames=(subjects.data||[]).map(function(x){return x.name;});
+      }
+    }
+  }
+  var classRecord=(studentDbState.classes||[]).find(function(x){return String(x.id)===String(enrolment.class_id);})||
+    (studentDbState.assignedClasses||[]).find(function(x){return String(x.id)===String(enrolment.class_id);})||{};
+  var school=schoolInfo||{},name=studentDbName(student);
+  function esc(v){return escapeManagementText(v==null||v===''?'—':String(v));}
+  var logo=school.portalLogo||school.logo||'';
+  var details=[
+    ['Full Name',name],['Admission Number',student.admission_number],['Student ID (SID)',enrolment.sid],
+    ['Register Number',enrolment.register_number],['Class / Arm',classRecord.class_name||studentDbClassLabel(enrolment.class_id)],
+    ['Academic Session',activeAcademicSession&&activeAcademicSession.name],['Gender',student.gender],
+    ['Date of Birth',studentDbDate(student.date_of_birth)],['Guardian Name',student.guardian_name],
+    ['Guardian Phone',student.guardian_phone],['Guardian Email',student.guardian_email],
+    ['Student House',student.student_house],['Student Status',student.status],['Account Status',student.login_status]
+  ];
+  return '<!doctype html><html><head><meta charset="utf-8"><title>Student Photo Card - '+esc(name)+'</title><style>'+
+    '@page{size:A4 portrait;margin:12mm}*{box-sizing:border-box}body{font-family:Arial,sans-serif;color:#172033;margin:0;background:#fff}.photo-card{max-width:760px;margin:0 auto;border:2px solid #183f35;border-radius:14px;padding:22px}.school-head{display:flex;align-items:center;gap:14px;border-bottom:2px solid #c99a36;padding-bottom:13px;margin-bottom:18px}.school-head img{width:66px;height:66px;object-fit:contain}.school-head div{flex:1;text-align:center}.school-head h1{font-size:22px;margin:0 0 5px;color:#164638}.school-head p{font-size:11px;margin:0;color:#64748b}.heading{text-align:center;font-weight:800;letter-spacing:1px;margin:12px 0 18px;color:#164638}.profile{display:grid;grid-template-columns:1fr 150px;gap:18px;align-items:start}.details{display:grid;grid-template-columns:1fr 1fr;gap:0 14px}.field{padding:9px 5px;border-bottom:1px solid #e5eaf0}.field small{display:block;color:#64748b;font-size:9px;text-transform:uppercase;letter-spacing:.5px}.field strong{display:block;margin-top:4px;font-size:12px;overflow-wrap:anywhere}.passport{width:145px;height:175px;border:1px solid #cbd5e1;border-radius:8px;object-fit:cover;background:#f1f5f9}.passport-placeholder{width:145px;height:175px;display:grid;place-items:center;border:1px dashed #94a3b8;border-radius:8px;color:#64748b;font-size:11px;text-align:center;padding:10px}.subjects{margin-top:20px;padding:14px;border:1px solid #dce7e1;border-radius:9px;background:#f7faf8}.subjects h3{font-size:13px;margin:0 0 10px;color:#164638}.subject-list{display:flex;flex-wrap:wrap;gap:7px}.subject-list span{font-size:10px;padding:6px 9px;border-radius:20px;background:#e7f0eb;color:#244d3e}.subject-list .empty{background:transparent;padding:0;color:#64748b}.footer{margin-top:20px;border-top:1px solid #dce3df;padding-top:9px;font-size:9px;color:#64748b;display:flex;justify-content:space-between}@media print{body{print-color-adjust:exact;-webkit-print-color-adjust:exact}.photo-card{break-inside:avoid}}'+
+    '</style></head><body><main class="photo-card"><header class="school-head">'+(logo?'<img src="'+esc(logo)+'" alt="School logo">':'<span></span>')+'<div><h1>'+esc(school.name||currentSchool&&currentSchool.schoolName||'DE-GLOBAL ACADEMY, GBOKO')+'</h1><p>'+esc(school.address||school.location||currentSchool&&currentSchool.location||'')+'</p></div></header><div class="heading">STUDENT PHOTO CARD / OFFICIAL PROFILE</div><section class="profile"><div class="details">'+details.map(function(x){return '<div class="field"><small>'+esc(x[0])+'</small><strong>'+esc(x[1])+'</strong></div>';}).join('')+'</div>'+(passportUrl?'<img class="passport" src="'+esc(passportUrl)+'" alt="Student passport photograph">':'<div class="passport-placeholder">Passport photograph not registered</div>')+'</section><section class="subjects"><h3>SUBJECTS OFFERED</h3><div class="subject-list">'+(subjectNames.length?subjectNames.map(function(x){return '<span>'+esc(x)+'</span>';}).join(''):'<span class="empty">No subjects have been registered for this class, session and term.</span>')+'</div></section><footer class="footer"><span>Official student information · '+esc(activeAcademicSession&&activeAcademicSession.name)+'</span><span>Generated '+new Date().toLocaleDateString('en-GB')+'</span></footer></main><script>window.onload=function(){var imgs=[].slice.call(document.images);Promise.all(imgs.map(function(i){return i.complete?Promise.resolve():new Promise(function(r){i.onload=r;i.onerror=r;});})).then(function(){window.print();});};<\/script></body></html>';
+}
+function bindStudentPhotoCardPrintEvents(root){
+  if(!root)return;
+  root.querySelectorAll('.student-photo-card-print').forEach(function(button){
+    if(button.dataset.bound==='true')return;
+    button.dataset.bound='true';
+    button.addEventListener('click',async function(){
+      var win=window.open('','_blank');
+      if(!win){showToast('Allow pop-ups to print the student photo card.','error');return;}
+      win.document.write('<!doctype html><title>Preparing photo card</title><p style="font-family:Arial;padding:24px">Preparing official student information…</p>');
+      win.document.close();
+      button.disabled=true;button.textContent='Preparing…';
+      try{
+        var html=await buildOfficialStudentPhotoCard(button.getAttribute('data-student-id'));
+        win.document.open();win.document.write(html);win.document.close();
+      }catch(error){
+        win.close();showToast(error&&error.message||'Unable to prepare student photo card.','error');
+      }finally{button.disabled=false;button.textContent='Print Photo Card';}
+    });
+  });
 }
 
 function bindOfficialStudentLoginEvents(root) {
@@ -8722,6 +8791,40 @@ window.deactivateAllInClass = async function(classLevel) {
 var activeArmAssignment = '';
 var armAssignmentMinimized = false;
 
+async function printArmScoreSheet(className) {
+  var printWindow=window.open('','_blank');
+  if(!printWindow){showToast('Allow pop-ups to print the Score Sheet.','error');return;}
+  printWindow.document.write('<!doctype html><title>Preparing Score Sheet</title><p style="font-family:Arial;padding:24px">Retrieving official student names and registered subjects…</p>');
+  printWindow.document.close();
+  try{
+    if(!supabaseClient||!authenticatedProfile||!authenticatedProfile.school_id||!activeAcademicSession||!activeAcademicSession.id||!activeAssessmentTerm||!activeAssessmentTerm.id)throw new Error('An active academic session and term are required.');
+    var schoolId=authenticatedProfile.school_id;
+    var cls=await supabaseClient.from('classes').select('id,class_name,level').eq('school_id',schoolId).eq('class_name',className).maybeSingle();
+    if(cls.error)throw cls.error;if(!cls.data)throw new Error('Class arm not found in Supabase.');
+    var enrol=await supabaseClient.from('student_enrolments').select('student_id,register_number,sid').eq('school_id',schoolId).eq('academic_session_id',activeAcademicSession.id).eq('class_id',cls.data.id).is('archived_at',null).order('register_number',{ascending:true});
+    if(enrol.error)throw enrol.error;
+    var ids=enrol.data.map(function(x){return x.student_id;}).filter(Boolean),studentsById={};
+    if(ids.length){var st=await supabaseClient.from('students').select('id,first_name,middle_name,last_name,admission_number').eq('school_id',schoolId).in('id',ids);if(st.error)throw st.error;(st.data||[]).forEach(function(x){studentsById[String(x.id)]=x;});}
+    var registration=await supabaseClient.from('class_subject_registrations').select('id').eq('school_id',schoolId).eq('academic_session_id',activeAcademicSession.id).eq('term_id',activeAssessmentTerm.id).eq('class_id',cls.data.id).maybeSingle();
+    if(registration.error)throw registration.error;
+    var subjectNames=[];
+    if(registration.data){
+      var itemRows=await supabaseClient.from('class_subject_registration_items').select('subject_id').eq('school_id',schoolId).eq('registration_id',registration.data.id);
+      if(itemRows.error)throw itemRows.error;
+      var subIds=(itemRows.data||[]).map(function(x){return x.subject_id;}).filter(Boolean);
+      if(subIds.length){var sub=await supabaseClient.from('subjects').select('id,name').eq('school_id',schoolId).in('id',subIds).order('name');if(sub.error)throw sub.error;subjectNames=(sub.data||[]).map(function(x){return x.name;});}
+    }
+    var roster=enrol.data.map(function(e){var st=studentsById[String(e.student_id)]||{};return {register:e.register_number,sid:e.sid,name:[st.first_name,st.middle_name,st.last_name].filter(Boolean).join(' ')};});
+    var school=schoolInfo||{},title=school.name||currentSchool&&currentSchool.schoolName||'DE-GLOBAL ACADEMY, GBOKO';
+    var safe=function(v){return escapeManagementText(v==null?'':String(v));};
+    var pages=(subjectNames.length?subjectNames:['All Subjects / General Score Sheet']).map(function(subject){
+      return '<section class="sheet"><header><h1>'+safe(title)+'</h1><h2>STUDENT SCORE SHEET</h2><p>Class Arm: '+safe(className)+' | Session: '+safe(activeAcademicSession.name)+' | Term: '+safe(activeAssessmentTerm.name)+'</p><h3>Subject: '+safe(subject)+'</h3></header><table><thead><tr><th>S/N</th><th>Register No.</th><th>Student Name</th><th>CA 1</th><th>CA 2</th><th>CA 3</th><th>Examination</th><th>Total</th><th>Grade</th><th>Teacher Remark</th></tr></thead><tbody>'+roster.map(function(x,i){return '<tr><td>'+(i+1)+'</td><td>'+safe(x.register==null?'':x.register)+'</td><td>'+safe(x.name)+'</td><td></td><td></td><td></td><td></td><td></td><td></td><td></td></tr>';}).join('')+'</tbody></table><footer>Subject Teacher: ___________________________ &nbsp;&nbsp; Signature: __________________ &nbsp;&nbsp; Date: __________</footer></section>';
+    }).join('');
+    var html='<!doctype html><html><head><meta charset="utf-8"><title>'+safe(className)+' Score Sheet</title><style>@page{size:A4 landscape;margin:9mm}*{box-sizing:border-box}body{font-family:Arial,sans-serif;color:#111;margin:0}.sheet{page-break-after:always;break-after:page}.sheet:last-child{page-break-after:auto}header{text-align:center;margin-bottom:15px;border-bottom:2px solid #183f35;padding-bottom:9px}h1{font-size:19px;margin:0 0 4px}h2{font-size:16px;margin:4px 0}header p{font-size:11px;margin:5px}header h3{font-size:13px;margin:9px 0 0}table{width:100%;border-collapse:collapse;font-size:10px}th,td{border:1px solid #333;padding:6px 5px;text-align:center;height:28px}th{background:#eaf0ec}td:nth-child(3){text-align:left;width:25%}footer{margin-top:20px;font-size:10px}@media print{print-color-adjust:exact;-webkit-print-color-adjust:exact}</style></head><body>'+pages+'<script>window.onload=function(){window.print();};<\/script></body></html>';
+    printWindow.document.open();printWindow.document.write(html);printWindow.document.close();
+  }catch(error){printWindow.close();showToast(error&&error.message||'Unable to generate Score Sheet.','error');}
+}
+
 function renderArms() {
   var levels = [
     { key: 'BASIC7', label: 'BASIC 7' }, { key: 'BASIC8', label: 'BASIC 8' }, { key: 'BASIC9', label: 'BASIC 9' },
@@ -8735,11 +8838,11 @@ function renderArms() {
     if (level) (grouped[level.key] = grouped[level.key] || []).push(arm);
     else otherArms.push(arm);
   });
-  var html = '<div class="card"><h2 style="margin-bottom:8px;">Manage Class Arms</h2><p style="color:#666;margin-bottom:16px">Select a class arm to assign its Form Master or edit the student register.</p><div class="student-class-picker-group basic">';
+  var html = '<div class="card"><h2 style="margin-bottom:8px;">Score Sheet</h2><p style="color:#666;margin-bottom:16px">Select a class arm to assign its Form Master or edit the student register.</p><div class="student-class-picker-group basic">';
   function renderArmAssignmentPanel(selectedArm) {
     var controls = '<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap"><h3 style="margin:0">' + escapeManagementText(selectedArm.name) + ' Assignment</h3><div><button type="button" class="btn btn-primary arm-assignment-minimize">' + (armAssignmentMinimized ? 'Expand' : 'Minimize') + '</button> <button type="button" class="btn btn-danger arm-assignment-close">Close</button></div></div>';
     if (armAssignmentMinimized) return '<div class="card" style="grid-column:1/-1;margin:14px 0 0;border:1px solid #e1e6f2">' + controls + '</div>';
-    return '<div class="card" style="grid-column:1/-1;margin:14px 0 0;border:1px solid #e1e6f2">' + controls + '<div style="margin-top:14px"><div class="input-group"><label for="arm-select-' + selectedArm.id + '">Assign Form Master</label><select id="arm-select-' + selectedArm.id + '" style="max-width:420px"><option value="">Select Form Master</option>' + formMasters.map(function(fm) { return '<option value="' + escapeManagementText(fm.name) + '"' + (selectedArm.formMaster === fm.name ? ' selected' : '') + '>' + escapeManagementText(fm.name) + '</option>'; }).join('') + '</select></div>' + (selectedArm.formMaster ? '<p style="font-size:13px;color:#23753b;margin:4px 0 12px">✓ ' + escapeManagementText(selectedArm.formMaster) + '</p>' : '') + '<button class="btn btn-primary edit-names-btn" data-arm-id="' + selectedArm.id + '">Edit Student Names</button></div></div>';
+    return '<div class="card" style="grid-column:1/-1;margin:14px 0 0;border:1px solid #e1e6f2">' + controls + '<div style="margin-top:14px"><div class="input-group"><label for="arm-select-' + selectedArm.id + '">Assign Form Master</label><select id="arm-select-' + selectedArm.id + '" style="max-width:420px"><option value="">Select Form Master</option>' + formMasters.map(function(fm) { return '<option value="' + escapeManagementText(fm.name) + '"' + (selectedArm.formMaster === fm.name ? ' selected' : '') + '>' + escapeManagementText(fm.name) + '</option>'; }).join('') + '</select></div>' + (selectedArm.formMaster ? '<p style="font-size:13px;color:#23753b;margin:4px 0 12px">✓ ' + escapeManagementText(selectedArm.formMaster) + '</p>' : '') + '<button class="btn btn-primary edit-names-btn" data-arm-id="' + selectedArm.id + '">Edit Student Names</button> <button type="button" class="btn btn-success" onclick="printArmScoreSheet(\'' + escapeManagementText(selectedArm.name) + '\')">Print Score Sheet</button></div></div>';
   }
   function renderLevel(level, senior) {
     var arms = (grouped[level.key] || []).slice().sort(function(a, b) { return String(a.name).localeCompare(String(b.name), undefined, { numeric: true }); });
