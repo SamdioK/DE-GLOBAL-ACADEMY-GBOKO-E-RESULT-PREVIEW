@@ -9097,7 +9097,7 @@ async function printArmScoreSheet(className, sessionOverride, termOverride) {
 
     var roster=enrol.data.map(function(e){
       var student=studentsById[String(e.student_id)]||{};
-      return {register:e.register_number,sid:e.sid,name:[student.first_name,student.middle_name,student.last_name].filter(Boolean).join(' ')};
+      return {sid:e.sid,name:[student.first_name,student.middle_name,student.last_name].filter(Boolean).join(' ')};
     });
     if(!roster.length)throw new Error('There are no active enrolled students in '+className+'.');
 
