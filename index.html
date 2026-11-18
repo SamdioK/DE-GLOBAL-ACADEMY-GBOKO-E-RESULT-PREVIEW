@@ -305,6 +305,7 @@ th { background: #f5f5f5; font-weight: 600; }
   <div class="main-content">
     <div id="principalDashboardTab" class="hidden"></div>
     <div id="principalStudentsTab" class="hidden"></div>
+    <div id="principalScoreSheetTab" class="hidden"></div>
     <div id="principalStaffTab" class="hidden"></div>
     <div id="principalResultsTab" class="hidden"></div>
     <div id="principalSubmissionTab" class="hidden"></div>
@@ -3424,7 +3425,7 @@ function showApp() {
   if (currentUser.type === 'admin') {
     tabs = ['dashboard', 'masters', 'school', 'profile', 'assessment', 'arms', 'teacherSignatures', 'management', 'staffDatabase', 'studentDatabase', 'passportRegistration', 'userManagement', 'release', 'view', 'compute', 'print', 'portalContent', 'schoolIdCard'];
   } else if (currentUser.type === 'principal') {
-    tabs = ['principalDashboard', 'principalStudents', 'principalResults', 'principalSubmission', 'principalReports', 'principalStaff', 'principalRequests', 'principalProfile'];
+    tabs = ['principalDashboard', 'principalStudents', 'principalScoreSheet', 'principalResults', 'principalSubmission', 'principalReports', 'principalStaff', 'principalRequests', 'principalProfile'];
   } else if (currentUser.type === 'subadmin') {
     tabs = [];
     if (hasSubAdminPermission('enterResults') || hasSubAdminPermission('editResults')) tabs.push('input');
@@ -3452,7 +3453,7 @@ function showApp() {
     var btn = document.createElement('button');
     btn.className = 'tab';
     if (idx === 0) btn.classList.add('active');
-    var tabLabels = { arms: 'Score Sheet', principalDashboard: 'Overview', principalStudents: 'Student Database', principalStaff: 'Staff & Teachers', principalResults: 'Broadsheet Review', principalSubmission: 'Submission Tracker', principalReports: 'Statistical Analysis', principalRequests: 'Requests & Activity', principalProfile: 'School Profile', profile: 'Admin Profile', teacherSignatures: "Teachers' Signature", management: 'Management Staff', staffDatabase: 'Staff Database', studentDatabase: 'Student Database', subjectRegistration: 'Subject Registration', passportRegistration: 'Student Passport Registration', userManagement: 'User Management', release: 'Release Results', studentResults: 'Student Results', portalContent: 'Portal Options', developerDashboard: 'Developer Dashboard', developer: 'Developer Console', schoolIdCard: 'School ID Card' };
+    var tabLabels = { arms: 'Score Sheet', principalDashboard: 'Overview', principalStudents: 'Student Database', principalScoreSheet: 'Score Sheet', principalStaff: 'Staff & Teachers', principalResults: 'Broadsheet Review', principalSubmission: 'Submission Tracker', principalReports: 'Statistical Analysis', principalRequests: 'Requests & Activity', principalProfile: 'School Profile', profile: 'Admin Profile', teacherSignatures: "Teachers' Signature", management: 'Management Staff', staffDatabase: 'Staff Database', studentDatabase: 'Student Database', subjectRegistration: 'Subject Registration', passportRegistration: 'Student Passport Registration', userManagement: 'User Management', release: 'Release Results', studentResults: 'Student Results', portalContent: 'Portal Options', developerDashboard: 'Developer Dashboard', developer: 'Developer Console', schoolIdCard: 'School ID Card' };
     btn.textContent = tabLabels[tab] || tab.charAt(0).toUpperCase() + tab.slice(1);
     btn.addEventListener('click', function() {
       document.querySelectorAll('.tab').forEach(function(t) { t.classList.remove('active'); });
@@ -3554,11 +3555,11 @@ function showTab(tabName) {
     }
   }
 
-  if (currentUser && currentUser.type === 'principal' && ['principalDashboard','principalStudents','principalStaff','principalResults','principalSubmission','principalReports','principalRequests','principalProfile'].indexOf(tabName) === -1) return;
+  if (currentUser && currentUser.type === 'principal' && ['principalDashboard','principalStudents','principalScoreSheet','principalStaff','principalResults','principalSubmission','principalReports','principalRequests','principalProfile'].indexOf(tabName) === -1) return;
   var requiredPermission = { input: 'enterResults', view: 'manageStudents', masters: 'manageTeachers', school: 'manageSchool', management: 'manageBoard', userManagement: 'createAdmins', release: 'publishResults', print: 'generateSheets' };
   if (currentUser && currentUser.type === 'subadmin' && (!requiredPermission[tabName] || (!hasSubAdminPermission(requiredPermission[tabName]) && !(tabName === 'input' && hasSubAdminPermission('editResults'))))) return;
   if (currentUser && currentUser.type === 'student' && tabName !== 'studentResults') return;
-  ['principalDashboard','principalStudents','principalStaff','principalResults','principalSubmission','principalReports','principalRequests','principalProfile','dashboard', 'arms', 'masters', 'school', 'profile',  'assessment', 'teacherSignatures', 'management', 'staffDatabase', 'studentDatabase', 'subjectRegistration', 'passportRegistration', 'input', 'compute', 'view', 'print', 'userManagement', 'release', 'studentResults', 'portalContent', 'developerDashboard', 'developer', 'schoolIdCard'].forEach(function(t) {
+  ['principalDashboard','principalStudents','principalScoreSheet','principalStaff','principalResults','principalSubmission','principalReports','principalRequests','principalProfile','dashboard', 'arms', 'masters', 'school', 'profile',  'assessment', 'teacherSignatures', 'management', 'staffDatabase', 'studentDatabase', 'subjectRegistration', 'passportRegistration', 'input', 'compute', 'view', 'print', 'userManagement', 'release', 'studentResults', 'portalContent', 'developerDashboard', 'developer', 'schoolIdCard'].forEach(function(t) {
     document.getElementById(t + 'Tab').classList.add('hidden');
   });
   document.getElementById(tabName + 'Tab').classList.remove('hidden');
