@@ -9131,50 +9131,62 @@ async function printArmScoreSheet(className, sessionOverride, termOverride) {
     var contactDetails=[school.address,school.email,school.phone].filter(function(v){return String(v||'').trim()!=='';}).map(function(v){return safe(v);}).join('  |  ');
     var motto=String(school.motto||'').trim();
 
-    // A3 landscape gives the requested 11pt Times New Roman table room to remain readable for a full class roster.
-    var rowHeight=Math.max(4.6,Math.min(6.2,(283-75)/roster.length));
+    // A3 landscape with balanced pagination keeps 11pt Times New Roman readable for large and small class lists.
+    var pagesPerSubject=Math.max(1,Math.ceil(roster.length/24));
+    var studentsPerPage=Math.ceil(roster.length/pagesPerSubject);
     var pageSections=subjectRows.map(function(subject,index){
-      var rows=roster.map(function(student,i){
-        return '<tr style="height:'+rowHeight.toFixed(2)+'mm">'+
-          '<td class="sn">'+(i+1)+'</td><td class="sid">'+safe(student.sid||'—')+'</td>'+
-          '<td class="reg">'+safe(student.register==null?'—':student.register)+'</td>'+
-          '<td class="student">'+safe(student.name||'Student')+'</td>'+
-          '<td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td></tr>';
-      }).join('');
-      var schoolLogo=logo?'<img class="school-logo" src="'+safe(logo)+'" alt="School badge">':'<div class="logo-placeholder">SCHOOL<br>BADGE</div>';
-      var stamp=stampArtwork?
-        '<div class="stamp-composite"><img class="stamp-artwork" src="'+safe(stampArtwork)+'" alt="Official school stamp">'+
-        (stampSignature?'<img class="stamp-signature" src="'+safe(stampSignature)+'" alt="Stamp signature">':'')+
-        (stampDateLabel?'<div class="stamp-date">'+safe(stampDateLabel)+'</div>':'')+'</div>':
-        '<div class="stamp-placeholder">Official School Stamp</div>';
-      var principalSign=principalSignature?'<img class="principal-signature" src="'+safe(principalSignature)+'" alt="Principal signature">':'<div class="principal-signature-line"></div>';
-      return '<section class="subject-sheet">'+
-        '<header class="sheet-head"><div class="school-identity">'+schoolLogo+
-        '<div class="school-identity-copy"><div class="school-name">'+safe(title)+'</div>'+
-        (motto?'<div class="school-motto">'+safe(motto)+'</div>':'')+
-        (contactDetails?'<div class="school-contact">'+contactDetails+'</div>':'')+
-        '<div class="sheet-title">STUDENT SCORE SHEET</div></div></div>'+
-        '<div class="meta"><span>CLASS ARM: <b>'+safe(className)+'</b></span><span>ACADEMIC SESSION: <b>'+safe(sheetSession.name)+'</b></span><span>TERM: <b>'+safe(sheetTerm.name)+'</b></span></div>'+
-        '<div class="subject-name">SUBJECT: '+safe(subject.name)+'</div></header>'+
-        '<table class="score-table"><colgroup>'+
-        '<col style="width:3%"><col style="width:8%"><col style="width:4%"><col style="width:16%">'+
-        '<col style="width:5%"><col style="width:5%"><col style="width:5%"><col style="width:7%"><col style="width:5%">'+
-        '<col style="width:6%"><col style="width:7%"><col style="width:6%"><col style="width:6%"><col style="width:4%"><col style="width:7%"><col style="width:10%">'+
-        '</colgroup><thead><tr>'+
-        '<th>S/N</th><th>Student SID</th><th>Reg. No.</th><th>Student Name</th>'+
-        '<th>CA 1<br><small>Max '+safe(maxima.ca1)+'</small></th>'+
-        '<th>CA 2<br><small>Max '+safe(maxima.ca2)+'</small></th>'+
-        '<th>CA 3<br><small>Max '+safe(maxima.ca3)+'</small></th>'+
-        '<th>Examination<br><small>Max '+safe(maxima.exam)+'</small></th>'+
-        '<th>Total<br><small>Max '+safe(maxima.total)+'</small></th>'+
-        '<th>Class Average</th><th>Position in Class</th><th>Highest in Class</th><th>Lowest in Class</th>'+
-        '<th>Grade</th><th>Remark</th><th>Teacher’s Signature</th>'+
-        '</tr></thead><tbody>'+rows+'</tbody></table>'+
-        '<footer class="sheet-footer"><div class="principal-block">'+principalSign+
-        '<div class="principal-name">'+safe(principalName||'Principal')+'</div><div class="principal-title">PRINCIPAL</div></div>'+
-        '<div class="stamp-block">'+stamp+
-        '<div class="stamp-caption">OFFICIAL SCHOOL STAMP'+(stampDateLabel?' · '+safe(stampDateLabel):' · DATE NOT CONFIGURED')+'</div></div></footer>'+
-        '<div class="page-number">Subject '+(index+1)+' of '+subjectRows.length+'</div></section>';
+      var subjectPages=[];
+      for(var pageIndex=0;pageIndex<pagesPerSubject;pageIndex++){
+        var pageRoster=roster.slice(pageIndex*studentsPerPage,(pageIndex+1)*studentsPerPage);
+        if(!pageRoster.length)continue;
+        var rowHeight=Math.max(5.2,Math.min(8.5,(283-110)/pageRoster.length));
+        var rows=pageRoster.map(function(student,i){
+          var serial=pageIndex*studentsPerPage+i+1;
+          return '<tr style="height:'+rowHeight.toFixed(2)+'mm">'+
+            '<td class="sn">'+serial+'</td><td class="sid">'+safe(student.sid||'—')+'</td>'+
+            '<td class="reg">'+safe(student.register==null?'—':student.register)+'</td>'+
+            '<td class="student">'+safe(student.name||'Student')+'</td>'+
+            '<td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td></tr>';
+        }).join('');
+        var schoolLogo=logo?'<img class="school-logo" src="'+safe(logo)+'" alt="School badge">':'<div class="logo-placeholder">SCHOOL<br>BADGE</div>';
+        var stamp=stampArtwork?
+          '<div class="stamp-composite"><img class="stamp-artwork" src="'+safe(stampArtwork)+'" alt="Official school stamp">'+
+          (stampSignature?'<img class="stamp-signature" src="'+safe(stampSignature)+'" alt="Stamp signature">':'')+
+          (stampDateLabel?'<div class="stamp-date">'+safe(stampDateLabel)+'</div>':'')+'</div>':
+          '<div class="stamp-placeholder">Official School Stamp</div>';
+        var principalSign=principalSignature?'<img class="principal-signature" src="'+safe(principalSignature)+'" alt="Principal signature">':'<div class="principal-signature-line"></div>';
+        var finalSubjectPage=pageIndex===pagesPerSubject-1;
+        var footer=finalSubjectPage?
+          '<footer class="sheet-footer"><div class="principal-block">'+principalSign+
+          '<div class="principal-name">'+safe(principalName||'Principal')+'</div><div class="principal-title">PRINCIPAL</div></div>'+
+          '<div class="stamp-block">'+stamp+
+          '<div class="stamp-caption">OFFICIAL SCHOOL STAMP'+(stampDateLabel?' · '+safe(stampDateLabel):' · DATE NOT CONFIGURED')+'</div></div></footer>':
+          '<footer class="continuation-footer">CONTINUED — '+safe(subject.name)+' · '+safe(className)+'</footer>';
+        subjectPages.push('<section class="subject-sheet">'+
+          '<header class="sheet-head"><div class="school-identity">'+schoolLogo+
+          '<div class="school-identity-copy"><div class="school-name">'+safe(title)+'</div>'+
+          (motto?'<div class="school-motto">'+safe(motto)+'</div>':'')+
+          (contactDetails?'<div class="school-contact">'+contactDetails+'</div>':'')+
+          '<div class="sheet-title">STUDENT SCORE SHEET</div></div></div>'+
+          '<div class="meta"><span>CLASS ARM: <b>'+safe(className)+'</b></span><span>ACADEMIC SESSION: <b>'+safe(sheetSession.name)+'</b></span><span>TERM: <b>'+safe(sheetTerm.name)+'</b></span></div>'+
+          '<div class="subject-name">SUBJECT: '+safe(subject.name)+'</div></header>'+
+          '<table class="score-table"><colgroup>'+
+          '<col style="width:3%"><col style="width:8%"><col style="width:4%"><col style="width:16%">'+
+          '<col style="width:5%"><col style="width:5%"><col style="width:5%"><col style="width:7%"><col style="width:5%">'+
+          '<col style="width:6%"><col style="width:6%"><col style="width:5%"><col style="width:5%"><col style="width:4%"><col style="width:6%"><col style="width:10%">'+
+          '</colgroup><thead><tr>'+
+          '<th>S/N</th><th>Student SID</th><th>Reg. No.</th><th>Student Name</th>'+
+          '<th>CA 1<br><small>Max '+safe(maxima.ca1)+'</small></th>'+
+          '<th>CA 2<br><small>Max '+safe(maxima.ca2)+'</small></th>'+
+          '<th>CA 3<br><small>Max '+safe(maxima.ca3)+'</small></th>'+
+          '<th>Examination<br><small>Max '+safe(maxima.exam)+'</small></th>'+
+          '<th>Total<br><small>Max '+safe(maxima.total)+'</small></th>'+
+          '<th>Class Average</th><th>Position in Class</th><th>Highest in Class</th><th>Lowest in Class</th>'+
+          '<th>Grade</th><th>Remark</th><th>Teacher’s Signature</th>'+
+          '</tr></thead><tbody>'+rows+'</tbody></table>'+footer+
+          '<div class="page-number">Subject '+(index+1)+' of '+subjectRows.length+' · Sheet '+(pageIndex+1)+' of '+pagesPerSubject+'</div></section>');
+      }
+      return subjectPages.join('');
     }).join('');
 
     var html='<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>'+safe(className)+' Score Sheets</title><style>'+
@@ -9188,8 +9200,8 @@ async function printArmScoreSheet(className, sessionOverride, termOverride) {
       '.score-table{width:100%;border-collapse:collapse;table-layout:fixed;flex:0 0 auto;font-size:11pt}'+
       '.score-table thead{display:table-header-group}.score-table th,.score-table td{border:.25mm solid #222;text-align:center;vertical-align:middle;padding:.45mm .4mm;overflow-wrap:anywhere;line-height:1.02;font-size:11pt}'+
       '.score-table th{background:#e8eee9;font-weight:800;height:12mm}.score-table th small{display:block;font-size:9pt;font-weight:600;margin-top:.5mm}'+
-      '.score-table tbody tr{height:'+rowHeight.toFixed(2)+'mm;break-inside:avoid;page-break-inside:avoid}.score-table td{height:'+rowHeight.toFixed(2)+'mm}.score-table td.student{text-align:left;padding-left:1.2mm;font-weight:600}'+
-      '.sheet-footer{flex:0 0 auto;display:flex;align-items:flex-end;justify-content:space-between;gap:12mm;border-top:.3mm solid #333;margin-top:4mm;padding-top:3mm;min-height:31mm}.principal-block{width:48%;min-height:27mm;display:flex;flex-direction:column;align-items:flex-start;justify-content:flex-end}.principal-signature{max-width:55mm;width:auto;height:15mm;object-fit:contain;object-position:left bottom;margin-bottom:1mm}.principal-signature-line{width:55mm;border-bottom:.3mm solid #222;height:14mm;margin-bottom:2mm}.principal-name{font-size:11pt;font-weight:bold}.principal-title{font-size:10pt;font-weight:bold;letter-spacing:.5px;margin-top:.5mm}.stamp-block{width:48%;display:flex;flex-direction:column;align-items:flex-end;justify-content:flex-end}.stamp-composite{position:relative;width:47mm;height:36mm;overflow:hidden}.stamp-artwork{position:absolute;inset:0;width:100%;height:100%;object-fit:contain}.stamp-signature{position:absolute;left:12%;top:24.56%;width:76%;height:28.51%;object-fit:contain;mix-blend-mode:multiply}.stamp-date{position:absolute;left:2%;right:2%;top:56.58%;transform:translateY(-50%);text-align:center;color:#2928b8;font-size:9pt;font-weight:bold;white-space:nowrap}.stamp-placeholder{width:47mm;height:36mm;border:1px dashed #999;border-radius:50%;display:flex;align-items:center;justify-content:center;text-align:center;font-size:10pt;color:#777}.stamp-caption{font-size:9pt;font-weight:bold;text-align:right;margin-top:1mm}.page-number{position:absolute;right:0;bottom:0;font-size:8pt;color:#555}'+
+      '.score-table tbody tr{break-inside:avoid;page-break-inside:avoid}.score-table td.student{text-align:left;padding-left:1.2mm;font-weight:600}'+
+      '.sheet-footer{flex:0 0 auto;display:flex;align-items:flex-end;justify-content:space-between;gap:12mm;border-top:.3mm solid #333;margin-top:4mm;padding-top:3mm;min-height:31mm}.principal-block{width:48%;min-height:27mm;display:flex;flex-direction:column;align-items:flex-start;justify-content:flex-end}.principal-signature{max-width:55mm;width:auto;height:15mm;object-fit:contain;object-position:left bottom;margin-bottom:1mm}.principal-signature-line{width:55mm;border-bottom:.3mm solid #222;height:14mm;margin-bottom:2mm}.principal-name{font-size:11pt;font-weight:bold}.principal-title{font-size:10pt;font-weight:bold;letter-spacing:.5px;margin-top:.5mm}.stamp-block{width:48%;display:flex;flex-direction:column;align-items:flex-end;justify-content:flex-end}.stamp-composite{position:relative;width:47mm;height:36mm;overflow:hidden}.stamp-artwork{position:absolute;inset:0;width:100%;height:100%;object-fit:contain}.stamp-signature{position:absolute;left:12%;top:24.56%;width:76%;height:28.51%;object-fit:contain;mix-blend-mode:multiply}.stamp-date{position:absolute;left:2%;right:2%;top:56.58%;transform:translateY(-50%);text-align:center;color:#2928b8;font-size:9pt;font-weight:bold;white-space:nowrap}.stamp-placeholder{width:47mm;height:36mm;border:1px dashed #999;border-radius:50%;display:flex;align-items:center;justify-content:center;text-align:center;font-size:10pt;color:#777}.stamp-caption{font-size:9pt;font-weight:bold;text-align:right;margin-top:1mm}.continuation-footer{flex:0 0 auto;text-align:right;border-top:.25mm solid #aaa;margin-top:3mm;padding-top:2mm;font-size:10pt;font-weight:bold;color:#555}.page-number{position:absolute;right:0;bottom:0;font-size:8pt;color:#555}'+
       '@media print{html,body{width:100%;height:auto}.subject-sheet{height:283mm;max-height:283mm;break-after:page;page-break-after:always}.subject-sheet:last-child{break-after:auto;page-break-after:auto}.score-table th{print-color-adjust:exact;-webkit-print-color-adjust:exact}}'+
       '</style></head><body>'+pageSections+'<script>window.onload=function(){window.print();};<\/script></body></html>';
     printWindow.document.open();printWindow.document.write(html);printWindow.document.close();
