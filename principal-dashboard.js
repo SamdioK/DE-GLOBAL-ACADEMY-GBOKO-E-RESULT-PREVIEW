@@ -193,7 +193,7 @@
   }
   function filterMarkup(f,withClass) {
     var h='<div class="principal-filter-row"><label>Academic Session<select data-pf="session">'+f.sessions.map(function(x){return '<option value="'+esc(x.id)+'" '+(x.id===principalFilters.sessionId?'selected':'')+'>'+esc(x.name)+'</option>';}).join('')+'</select></label><label>Term<select data-pf="term">'+f.terms.map(function(x){return '<option value="'+esc(x.id)+'" '+(x.id===principalFilters.termId?'selected':'')+'>'+esc(x.name)+'</option>';}).join('')+'</select></label>';
-    if(withClass)h+='<label>Class Arm<select data-pf="class">'+f.classes.map(function(x){return '<option value="'+esc(x.id)+'" '+(x.id===principalFilters.classId?'selected':'')+'>'+esc(x.class_name)+'</option>').join('')+'</select></label>';
+    if(withClass)h+='<label>Class Arm<select data-pf="class">'+f.classes.map(function(x){return '<option value="'+esc(x.id)+'" '+(x.id===principalFilters.classId?'selected':'')+'>'+esc(x.class_name)+'</option>';}).join('')+'</select></label>';
     return h+'</div>';
   }
   function bindFilterEvents(root,tab,withClass) {
