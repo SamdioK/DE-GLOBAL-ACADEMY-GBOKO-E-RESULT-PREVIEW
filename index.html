@@ -10585,7 +10585,7 @@ async function saveTeacherSignatureToSupabase(subject, file) {
     .eq('school_id', authenticatedProfile.school_id).eq('subject_name', subject).maybeSingle();
   if (existing.error) throw existing.error;
   var extension = file.type.toLowerCase() === 'image/jpeg' ? 'jpg' : file.type.toLowerCase().split('/')[1];
-  var path = authenticatedProfile.school_id + '/teacher-signatures/' + window.crypto.randomUUID() + '.' + extension;
+  var path = authenticatedProfile.school_id + '/signatures/' + window.crypto.randomUUID() + '.' + extension;
   var bucket = supabaseClient.storage.from('school-private-assets');
   var uploaded = await bucket.upload(path, file, { contentType: file.type, cacheControl: '3600', upsert: false });
   if (uploaded.error) throw uploaded.error;
