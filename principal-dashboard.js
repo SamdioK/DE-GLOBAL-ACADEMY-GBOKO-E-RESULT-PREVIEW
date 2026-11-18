@@ -206,12 +206,14 @@
       var vals=await Promise.all([
         queryAll('results','id,status,total,grade,student_id,class_id,subject_id,academic_session_id,term_id','created_at'),
         supabaseClient.from('student_enrolments').select('student_id,class_id,register_number,students!inner(first_name,middle_name,last_name)').eq('school_id',authenticatedProfile.school_id).eq('academic_session_id',principalFilters.sessionId).is('archived_at',null).order('register_number',{ascending:true}),
-        query('subjects','id,name')
+        query('subjects','id,name'),
+        supabaseClient.from('teacher_assignments').select('subject_id').eq('school_id',authenticatedProfile.school_id).eq('academic_session_id',principalFilters.sessionId).eq('class_id',principalFilters.classId).eq('is_active',true)
       ]);
       if(vals[1].error)throw vals[1].error;
+      if(vals[3].error)throw vals[3].error;
       var results=vals[0].filter(function(r){return r.academic_session_id===principalFilters.sessionId&&r.term_id===principalFilters.termId&&r.class_id===principalFilters.classId;});
       var enrolments=vals[1].data||[],classStudents=enrolments.filter(function(e){return e.class_id===principalFilters.classId;}).sort(function(a,b){return Number(a.register_number||0)-Number(b.register_number||0);});
-      var subjects=vals[2],ids=[...new Set(results.map(function(r){return r.subject_id;}))],subjectMap={};
+      var subjects=vals[2],ids=[...new Set(results.map(function(r){return r.subject_id;}).concat((vals[3].data||[]).map(function(a){return a.subject_id;})))],subjectMap={};
       subjects.forEach(function(x){subjectMap[x.id]=x.name;});
       var board=classStudents.map(function(e){var scores={},values=[];results.filter(function(r){return r.student_id===e.student_id;}).forEach(function(r){scores[r.subject_id]=r.total;if(r.total!==null&&r.total!==undefined&&r.total!=='')values.push(Number(r.total));});var aggregate=values.reduce(function(a,b){return a+b;},0);return {name:[e.students.first_name,e.students.middle_name,e.students.last_name].filter(Boolean).join(' '),reg:Number(e.register_number||0),scores:scores,aggregate:aggregate,average:values.length?aggregate/values.length:null};}).sort(function(a,b){if(a.average===null&&b.average!==null)return 1;if(b.average===null&&a.average!==null)return -1;return (b.average||0)-(a.average||0)||a.reg-b.reg;});
       var last=null,rank=0;board.forEach(function(x,i){if(x.average!==null&&x.average!==last)rank=i+1;x.rank=x.average===null?'—':rank;last=x.average;});
@@ -229,7 +231,7 @@
         queryAll('teacher_assignments','id,teacher_id,class_id,subject_id,academic_session_id,is_active','created_at'),
         queryAll('results','id,student_id,class_id,subject_id,academic_session_id,term_id,ca1,ca2,ca3,examination,status','created_at'),
         queryAll('student_enrolments','id,student_id,class_id,academic_session_id,archived_at','created_at'),
-        query('assessment_configurations','class_level,ca1_max,ca2_max,ca3_max',{eq:{academic_session_id:principalFilters.sessionId},limit:100}),
+        query('assessment_configurations','class_level,ca1_max,ca2_max,ca3_max',{eq:{academic_session_id:principalFilters.sessionId,term_id:principalFilters.termId},limit:100}),
         query('profiles','id,full_name,role,is_active',{limit:1000}),
         query('classes','id,class_name,level'),
         query('subjects','id,name')
