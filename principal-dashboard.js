@@ -7,6 +7,7 @@
   var sections = {
     principalDashboard: ['Principal Overview', 'A live executive summary of the school.'],
     principalStudents: ['Student Database', 'Official student names arranged by class arm and register order.'],
+    principalScoreSheet: ['Score Sheet', 'Print class-arm score sheets using official Supabase enrolment names and registered subjects.'],
     principalStaff: ['Staff & Teachers', 'Staff directory, designations and employment information.'],
     principalResults: ['Broadsheet Review', 'Interactive class broadsheets, aggregates, averages and rankings before publication.'],
     principalSubmission: ['Submission Tracker', 'Live CA and examination upload progress by class, subject and teacher.'],
@@ -199,6 +200,40 @@
   function bindFilterEvents(root,tab,withClass) {
     root.querySelectorAll('[data-pf]').forEach(function(el){el.addEventListener('change',function(){var k=el.getAttribute('data-pf');if(k==='session')principalFilters.sessionId=el.value;if(k==='term')principalFilters.termId=el.value;if(k==='class')principalFilters.classId=el.value;showTab(tab);});});
   }
+  async function renderPrincipalScoreSheet(root) {
+    root.innerHTML=frame('principalScoreSheet','<div class="principal-panel">Loading class arms and academic session…</div>');
+    try {
+      var f=await getAcademicFilters();
+      root.innerHTML=frame('principalScoreSheet',filterMarkup(f,true)+'<div class="principal-panel"><h3>Printable Class Score Sheet</h3><p class="principal-muted">The printable register retrieves student names and serial numbers from official Supabase enrolments. A separate score-entry sheet is prepared for each subject registered for the selected class arm and term. No results are displayed or changed.</p><button type="button" class="principal-score-print" id="principalPrintScoreSheet">Print Score Sheet</button><div id="principalScoreSheetStatus" class="principal-muted" style="margin-top:10px">Ready to prepare the selected class arm.</div></div>');
+      bindFilterEvents(root,'principalScoreSheet',true);
+      var button=root.querySelector('#principalPrintScoreSheet');
+      button.addEventListener('click',function(){printPrincipalScoreSheet(root);});
+    }catch(e){root.innerHTML=frame('principalScoreSheet','<div class="principal-error">Score Sheet could not be prepared: '+esc(e.message||e)+'</div>');}
+  }
+  async function printPrincipalScoreSheet(root) {
+    var win=window.open('','_blank');
+    if(!win){var blocked=root.querySelector('#principalScoreSheetStatus');if(blocked)blocked.textContent='Allow pop-ups to print the Score Sheet.';return;}
+    win.document.write('<!doctype html><title>Preparing Score Sheet</title><p style="font-family:Arial;padding:24px">Retrieving official student names and registered subjects…</p>');win.document.close();
+    var status=root.querySelector('#principalScoreSheetStatus'),button=root.querySelector('#principalPrintScoreSheet');
+    if(button){button.disabled=true;button.textContent='Preparing…';}
+    try{
+      var sid=authenticatedProfile.school_id,sessionId=principalFilters.sessionId,termId=principalFilters.termId,classId=principalFilters.classId;
+      var cls=await supabaseClient.from('classes').select('id,class_name').eq('school_id',sid).eq('id',classId).maybeSingle();if(cls.error)throw cls.error;if(!cls.data)throw new Error('Selected class arm was not found.');
+      var enrol=await supabaseClient.from('student_enrolments').select('student_id,register_number,sid').eq('school_id',sid).eq('academic_session_id',sessionId).eq('class_id',classId).is('archived_at',null).order('register_number',{ascending:true});if(enrol.error)throw enrol.error;
+      var studentIds=enrol.data.map(function(x){return x.student_id;}).filter(Boolean),byId={};
+      if(studentIds.length){var sr=await supabaseClient.from('students').select('id,first_name,middle_name,last_name').eq('school_id',sid).in('id',studentIds);if(sr.error)throw sr.error;(sr.data||[]).forEach(function(x){byId[String(x.id)]=x;});}
+      var registration=await supabaseClient.from('class_subject_registrations').select('id').eq('school_id',sid).eq('academic_session_id',sessionId).eq('term_id',termId).eq('class_id',classId).maybeSingle();if(registration.error)throw registration.error;
+      var subjects=[];
+      if(registration.data){var items=await supabaseClient.from('class_subject_registration_items').select('subject_id').eq('school_id',sid).eq('registration_id',registration.data.id);if(items.error)throw items.error;var ids=(items.data||[]).map(function(x){return x.subject_id;}).filter(Boolean);if(ids.length){var sub=await supabaseClient.from('subjects').select('id,name').eq('school_id',sid).in('id',ids).order('name');if(sub.error)throw sub.error;subjects=sub.data||[];}}
+      var roster=enrol.data.map(function(e){var st=byId[String(e.student_id)]||{};return {reg:e.register_number,name:[st.first_name,st.middle_name,st.last_name].filter(Boolean).join(' ')};});
+      var school=schoolInfo||{},schoolName=school.name||currentSchool&&currentSchool.schoolName||'DE-GLOBAL ACADEMY, GBOKO';
+      function safe(x){return esc(x==null?'':String(x));}
+      var pages=(subjects.length?subjects:[{name:'General Score Sheet'}]).map(function(sub){return '<section class="sheet"><header><h1>'+safe(schoolName)+'</h1><h2>STUDENT SCORE SHEET</h2><p>Class Arm: '+safe(cls.data.class_name)+' | Session: '+safe((f.sessions.find(function(x){return x.id===sessionId;})||{}).name)+' | Term: '+safe((f.terms.find(function(x){return x.id===termId;})||{}).name)+'</p><h3>Subject: '+safe(sub.name)+'</h3></header><table><thead><tr><th>S/N</th><th>Register No.</th><th>Student Name</th><th>CA 1</th><th>CA 2</th><th>CA 3</th><th>Examination</th><th>Total</th><th>Grade</th><th>Teacher Remark</th></tr></thead><tbody>'+roster.map(function(x,i){return '<tr><td>'+(i+1)+'</td><td>'+safe(x.reg)+'</td><td>'+safe(x.name)+'</td><td></td><td></td><td></td><td></td><td></td><td></td><td></td></tr>';}).join('')+'</tbody></table><footer>Subject Teacher: __________________________ &nbsp; Signature: ________________ &nbsp; Date: __________</footer></section>';}).join('');
+      var html='<!doctype html><html><head><meta charset="utf-8"><title>'+safe(cls.data.class_name)+' Score Sheet</title><style>@page{size:A4 landscape;margin:9mm}*{box-sizing:border-box}body{font-family:Arial,sans-serif;color:#111;margin:0}.sheet{page-break-after:always;break-after:page}.sheet:last-child{page-break-after:auto}header{text-align:center;margin-bottom:15px;border-bottom:2px solid #183f35;padding-bottom:9px}h1{font-size:19px;margin:0 0 4px}h2{font-size:16px;margin:4px 0}header p{font-size:11px;margin:5px}header h3{font-size:13px;margin:9px 0 0}table{width:100%;border-collapse:collapse;font-size:10px}th,td{border:1px solid #333;padding:6px 5px;text-align:center;height:28px}th{background:#eaf0ec}td:nth-child(3){text-align:left;width:25%}footer{margin-top:20px;font-size:10px}@media print{print-color-adjust:exact;-webkit-print-color-adjust:exact}</style></head><body>'+pages+'<script>window.onload=function(){window.print();};<\/script></body></html>';
+      win.document.open();win.document.write(html);win.document.close();if(status)status.textContent='Prepared '+roster.length+' student names across '+subjects.length+' registered subject(s).';
+    }catch(e){win.close();if(status)status.textContent='Unable to print Score Sheet: '+(e.message||e);}
+    finally{if(button){button.disabled=false;button.textContent='Print Score Sheet';}}
+  }
   async function renderResults(root) {
     root.innerHTML=frame('principalResults','<div class="principal-panel">Preparing interactive broadsheet…</div>');
     try {
@@ -303,6 +338,7 @@
     var root=rootFor(tab); if(!root)return;
     if(tab==='principalDashboard') renderOverview(root);
     else if(tab==='principalStudents') renderStudents(root);
+    else if(tab==='principalScoreSheet') renderPrincipalScoreSheet(root);
     else if(tab==='principalStaff') renderStaff(root);
     else if(tab==='principalResults') renderResults(root);
     else if(tab==='principalSubmission') renderSubmissionTracker(root);
