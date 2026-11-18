@@ -8939,40 +8939,85 @@ async function renderPrincipalBroadsheet(root) {
 async function printArmScoreSheet(className, sessionOverride, termOverride) {
   var sheetSession = sessionOverride || activeAcademicSession;
   var sheetTerm = termOverride || activeAssessmentTerm;
-  if (!currentUser || ['admin','principal'].indexOf(currentUser.type) === -1 || !authenticatedProfile || authenticatedProfile.is_active !== true) { showToast('An active Administrator or Principal account is required to print score sheets.','error'); return; }
+  if (!currentUser || ['admin','principal'].indexOf(currentUser.type) === -1 || !authenticatedProfile || authenticatedProfile.is_active !== true) {
+    showToast('An active Administrator or Principal account is required to print score sheets.','error'); return;
+  }
   var printWindow=window.open('','_blank');
   if(!printWindow){showToast('Allow pop-ups to print the Score Sheet.','error');return;}
-  printWindow.document.write('<!doctype html><title>Preparing Score Sheet</title><p style="font-family:Arial;padding:24px">Retrieving official student names and registered subjects…</p>');
+  printWindow.document.write('<!doctype html><title>Preparing Score Sheet</title><p style="font-family:Arial;padding:24px">Retrieving official student names, registered subjects and assessment configuration…</p>');
   printWindow.document.close();
   try{
     if(!supabaseClient||!authenticatedProfile||!authenticatedProfile.school_id||!sheetSession||!sheetSession.id||!sheetTerm||!sheetTerm.id)throw new Error('An active academic session and term are required.');
     var schoolId=authenticatedProfile.school_id;
     var cls=await supabaseClient.from('classes').select('id,class_name,level').eq('school_id',schoolId).eq('class_name',className).maybeSingle();
-    if(cls.error)throw cls.error;if(!cls.data)throw new Error('Class arm not found in Supabase.');
+    if(cls.error)throw cls.error;
+    if(!cls.data)throw new Error('Class arm not found in Supabase.');
+
     var enrol=await supabaseClient.from('student_enrolments').select('student_id,register_number,sid').eq('school_id',schoolId).eq('academic_session_id',sheetSession.id).eq('class_id',cls.data.id).is('archived_at',null).order('register_number',{ascending:true});
     if(enrol.error)throw enrol.error;
     var ids=enrol.data.map(function(x){return x.student_id;}).filter(Boolean),studentsById={};
-    if(ids.length){var st=await supabaseClient.from('students').select('id,first_name,middle_name,last_name,admission_number').eq('school_id',schoolId).in('id',ids);if(st.error)throw st.error;(st.data||[]).forEach(function(x){studentsById[String(x.id)]=x;});}
+    if(ids.length){
+      var st=await supabaseClient.from('students').select('id,first_name,middle_name,last_name').eq('school_id',schoolId).in('id',ids);
+      if(st.error)throw st.error;
+      (st.data||[]).forEach(function(x){studentsById[String(x.id)]=x;});
+    }
+
     var registration=await supabaseClient.from('class_subject_registrations').select('id').eq('school_id',schoolId).eq('academic_session_id',sheetSession.id).eq('term_id',sheetTerm.id).eq('class_id',cls.data.id).maybeSingle();
     if(registration.error)throw registration.error;
-    var subjectNames=[];
-    if(registration.data){
-      var itemRows=await supabaseClient.from('class_subject_registration_items').select('subject_id').eq('school_id',schoolId).eq('registration_id',registration.data.id);
-      if(itemRows.error)throw itemRows.error;
-      var subIds=(itemRows.data||[]).map(function(x){return x.subject_id;}).filter(Boolean);
-      if(subIds.length){var sub=await supabaseClient.from('subjects').select('id,name').eq('school_id',schoolId).in('id',subIds).order('name');if(sub.error)throw sub.error;subjectNames=(sub.data||[]).map(function(x){return x.name;});}
-    }
-    var roster=enrol.data.map(function(e){var st=studentsById[String(e.student_id)]||{};return {register:e.register_number,sid:e.sid,name:[st.first_name,st.middle_name,st.last_name].filter(Boolean).join(' ')};});
-    var school=schoolInfo||{},title=school.name||currentSchool&&currentSchool.schoolName||'DE-GLOBAL ACADEMY, GBOKO';
-    var safe=function(v){return escapeManagementText(v==null?'':String(v));};
-    var pages=(subjectNames.length?subjectNames:['All Subjects / General Score Sheet']).map(function(subject){
-      return '<section class="sheet"><header><h1>'+safe(title)+'</h1><h2>STUDENT SCORE SHEET</h2><p>Class Arm: '+safe(className)+' | Session: '+safe(sheetSession.name)+' | Term: '+safe(sheetTerm.name)+'</p><h3>Subject: '+safe(subject)+'</h3></header><table><thead><tr><th>S/N</th><th>Register No.</th><th>Student Name</th><th>CA 1</th><th>CA 2</th><th>CA 3</th><th>Examination</th><th>Total</th><th>Grade</th><th>Teacher Remark</th></tr></thead><tbody>'+roster.map(function(x,i){return '<tr><td>'+(i+1)+'</td><td>'+safe(x.register==null?'':x.register)+'</td><td>'+safe(x.name)+'</td><td></td><td></td><td></td><td></td><td></td><td></td><td></td></tr>';}).join('')+'</tbody></table><footer>Subject Teacher: ___________________________ &nbsp;&nbsp; Signature: __________________ &nbsp;&nbsp; Date: __________</footer></section>';
-    }).join('');
-    var html='<!doctype html><html><head><meta charset="utf-8"><title>'+safe(className)+' Score Sheet</title><style>@page{size:A4 landscape;margin:9mm}*{box-sizing:border-box}body{font-family:Arial,sans-serif;color:#111;margin:0}.sheet{page-break-after:always;break-after:page}.sheet:last-child{page-break-after:auto}header{text-align:center;margin-bottom:15px;border-bottom:2px solid #183f35;padding-bottom:9px}h1{font-size:19px;margin:0 0 4px}h2{font-size:16px;margin:4px 0}header p{font-size:11px;margin:5px}header h3{font-size:13px;margin:9px 0 0}table{width:100%;border-collapse:collapse;font-size:10px}th,td{border:1px solid #333;padding:6px 5px;text-align:center;height:28px}th{background:#eaf0ec}td:nth-child(3){text-align:left;width:25%}footer{margin-top:20px;font-size:10px}@media print{print-color-adjust:exact;-webkit-print-color-adjust:exact}</style></head><body>'+pages+'<script>window.onload=function(){window.print();};<\/script></body></html>';
-    printWindow.document.open();printWindow.document.write(html);printWindow.document.close();
-  }catch(error){printWindow.close();showToast(error&&error.message||'Unable to generate Score Sheet.','error');}
-}
+    if(!registration.data)throw new Error('No subject registration was found for '+className+' in the selected session and term.');
+    var itemRows=await supabaseClient.from('class_subject_registration_items').select('subject_id').eq('school_id',schoolId).eq('registration_id',registration.data.id);
+    if(itemRows.error)throw itemRows.error;
+    var subIds=(itemRows.data||[]).map(function(x){return x.subject_id;}).filter(Boolean);
+    if(!subIds.length)throw new Error('No subjects are registered for this class arm in the selected session and term.');
+    var sub=await supabaseClient.from('subjects').select('id,name').eq('school_id',schoolId).in('id',subIds).order('name');
+    if(sub.error)throw sub.error;
+    var subjectRows=sub.data||[];
+    if(!subjectRows.length)throw new Error('The registered subject names could not be retrieved.');
 
+    // Assessment limits are read directly from the saved Supabase configuration
+    // for this exact school, session, term and class level.
+    var levelHint=String(cls.data.level||'')+' '+String(cls.data.class_name||className);
+    var levelMatch=levelHint.toUpperCase().replace(/\s+/g,'').match(/(BASIC[7-9]|SS[1-3])/);
+    if(!levelMatch)throw new Error('The class level could not be identified for Assessment Configuration.');
+    var targetLevel=normalizeAssessmentLevel(levelMatch[1]);
+    var configResult=await supabaseClient.from('assessment_configurations')
+      .select('class_level,ca1_max,ca2_max,ca3_max,examination_max,total_max,is_active')
+      .eq('school_id',schoolId).eq('academic_session_id',sheetSession.id).eq('term_id',sheetTerm.id).eq('is_active',true);
+    if(configResult.error)throw configResult.error;
+    var config=(configResult.data||[]).find(function(row){
+      return normalizeAssessmentLevel(row.class_level)===targetLevel;
+    });
+    if(!config)throw new Error('No active Assessment Configuration was found for '+targetLevel+', '+sheetSession.name+', '+sheetTerm.name+'. Save the configuration before printing.');
+    var maxima={
+      ca1:Number(config.ca1_max),ca2:Number(config.ca2_max),ca3:Number(config.ca3_max),
+      exam:Number(config.examination_max),
+      total:config.total_max==null?Number(config.ca1_max)+Number(config.ca2_max)+Number(config.ca3_max)+Number(config.examination_max):Number(config.total_max)
+    };
+    if([maxima.ca1,maxima.ca2,maxima.ca3,maxima.exam,maxima.total].some(function(v){return !Number.isFinite(v)||v<0;})) {
+      throw new Error('The saved Assessment Configuration contains an invalid maximum score.');
+    }
+    var roster=enrol.data.map(function(e){
+      var st=studentsById[String(e.student_id)]||{};
+      return {register:e.register_number,sid:e.sid,name:[st.first_name,st.middle_name,st.last_name].filter(Boolean).join(' ')};
+    });
+    if(!roster.length)throw new Error('There are no active enrolled students in '+className+'.');
+    var school=schoolInfo||{},title=school.name||currentSchool&&currentSchool.schoolName||'DE-GLOBAL ACADEMY';
+    var safe=function(v){return escapeManagementText(v==null?'':String(v));};
+    var pageSections=subjectRows.map(function(subject,index){
+      var rows=roster.map(function(x,i){
+        return '<tr><td class="sn">'+(i+1)+'</td><td class="sid">'+safe(x.sid||'—')+'</td><td class="reg">'+safe(x.register==null?'—':x.register)+'</td><td class="student">'+safe(x.name||'Student')+'</td><td></td><td></td><td></td><td></td><td></td><td></td></tr>';
+      }).join('');
+      return '<section class="subject-sheet"><header class="sheet-head"><div class="school-name">'+safe(title)+'</div><div class="sheet-title">STUDENT SCORE SHEET</div><div class="meta">CLASS ARM: <b>'+safe(className)+'</b><span>SESSION: <b>'+safe(sheetSession.name)+'</b></span><span>TERM: <b>'+safe(sheetTerm.name)+'</b></span></div><div class="subject-name">SUBJECT: '+safe(subject.name)+'</div></header><table class="score-table"><colgroup><col style="width:5%"><col style="width:13%"><col style="width:8%"><col style="width:27%"><col style="width:7%"><col style="width:7%"><col style="width:7%"><col style="width:9%"><col style="width:8%"><col style="width:9%"></colgroup><thead><tr><th>S/N</th><th>Student SID</th><th>Reg. No.</th><th>Student Name</th><th>CA 1<br><small>Max '+safe(maxima.ca1)+'</small></th><th>CA 2<br><small>Max '+safe(maxima.ca2)+'</small></th><th>CA 3<br><small>Max '+safe(maxima.ca3)+'</small></th><th>Examination<br><small>Max '+safe(maxima.exam)+'</small></th><th>Total<br><small>Max '+safe(maxima.total)+'</small></th><th>Grade</th></tr></thead><tbody>'+rows+'</tbody></table><footer class="sheet-footer"><span>Subject Teacher: __________________________________</span><span>Signature: _____________________</span><span>Date: ______________</span></footer><div class="page-number">Subject '+(index+1)+' of '+subjectRows.length+'</div></section>';
+    }).join('');
+    var html='<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>'+safe(className)+' Score Sheets</title><style>'+
+      '@page{size:A4 landscape;margin:7mm}*{box-sizing:border-box}html,body{margin:0;padding:0;font-family:Arial,Helvetica,sans-serif;color:#111;background:#fff}.subject-sheet{width:100%;min-height:196mm;height:196mm;display:flex;flex-direction:column;position:relative;break-after:page;page-break-after:always;overflow:visible}.subject-sheet:last-child{break-after:auto;page-break-after:auto}.sheet-head{flex:0 0 auto;text-align:center;border-bottom:1.2mm solid #174b38;padding:0 0 3mm;margin-bottom:3mm}.school-name{font-size:17pt;font-weight:800;text-transform:uppercase;letter-spacing:.3px;margin-bottom:1mm}.sheet-title{font-size:13pt;font-weight:800;margin:1mm 0}.meta{display:flex;justify-content:center;gap:10mm;font-size:9pt;margin:2mm 0}.subject-name{font-size:12pt;font-weight:800;margin-top:2mm}.score-table{width:100%;border-collapse:collapse;table-layout:fixed;flex:1 1 auto;height:1px;font-size:8.5pt}.score-table thead{display:table-header-group}.score-table th,.score-table td{border:.25mm solid #222;text-align:center;vertical-align:middle;padding:1mm .8mm;overflow-wrap:anywhere}.score-table th{background:#e8eee9;font-size:8pt;font-weight:800;height:11mm}.score-table th small{font-size:7pt;font-weight:600}.score-table tbody{height:100%}.score-table tbody tr{height:auto;break-inside:avoid;page-break-inside:avoid}.score-table td{height:auto}.score-table td.student{text-align:left;padding-left:2mm;font-weight:600}.sheet-footer{flex:0 0 auto;display:flex;justify-content:space-between;gap:4mm;border-top:.3mm solid #333;margin-top:3mm;padding-top:3mm;font-size:8pt}.page-number{position:absolute;right:0;bottom:-4mm;font-size:6pt;color:#555}@media print{html,body{width:100%;height:auto}.subject-sheet{height:196mm;min-height:196mm;break-after:page;page-break-after:always}.subject-sheet:last-child{break-after:auto;page-break-after:auto}.score-table{height:100%;} .score-table tbody tr{break-inside:avoid;page-break-inside:avoid} .score-table th{print-color-adjust:exact;-webkit-print-color-adjust:exact}}'+
+      '</style></head><body>'+pageSections+'<script>window.onload=function(){window.print();};<\/script></body></html>';
+    printWindow.document.open();printWindow.document.write(html);printWindow.document.close();
+  }catch(error){
+    printWindow.close();
+    showToast(error&&error.message||'Unable to generate Score Sheet.','error');
+  }
+}
 function renderArms() {
   var levels = [
     { key: 'BASIC7', label: 'BASIC 7' }, { key: 'BASIC8', label: 'BASIC 8' }, { key: 'BASIC9', label: 'BASIC 9' },
