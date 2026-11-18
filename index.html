@@ -11085,7 +11085,7 @@ function renderTeacherSignatures() {
     '<div style="overflow-x:auto;"><table><thead><tr><th>Subject</th><th>Uploaded Signature</th><th>Upload / Replace</th><th>Action</th></tr></thead><tbody>';
   subjects.forEach(function(subject) {
     var signature = getTeacherSignatureForPhase(subject, activeSignatureLevel);
-    html += '<tr><td>' + escapeManagementText(subject) + '</td><td>' + (signature ? '<img src="' + escapeManagementText(signature) + '" alt="' + escapeManagementText(subject) + ' teacher signature" style="max-width:120px;max-height:44px;object-fit:contain;">' : '<span style="color:#999;">Not uploaded</span>') + '</td><td><input type="file" class="teacher-signature-upload" data-subject="' + escapeManagementText(subject) + '" accept="image/*"></td><td>' + (signature ? '<button class="btn btn-danger remove-teacher-signature" data-subject="' + escapeManagementText(subject) + '">Remove</button>' : '—') + '</td></tr>';
+    html += '<tr><td>' + escapeManagementText(subject) + '</td><td>' + (signature ? '<img src="' + escapeManagementText(signature) + '" alt="' + escapeManagementText(subject) + ' teacher signature" style="max-width:120px;max-height:44px;object-fit:contain;">' : '<span style="color:#999;">Not uploaded</span>') + '</td><td><input type="file" class="teacher-signature-upload" data-subject="' + escapeManagementText(subject) + '" data-phase="' + activeSignatureLevel + '" accept="image/*"></td><td>' + (signature ? '<button class="btn btn-danger remove-teacher-signature" data-subject="' + escapeManagementText(subject) + '" data-phase="' + activeSignatureLevel + '">Remove</button>' : '—') + '</td></tr>';
   });
   html += '</tbody></table></div></div>';
   document.getElementById('teacherSignaturesTab').innerHTML = html;
