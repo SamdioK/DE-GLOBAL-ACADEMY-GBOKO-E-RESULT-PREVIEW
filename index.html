@@ -2809,6 +2809,28 @@ async function loadSchoolIdCardSettings() {
   });
 }
 
+async function downloadRenderedCard(element, format, filename) {
+  if (!element) { showToast('The card preview is not available.', 'error'); return; }
+  if (typeof html2canvas !== 'function') { showToast('Card export library is unavailable. Reload the portal and try again.', 'error'); return; }
+  var canvas;
+  try {
+    showToast('Preparing ' + format.toUpperCase() + ' card download…', 'info');
+    canvas = await html2canvas(element, { scale: 3, useCORS: true, backgroundColor: '#ffffff', imageTimeout: 15000 });
+    if (format === 'jpg') {
+      var link = document.createElement('a'); link.href = canvas.toDataURL('image/jpeg', 0.94); link.download = filename + '.jpg'; link.click();
+    } else if (format === 'pdf') {
+      if (!window.jspdf || !window.jspdf.jsPDF) throw new Error('PDF export library is unavailable.');
+      var pdf = new window.jspdf.jsPDF({ orientation: canvas.width > canvas.height ? 'landscape' : 'portrait', unit: 'mm', format: 'a4' });
+      var pw = pdf.internal.pageSize.getWidth(), ph = pdf.internal.pageSize.getHeight();
+      var scale = Math.min((pw - 12) / canvas.width, (ph - 12) / canvas.height);
+      var w = canvas.width * scale, h = canvas.height * scale;
+      pdf.addImage(canvas.toDataURL('image/jpeg', 0.96), 'JPEG', (pw-w)/2, (ph-h)/2, w, h); pdf.save(filename + '.pdf');
+    } else throw new Error('Unsupported card download format.');
+    showToast(format.toUpperCase() + ' card downloaded successfully.', 'success');
+  } catch (error) { console.error('Card download failed:', error); showToast(error.message || 'Could not download the card.', 'error'); }
+  finally { if (canvas) { canvas.width = 0; canvas.height = 0; } }
+}
+
 function idCardEscape(value) {
   return String(value == null ? '' : value).replace(
     /[&<>"']/g,
@@ -3013,7 +3035,9 @@ function renderSchoolIdCardContent() {
   }
 
   html += '<div class="card"><h3>My ID Card</h3><div id="myIdCardPreview"></div>' +
-    '<button class="btn btn-primary" id="idCardPrintOwn">Print My Card</button></div>';
+    '<button class="btn btn-primary" id="idCardPrintOwn">Print My Card</button> ' +
+    '<button class="btn btn-success" id="idCardDownloadJpg">Download JPG</button> ' +
+    '<button class="btn btn-success" id="idCardDownloadPdf">Download PDF</button></div>';
 
   if (idCardIsDeveloper() || currentUser.type === 'admin') {
     html +=
@@ -3045,6 +3069,15 @@ function renderSchoolIdCardContent() {
       'Contact the school administrator.' +
       '</div>';
   }
+
+  document.getElementById('idCardDownloadJpg').addEventListener('click', function () {
+    if (!idCardCanAccess() || !ownData) { showToast('Card access is not authorised.', 'error'); return; }
+    downloadRenderedCard(document.querySelector('#myIdCardPreview > div'), 'jpg', 'DE-Global-' + (ownData.identifier || 'ID-Card'));
+  });
+  document.getElementById('idCardDownloadPdf').addEventListener('click', function () {
+    if (!idCardCanAccess() || !ownData) { showToast('Card access is not authorised.', 'error'); return; }
+    downloadRenderedCard(document.querySelector('#myIdCardPreview > div'), 'pdf', 'DE-Global-' + (ownData.identifier || 'ID-Card'));
+  });
 
   document.getElementById('idCardPrintOwn').addEventListener('click', function () {
     if (!idCardCanAccess() || !ownData) {
@@ -5096,7 +5129,7 @@ function renderOfficialStudentRows(isAdmin, query) {
 
     var actionCell = isAdmin
       ? '<td class="student-login-account-cell">' +
-          renderOfficialStudentLoginAction(item) + '<div style="margin-top:6px"><button type="button" class="btn btn-primary student-photo-card-print" data-student-id="' + escapeManagementText(student.id) + '">Print Photo Card</button></div></td>'
+          renderOfficialStudentLoginAction(item) + '<div style="margin-top:6px"><button type="button" class="btn btn-primary student-photo-card-print" data-student-id="' + escapeManagementText(student.id) + '">Print Photo Card</button> <button type="button" class="btn btn-success student-photo-card-pdf" data-student-id="' + escapeManagementText(student.id) + '">Download PDF</button></div></td>'
       : '<td><button class="btn btn-primary student-correction-start" data-student="' +
           escapeManagementText(student.id) +
           '">Request Correction</button></td>';
@@ -5503,6 +5536,22 @@ async function buildOfficialStudentPhotoCard(studentId, sessionOverride, termOve
 }
 function bindStudentPhotoCardPrintEvents(root){
   if(!root)return;
+  root.querySelectorAll('.student-photo-card-pdf').forEach(function(button){
+    if(button.dataset.bound==='true')return;
+    button.dataset.bound='true';
+    button.addEventListener('click',async function(){
+      var win=window.open('','_blank');
+      if(!win){showToast('Allow pop-ups to prepare the photo-card PDF.','error');return;}
+      win.document.write('<!doctype html><title>Preparing photo card PDF</title><p style="font-family:Arial;padding:24px">Preparing official student photo card…</p>'); win.document.close();
+      button.disabled=true;button.textContent='Preparing PDF…';
+      try{
+        var html=await buildOfficialStudentPhotoCard(button.getAttribute('data-student-id'));
+        html=html.replace('setTimeout(function(){window.print();},250);','setTimeout(function(){if(window.opener&&window.opener.downloadRenderedCard){window.opener.downloadRenderedCard(document.querySelector(".card"),"pdf","Student-Photo-Card");}},300);');
+        win.document.open();win.document.write(html);win.document.close();
+      }catch(error){win.close();showToast(error&&error.message||'Unable to prepare student photo-card PDF.','error');}
+      finally{button.disabled=false;button.textContent='Download PDF';}
+    });
+  });
   root.querySelectorAll('.student-photo-card-print').forEach(function(button){
     if(button.dataset.bound==='true')return;
     button.dataset.bound='true';
