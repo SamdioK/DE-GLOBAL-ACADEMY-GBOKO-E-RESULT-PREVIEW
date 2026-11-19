@@ -1085,14 +1085,14 @@ th { background: #f5f5f5; font-weight: 600; }
 
   <div class="landing-shell">
     <div class="landing-academic-strip" aria-label="Current academic session and term">
-      <div class="landing-academic-item"><span class="landing-academic-icon">▦</span><div><div class="landing-academic-label">Academic Session</div><div class="landing-academic-value" id="landingAcademicSession">Loading session…</div></div></div>
+      <div class="landing-academic-item"><span class="landing-academic-icon">▦</span><div><div class="landing-academic-label">Academic Session</div><div class="landing-academic-value" id="landingAcademicSession">2026/2027</div></div></div>
       <span class="landing-academic-divider"></span>
-      <div class="landing-academic-item"><span class="landing-academic-icon">▰</span><div><div class="landing-academic-label">Current Term</div><div class="landing-academic-value" id="landingCurrentTerm">Loading term…</div></div></div>
+      <div class="landing-academic-item"><span class="landing-academic-icon">▰</span><div><div class="landing-academic-label">Current Term</div><div class="landing-academic-value" id="landingCurrentTerm">First Term</div></div></div>
     </div>
     <div class="landing-live-time" id="landingLiveTime" aria-live="off">Loading current date and time · WAT</div>
     <section class="landing-hero" aria-label="School identity">
       <div class="landing-brand">
-        <div class="landing-crest" id="landingSchoolCrest" aria-label="School crest"><span id="landingCrestFallback">🏫</span><img id="landingSchoolLogo" alt="DE-GLOBAL ACADEMY crest" hidden></div>
+        <div class="landing-crest" id="landingSchoolCrest" aria-label="School crest"><span id="landingCrestFallback" hidden>🏫</span><img id="landingSchoolLogo" src="https://rvmcqvfuioxmbtvgdptb.supabase.co/storage/v1/object/public/school-public-assets/b135a823-0a04-4b4b-86dd-2b20ea5e9fac/branding/logo-1794147672365-yyjd2x.png" alt="DE-GLOBAL ACADEMY official crest" fetchpriority="high" decoding="async"></div>
         <div class="landing-school-name" id="landingSchoolName">DE-GLOBAL ACADEMY GBOKO</div>
         <div class="landing-school-location" id="landingSchoolLocation">Benue State, Nigeria</div>
         <div class="landing-quote" id="landingSchoolMotto">WE ARE THE WORLD BEST</div>
@@ -1706,6 +1706,8 @@ document.addEventListener('DOMContentLoaded', async function() {
 });
 
 async function loadLandingSchoolIdentity() {
+  if (window.__landingIdentityStarted) return;
+  window.__landingIdentityStarted = true;
   var liveTimeEl = document.getElementById('landingLiveTime');
   function updateLandingClock() {
     if (!liveTimeEl) return;
@@ -1768,7 +1770,7 @@ async function loadLandingSchoolIdentity() {
       var logoUrl = /^https?:\/\//i.test(school.logo_url) ? school.logo_url : supabaseClient.storage.from('school-public-assets').getPublicUrl(school.logo_url).data.publicUrl;
       logoEl.onload = function() { logoEl.hidden = false; if (fallbackEl) fallbackEl.hidden = true; };
       logoEl.onerror = function() { logoEl.hidden = true; if (fallbackEl) fallbackEl.hidden = false; };
-      logoEl.src = logoUrl;
+      if (logoEl.src !== logoUrl) logoEl.src = logoUrl;
     }
   } catch (error) {
     console.info('Public school landing details could not be loaded:', error && error.message || error);
@@ -1788,8 +1790,9 @@ async function initApp() {
   if (setupView) setupView.classList.add('hidden');
   if (loginView) loginView.classList.remove('hidden');
 
-  setupEventListeners();
+  // Render public identity before wiring optional login controls.
   await loadLandingSchoolIdentity();
+  setupEventListeners();
 }
 
 function setHeaderLogo(logoDataUrl) {
@@ -6473,69 +6476,7 @@ function printOfficialStudentProfiles() {
     '<table>' + tableHead + tableBody + '</table>' +
     '<script>window.onload=function(){window.print();};<\/script>' +
     '
-<script>
-/* Independent first-paint identity loader: keeps the crest, WAT clock and academic labels
-   available even if a later application module fails during initialisation. */
-(function(){
-  function bootLandingIdentity(){
-    var clock=document.getElementById('landingLiveTime');
-    var session=document.getElementById('landingAcademicSession');
-    var term=document.getElementById('landingCurrentTerm');
-    var logo=document.getElementById('landingSchoolLogo');
-    var fallback=document.getElementById('landingCrestFallback');
-    var logoUrl='https://rvmcqvfuioxmbtvgdptb.supabase.co/storage/v1/object/public/school-public-assets/b135a823-0a04-4b4b-86dd-2b20ea5e9fac/branding/logo-1794147672365-yyjd2x.png';
-    function tick(){
-      if(!clock)return;
-      var now=new Date();
-      var date=new Intl.DateTimeFormat('en-GB',{timeZone:'Africa/Lagos',weekday:'long',day:'2-digit',month:'long',year:'numeric'}).format(now);
-      var time=new Intl.DateTimeFormat('en-GB',{timeZone:'Africa/Lagos',hour:'2-digit',minute:'2-digit',second:'2-digit',hour12:true}).format(now);
-      clock.textContent=date+'  ·  '+time+' WAT';
-    }
-    tick();
-    if(window.__landingIdentityClock)window.clearInterval(window.__landingIdentityClock);
-    window.__landingIdentityClock=window.setInterval(tick,1000);
-    if(session&&(!session.textContent||/loading|unavailable|checking/i.test(session.textContent)))session.textContent='2026/2027';
-    if(term&&(!term.textContent||/loading|unavailable|checking/i.test(term.textContent)))term.textContent='First Term';
-    function setLogo(url){
-      if(!logo||!url)return;
-      logo.onload=function(){logo.hidden=false;if(fallback)fallback.hidden=true;};
-      logo.onerror=function(){logo.hidden=true;if(fallback)fallback.hidden=false;};
-      logo.src=url;
-    }
-    setLogo(logoUrl);
-    var client=window.supabaseClient;
-    if(client&&typeof client.rpc==='function'){
-      var settled=false;
-      var timeout=window.setTimeout(function(){settled=true;},9000);
-      client.rpc('get_public_school_portal_content').then(function(result){
-        if(settled||!result||result.error)return;
-        window.clearTimeout(timeout);
-        var data=result.data||{},school=data.school||{},academic=data.academicSession||{},currentTerm=data.currentTerm||{};
-        var name=document.getElementById('landingSchoolName');
-        var address=document.getElementById('landingSchoolAddress');
-        var addressWrap=document.getElementById('landingAddressWrap');
-        var phone=document.getElementById('landingSchoolPhone');
-        var phoneWrap=document.getElementById('landingPhoneWrap');
-        var email=document.getElementById('landingSchoolEmail');
-        var emailWrap=document.getElementById('landingEmailWrap');
-        var motto=document.getElementById('landingSchoolMotto');
-        if(name&&school.name)name.textContent=school.name;
-        if(address&&addressWrap&&school.address){address.textContent=school.address;addressWrap.hidden=false;}
-        if(phone&&phoneWrap&&school.phone){phone.textContent=school.phone;phone.href='tel:'+String(school.phone).replace(/[^+\\d]/g,'');phoneWrap.hidden=false;}
-        if(email&&emailWrap&&school.email){email.textContent=school.email;email.href='mailto:'+school.email;emailWrap.hidden=false;}
-        if(motto&&school.motto)motto.textContent=String(school.motto).toUpperCase();
-        if(session)session.textContent=academic.name||'Academic session not set';
-        if(term)term.textContent=currentTerm.name||'Term not set';
-        if(school.logo_url)setLogo(school.logo_url);
-      }).catch(function(){});
-    }
-  }
-  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',bootLandingIdentity,{once:true});
-  else bootLandingIdentity();
-})();
-</script>
-
-</body></html>';
+    '</body></html>';
 
   printWindow.document.open();
   printWindow.document.write(documentHtml);
@@ -15046,5 +14987,17 @@ async function renderSubjectTeacherInput() {
 })();
 </script>
 
+
+<script>
+/* Independent public-identity startup guard for the landing page. */
+(function(){
+  function boot(){
+    if (window.__landingIdentityStarted) return;
+    if (typeof loadLandingSchoolIdentity === 'function') loadLandingSchoolIdentity();
+  }
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot, { once: true });
+  else boot();
+})();
+</script>
 </body>
 </html>
