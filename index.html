@@ -189,6 +189,65 @@ th { background: #f5f5f5; font-weight: 600; }
 .student-row-login-action .btn{width:100%}
 .student-row-login-action .student-login-action-status{margin-top:5px;font-size:11px;line-height:1.25;overflow-wrap:anywhere}
 @media(min-width:760px){.student-row-actions{min-width:150px;flex-direction:row;align-items:center}.student-row-actions>*{flex:1 1 0}.student-row-actions .btn{min-width:68px}}
+
+/* Approved school-branded landing composition — responsive layout hardening */
+#loginContainer{min-height:100vh;min-height:100svh;background-position:center center;background-repeat:no-repeat;background-size:cover}
+#loginContainer .landing-shell{width:min(1320px,100%);margin:0 auto}
+#loginContainer .landing-hero{min-width:0}
+#loginContainer .landing-brand{align-items:center;text-align:center;width:100%}
+#loginContainer .landing-crest{margin:0 auto;width:clamp(128px,14vw,190px);height:clamp(128px,14vw,190px);border-radius:0;overflow:visible}
+#loginContainer .landing-crest img{object-fit:contain;filter:drop-shadow(0 5px 9px rgba(0,0,0,.24))}
+#loginContainer .landing-school-name{width:100%;max-width:640px;text-align:center;text-wrap:balance}
+#loginContainer .landing-system-tag{max-width:100%;text-align:center;white-space:normal}
+#loginContainer .landing-features{width:100%}
+#loginContainer .landing-graduation{justify-content:flex-start;min-height:138px}
+#loginContainer .landing-cap{font-size:clamp(76px,9vw,118px)}
+#loginContainer .landing-books{font-size:clamp(54px,6vw,82px)}
+#loginContainer .landing-academic-strip{max-width:100%}
+#loginContainer .landing-footer-item{overflow-wrap:anywhere}
+@media(max-width:900px){
+  #loginContainer{align-items:flex-start;padding:20px 16px 24px}
+  #loginContainer .landing-shell{display:grid!important;grid-template-columns:minmax(0,1fr)!important;grid-template-rows:auto auto auto auto auto!important;gap:15px!important;width:min(640px,100%)!important;max-width:640px!important}
+  #loginContainer .landing-academic-strip{grid-column:1!important;justify-self:stretch!important;width:100%;min-width:0!important;justify-content:center!important;flex-wrap:nowrap;padding:11px 12px}
+  #loginContainer .landing-live-time{grid-column:1!important;justify-self:center!important;text-align:center!important;margin:0!important;width:100%}
+  #loginContainer .landing-hero{grid-column:1!important;grid-row:auto!important;padding:3px 0!important}
+  #loginContainer .landing-brand{align-items:center!important;text-align:center!important;margin-bottom:12px!important}
+  #loginContainer .landing-crest{width:clamp(104px,22vw,142px)!important;height:clamp(104px,22vw,142px)!important;margin:0 auto!important}
+  #loginContainer .landing-school-name{font-size:clamp(27px,6.5vw,42px)!important;line-height:1.04!important;text-align:center!important}
+  #loginContainer .landing-system-tag{font-size:clamp(12px,3vw,17px)!important;padding:9px 15px!important;margin-top:9px!important}
+  #loginContainer .landing-intro{text-align:center!important;margin:12px auto 16px!important;font-size:clamp(13px,2.8vw,16px)!important}
+  #loginContainer .landing-intro:after{margin:13px auto 0!important}
+  #loginContainer .landing-features{grid-template-columns:repeat(4,minmax(0,1fr))!important;padding:12px 4px!important}
+  #loginContainer .landing-feature{font-size:clamp(9px,2vw,12px)!important;padding:6px 2px!important}
+  #loginContainer .landing-feature-icon{width:clamp(36px,8vw,52px)!important;height:clamp(36px,8vw,52px)!important;font-size:clamp(18px,4vw,25px)!important;margin-bottom:7px!important}
+  #loginContainer .landing-quote{text-align:center!important;margin:13px 0 0!important;font-size:clamp(10px,2vw,13px)!important}
+  #loginContainer .landing-graduation{justify-content:center!important;min-height:78px!important;margin:7px 0 0!important}
+  #loginContainer .landing-cap{font-size:clamp(56px,13vw,82px)!important}
+  #loginContainer .landing-books{font-size:clamp(40px,10vw,62px)!important}
+  #loginContainer .login-box{grid-column:1!important;grid-row:auto!important;justify-self:stretch!important;width:100%!important;max-width:none!important;padding:clamp(22px,5vw,34px)!important}
+  #loginContainer .landing-footer{grid-column:1!important;grid-row:auto!important;display:flex!important;flex-direction:column!important;align-items:center!important;gap:10px!important;text-align:center!important;padding:14px 4px 4px!important}
+  #loginContainer .landing-footer-item{border:0!important;padding:0!important;justify-content:center!important;text-align:center!important}
+}
+@media(max-width:480px){
+  #loginContainer{padding:14px 12px 22px!important}
+  #loginContainer .landing-shell{gap:12px!important}
+  #loginContainer .landing-academic-strip{gap:8px!important;border-width:2px!important;border-radius:16px!important;padding:9px 8px!important}
+  #loginContainer .landing-academic-item{gap:7px!important}
+  #loginContainer .landing-academic-icon{font-size:22px!important}
+  #loginContainer .landing-academic-label{font-size:9px!important}
+  #loginContainer .landing-academic-value{font-size:clamp(12px,3.5vw,16px)!important}
+  #loginContainer .landing-academic-divider{height:30px!important}
+  #loginContainer .landing-live-time{font-size:10px!important}
+  #loginContainer .landing-crest{width:100px!important;height:100px!important}
+  #loginContainer .landing-school-name{font-size:clamp(25px,7vw,32px)!important}
+  #loginContainer .landing-features{border-radius:16px!important}
+  #loginContainer .landing-feature{font-size:9px!important}
+  #loginContainer .landing-feature-icon{width:36px!important;height:36px!important;font-size:18px!important}
+  #loginContainer .login-box{padding:25px 17px 20px!important;border-radius:21px!important}
+  #loginContainer .logo-icon{width:68px!important;height:68px!important;font-size:35px!important}
+  #loginContainer .login-box #loginBtn{min-height:50px!important}
+  #loginContainer .login-box #viewManagementBtn,#loginContainer .login-box #openPortalBtn{min-height:47px!important;font-size:14px!important}
+}
 </style>
 </head>
 <body>
