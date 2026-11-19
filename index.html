@@ -1272,7 +1272,7 @@ th { background: #f5f5f5; font-weight: 600; }
       </div>
       <div class="input-group">
         <label>Login Type</label>
-        <select id="userType" onchange="window.handleUserTypeChange(event)" oninput="window.handleUserTypeChange(event)">
+        <select id="userType">
           <option value="">Select Login Type</option>
           <option value="admin">School Administrator</option>
           <option value="principal">Principal</option>
@@ -1283,7 +1283,7 @@ th { background: #f5f5f5; font-weight: 600; }
           <option value="developer" id="developerLoginOption" hidden>
             Portal Developer
           </option>
-        </select>
+        
       </div>
 
       <div id="principalLoginFields" class="hidden"><div class="input-group"><label>Email</label><input type="email" id="principalEmail" autocomplete="username" placeholder="Principal account email"></div><div class="input-group"><label>Password</label><input type="password" id="principalPassword" autocomplete="current-password" placeholder="Enter password"></div></div>
@@ -1877,9 +1877,8 @@ async function initApp() {
   if (setupView) setupView.classList.add('hidden');
   if (loginView) loginView.classList.remove('hidden');
 
-  // Render public identity before wiring optional login controls.
-  loadLandingSchoolIdentity();
   setupEventListeners();
+  await loadLandingSchoolIdentity();
 }
 
 function setHeaderLogo(logoDataUrl) {
@@ -1892,11 +1891,7 @@ function setHeaderLogo(logoDataUrl) {
 function setupEventListeners() {
   var userTypeSelect = document.getElementById('userType');
   if (userTypeSelect) {
-    // Use native listeners rather than relying on a replaceable onchange property.
-    // Capture phase ensures role fields are updated even if another UI script
-    // attaches its own listener to the login selector.
-    userTypeSelect.addEventListener('change', handleUserTypeChange, true);
-    userTypeSelect.addEventListener('input', handleUserTypeChange, true);
+    userTypeSelect.addEventListener('change', handleUserTypeChange);
 
     var developerOption = document.getElementById('developerLoginOption');
     var params = new URLSearchParams(window.location.search);
@@ -1914,9 +1909,6 @@ function setupEventListeners() {
       });
     }
   }
-
-  // Initialise role-dependent visibility on first render as well as on selection.
-  if (userTypeSelect) handleUserTypeChange({ target: userTypeSelect });
 
   var setupBtn = document.getElementById('setupBtn');
   if (setupBtn) setupBtn.addEventListener('click', handleSetup);
@@ -1961,57 +1953,49 @@ function setupEventListeners() {
   });
 }
 
-function handleUserTypeChange(event) {
-  var select = event && event.target && event.target.id === 'userType'
-    ? event.target
-    : document.getElementById('userType');
-  if (!select) return;
-
-  var role = String(select.value || '').trim();
-  var panels = {
-    principal: 'principalLoginFields',
-    admin: 'adminLoginFields',
-    formmaster: 'formmasterFields',
-    subjectteacher: 'subjectTeacherFields',
-    subadmin: 'subadminLoginFields',
-    student: 'studentLoginFields',
-    developer: 'developerLoginFields'
-  };
-  var emailGroup = document.getElementById('genericAuthEmailGroup');
-  if (emailGroup) {
-    var hideEmail = role === 'student' || role === 'developer' || role === 'principal';
-    emailGroup.hidden = hideEmail;
-    emailGroup.classList.toggle('hidden', hideEmail);
-    emailGroup.style.display = hideEmail ? 'none' : 'block';
+async function handleUserTypeChange(e) {
+  var userType = e.target.value;
+  var genericEmailGroup = document.getElementById('genericAuthEmailGroup');
+  if (genericEmailGroup) {
+    genericEmailGroup.classList.toggle(
+      'hidden',
+      userType === 'student' || userType === 'developer' || userType === 'principal'
+    );
   }
+  var principalFields = document.getElementById('principalLoginFields');
+  var adminFields = document.getElementById('adminLoginFields');
+  var fmFields = document.getElementById('formmasterFields');
+  var stFields = document.getElementById('subjectTeacherFields');
+  var subadminFields = document.getElementById('subadminLoginFields');
+  var studentFields = document.getElementById('studentLoginFields');
+  var developerFields = document.getElementById('developerLoginFields');
 
-  Object.keys(panels).forEach(function(key) {
-    var panel = document.getElementById(panels[key]);
-    if (!panel) return;
-    var active = key === role;
-    panel.hidden = !active;
-    panel.classList.toggle('hidden', !active);
-    panel.style.display = active ? 'block' : 'none';
-    panel.style.visibility = active ? 'visible' : 'hidden';
-    panel.setAttribute('aria-hidden', active ? 'false' : 'true');
-    panel.querySelectorAll('.input-group').forEach(function(group) {
-      group.hidden = !active;
-      group.classList.toggle('hidden', !active);
-      group.style.display = active ? 'block' : 'none';
-      group.style.visibility = active ? 'visible' : 'hidden';
-    });
-    panel.querySelectorAll('input, select').forEach(function(input) {
-      input.disabled = !active;
-    });
-  });
+  principalFields.classList.add('hidden');
+  adminFields.classList.add('hidden');
+  fmFields.classList.add('hidden');
+  stFields.classList.add('hidden');
+  subadminFields.classList.add('hidden');
+  studentFields.classList.add('hidden');
+  developerFields.classList.add('hidden');
 
-  var error = document.getElementById('loginError');
-  if (error) { error.classList.add('hidden'); error.textContent = ''; }
-
-  if (role === 'formmaster' && typeof loadArmDropdown === 'function') loadArmDropdown();
-  if (role === 'subjectteacher' && typeof loadAssignmentDropdown === 'function') loadAssignmentDropdown();
+  if (userType === 'principal') {
+    principalFields.classList.remove('hidden');
+  } else if (userType === 'admin') {
+    adminFields.classList.remove('hidden');
+  } else if (userType === 'formmaster') {
+    fmFields.classList.remove('hidden');
+    await loadArmDropdown();
+  } else if (userType === 'subjectteacher') {
+    stFields.classList.remove('hidden');
+    await loadAssignmentDropdown();
+  } else if (userType === 'subadmin') {
+    subadminFields.classList.remove('hidden');
+  } else if (userType === 'student') {
+    studentFields.classList.remove('hidden');
+  } else if (userType === 'developer') {
+    developerFields.classList.remove('hidden');
+  }
 }
-window.handleUserTypeChange = handleUserTypeChange;
 
 async function loadArmDropdown() {
   // Form Master assignments are private. They are fetched from Supabase
