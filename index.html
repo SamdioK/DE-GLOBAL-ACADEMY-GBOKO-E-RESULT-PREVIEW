@@ -1882,46 +1882,45 @@ function setupEventListeners() {
 }
 
 async function handleUserTypeChange(e) {
-  var userType = e.target.value;
+  var userType = e && e.target ? String(e.target.value || '') : '';
   var genericEmailGroup = document.getElementById('genericAuthEmailGroup');
   if (genericEmailGroup) {
-    genericEmailGroup.classList.toggle(
-      'hidden',
-      userType === 'student' || userType === 'developer' || userType === 'principal'
-    );
+    genericEmailGroup.classList.toggle('hidden',
+      userType === 'student' || userType === 'developer' || userType === 'principal');
   }
-  var principalFields = document.getElementById('principalLoginFields');
-  var adminFields = document.getElementById('adminLoginFields');
-  var fmFields = document.getElementById('formmasterFields');
-  var stFields = document.getElementById('subjectTeacherFields');
-  var subadminFields = document.getElementById('subadminLoginFields');
-  var studentFields = document.getElementById('studentLoginFields');
-  var developerFields = document.getElementById('developerLoginFields');
 
-  principalFields.classList.add('hidden');
-  adminFields.classList.add('hidden');
-  fmFields.classList.add('hidden');
-  stFields.classList.add('hidden');
-  subadminFields.classList.add('hidden');
-  studentFields.classList.add('hidden');
-  developerFields.classList.add('hidden');
+  var fieldMap = {
+    principal: 'principalLoginFields',
+    admin: 'adminLoginFields',
+    formmaster: 'formmasterFields',
+    subjectteacher: 'subjectTeacherFields',
+    subadmin: 'subadminLoginFields',
+    student: 'studentLoginFields',
+    developer: 'developerLoginFields'
+  };
+  var fieldIds = Object.keys(fieldMap).map(function(key) { return fieldMap[key]; });
+  fieldIds.forEach(function(id) {
+    var field = document.getElementById(id);
+    if (!field) return;
+    field.hidden = true;
+    field.classList.add('hidden');
+    field.setAttribute('aria-hidden', 'true');
+  });
 
-  if (userType === 'principal') {
-    principalFields.classList.remove('hidden');
-  } else if (userType === 'admin') {
-    adminFields.classList.remove('hidden');
-  } else if (userType === 'formmaster') {
-    fmFields.classList.remove('hidden');
+  var selectedId = fieldMap[userType];
+  var selectedFields = selectedId ? document.getElementById(selectedId) : null;
+  if (selectedFields) {
+    selectedFields.hidden = false;
+    selectedFields.classList.remove('hidden');
+    selectedFields.setAttribute('aria-hidden', 'false');
+  }
+
+  // Reveal credentials immediately; optional assignment lookups must never
+  // delay or suppress the password field.
+  if (userType === 'formmaster') {
     await loadArmDropdown();
   } else if (userType === 'subjectteacher') {
-    stFields.classList.remove('hidden');
     await loadAssignmentDropdown();
-  } else if (userType === 'subadmin') {
-    subadminFields.classList.remove('hidden');
-  } else if (userType === 'student') {
-    studentFields.classList.remove('hidden');
-  } else if (userType === 'developer') {
-    developerFields.classList.remove('hidden');
   }
 }
 
@@ -14682,6 +14681,30 @@ async function renderSubjectTeacherInput() {
   #loginContainer .landing-feature-icon{width:36px!important;height:36px!important;font-size:18px!important;margin-bottom:6px!important}
   #loginContainer .landing-graduation-art{max-height:185px!important}
   #loginContainer .landing-role-gallery{padding:12px!important;border-radius:18px!important}
+}
+
+
+/* LOGIN ROLE FIELDS — keep unselected credential groups reliably hidden */
+#loginContainer #loginView .hidden,
+#loginContainer #loginView [hidden]{
+  display:none!important;
+  visibility:hidden!important;
+}
+#loginContainer #loginView [aria-hidden="true"]{
+  display:none!important;
+}
+#loginContainer #loginView .input-group:not(.hidden){
+  visibility:visible!important;
+}
+#loginContainer #loginView #principalLoginFields:not(.hidden),
+#loginContainer #loginView #adminLoginFields:not(.hidden),
+#loginContainer #loginView #formmasterFields:not(.hidden),
+#loginContainer #loginView #subjectTeacherFields:not(.hidden),
+#loginContainer #loginView #subadminLoginFields:not(.hidden),
+#loginContainer #loginView #studentLoginFields:not(.hidden),
+#loginContainer #loginView #developerLoginFields:not(.hidden){
+  display:block!important;
+  visibility:visible!important;
 }
 
 </style></div>';
