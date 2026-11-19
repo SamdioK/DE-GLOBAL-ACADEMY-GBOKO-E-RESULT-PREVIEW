@@ -10624,10 +10624,11 @@ async function loadSchoolBrandingAssets() {
 }
 
 function getTeacherSignatureKey(phase, subject, teacherId) { return String(phase || 'BASIC').toUpperCase() + '::' + String(subject || '') + '::' + String(teacherId || ''); }
+var teacherSignatureAssignmentIndex = {};
 function getTeacherSignatureForPhase(subject, phase, teacherId) {
-  var exact = teacherSignatures[getTeacherSignatureKey(phase, subject, teacherId)];
+  var exact = teacherId ? teacherSignatures[getTeacherSignatureKey(phase, subject, teacherId)] : '';
   var categorySignature = teacherSignatures[getTeacherSignatureKey(phase, subject, '')];
-  var bothTeacher = teacherSignatures[getTeacherSignatureKey('BOTH', subject, teacherId)];
+  var bothTeacher = teacherId ? teacherSignatures[getTeacherSignatureKey('BOTH', subject, teacherId)] : '';
   var bothCategory = teacherSignatures[getTeacherSignatureKey('BOTH', subject, '')];
   return exact || categorySignature || bothTeacher || bothCategory || '';
 }
@@ -10635,8 +10636,55 @@ function getStudentSignaturePhase(student) {
   var className = String(student && (student.className || student.class_name) || '').toUpperCase();
   return /^(BASIC|JSS)/.test(className) ? 'BASIC' : 'SS';
 }
+function getStudentSignatureTeacherId(student, subject) {
+  var className = String(student && (student.className || student.class_name) || '').trim().toLowerCase();
+  var key = className + '::' + String(subject || '').trim().toLowerCase();
+  return teacherSignatureAssignmentIndex[key] || '';
+}
+async function loadTeacherSignatureAssignments() {
+  if (!supabaseClient || !authenticatedProfile || !authenticatedProfile.school_id || !activeAcademicSession || !activeAcademicSession.id) {
+    teacherSignatureAssignmentIndex = {};
+    return [];
+  }
+  var query = supabaseClient.from('teacher_assignments')
+    .select('teacher_id,class_id,subject_id')
+    .eq('school_id', authenticatedProfile.school_id)
+    .eq('academic_session_id', activeAcademicSession.id)
+    .eq('is_active', true);
+  if (activeAssessmentTerm && activeAssessmentTerm.id) query = query.eq('term_id', activeAssessmentTerm.id);
+  var result = await query;
+  if (result.error) throw result.error;
+  var rows = result.data || [];
+  var classIds = Array.from(new Set(rows.map(function(x){return x.class_id;}).filter(Boolean)));
+  var subjectIds = Array.from(new Set(rows.map(function(x){return x.subject_id;}).filter(Boolean)));
+  var lookups = await Promise.all([
+    classIds.length ? supabaseClient.from('classes').select('id,class_name,level').eq('school_id',authenticatedProfile.school_id).in('id',classIds) : Promise.resolve({data:[],error:null}),
+    subjectIds.length ? supabaseClient.from('subjects').select('id,name').eq('school_id',authenticatedProfile.school_id).in('id',subjectIds) : Promise.resolve({data:[],error:null})
+  ]);
+  lookups.forEach(function(x){if(x.error)throw x.error;});
+  var classMap={}, subjectMap={}, index={};
+  (lookups[0].data||[]).forEach(function(x){classMap[String(x.id)]=x;});
+  (lookups[1].data||[]).forEach(function(x){subjectMap[String(x.id)]=x;});
+  rows.forEach(function(row){
+    var cl=classMap[String(row.class_id)]||{}, su=subjectMap[String(row.subject_id)]||{};
+    if(!cl.class_name||!su.name) return;
+    var key=String(cl.class_name).trim().toLowerCase()+'::'+String(su.name).trim().toLowerCase();
+    if(index[key] && String(index[key])!==String(row.teacher_id)) {
+      console.error('Conflicting active subject-teacher allocations for',key);
+      index[key]='';
+      return;
+    }
+    index[key]=row.teacher_id;
+  });
+  teacherSignatureAssignmentIndex=index;
+  return rows.map(function(row){
+    var cl=classMap[String(row.class_id)]||{}, su=subjectMap[String(row.subject_id)]||{};
+    return {teacherId:row.teacher_id,classId:row.class_id,className:cl.class_name||'',level:cl.level||'',subjectId:row.subject_id,subject:su.name||''};
+  }).filter(function(x){return x.className&&x.subject;});
+}
 async function loadTeacherSignaturesFromSupabase() {
   if (!supabaseClient || !authenticatedProfile || !authenticatedProfile.school_id) return;
+  await loadTeacherSignatureAssignments();
   var result = await supabaseClient.from('school_teacher_signatures')
     .select('subject_name, storage_path, phase, teacher_id')
     .eq('school_id', authenticatedProfile.school_id);
@@ -11154,29 +11202,35 @@ var activeSignatureLevel = 'BASIC';
 var activeSignatureTeacherId = '';
 async function renderTeacherSignatures() {
   if (!currentUser || currentUser.type !== 'admin') return;
-  var subjects = activeSignatureLevel === 'SS' ? seniorCoreSubjects.concat(tradeSubjects) : basicCoreSubjects.concat(tradeSubjects);
-  var teacherResult = await supabaseClient.from('profiles').select('id,full_name,role,is_active')
-    .eq('school_id', authenticatedProfile.school_id).eq('is_active', true).order('full_name');
+  var allocations = await loadTeacherSignatureAssignments();
+  var section = activeSignatureLevel === 'SS' ? 'SS' : 'BASIC';
+  var sectionAllocations = allocations.filter(function(a){return /^(BASIC|JSS)/i.test(a.level)?section==='BASIC':section==='SS';});
+  var assignedTeacherIds = Array.from(new Set(sectionAllocations.map(function(a){return String(a.teacherId);})));
+  var teacherResult = assignedTeacherIds.length ? await supabaseClient.from('profiles').select('id,full_name,role,is_active')
+    .eq('school_id', authenticatedProfile.school_id).eq('is_active', true).in('id',assignedTeacherIds).order('full_name') : {data:[],error:null};
   if (teacherResult.error) throw teacherResult.error;
-  var teachers = (teacherResult.data || []).filter(function(p) { return ['subject_teacher','form_master','principal','administrator'].indexOf(String(p.role||'')) >= 0; });
+  var teachers = teacherResult.data || [];
   if (!activeSignatureTeacherId || !teachers.some(function(p){return String(p.id)===String(activeSignatureTeacherId);})) activeSignatureTeacherId = teachers.length ? String(teachers[0].id) : '';
   var selectedTeacher = teachers.find(function(p){return String(p.id)===String(activeSignatureTeacherId);});
-  var html = '<div class="card"><h2>Teachers\' Signature</h2><p style="color:#666;margin:8px 0 16px;">Existing signatures are retained by subject and school section (BASIC / SS). You may continue using them as registered; new uploads can also be linked to an individual teacher.</p>'+
-    '<div class="input-group"><label for="signatureTeacherProfile">Assigned Subject Teacher</label><select id="signatureTeacherProfile"><option value="">Select teacher</option>'+teachers.map(function(p){return '<option value="'+escapeManagementText(p.id)+'" '+(String(p.id)===String(activeSignatureTeacherId)?'selected':'')+'>'+escapeManagementText(p.full_name||'Unnamed staff')+'</option>';}).join('')+'</select></div>'+
+  var assignedSubjects = Array.from(new Set(sectionAllocations.filter(function(a){return String(a.teacherId)===String(activeSignatureTeacherId);}).map(function(a){return a.subject;}))).sort();
+  var html = '<div class="card"><h2>Teachers\' Signature Registration</h2><p style="color:#666;margin:8px 0 16px;">Select a category and an assigned subject teacher. Only subjects allocated to that teacher in the active session and term are listed. One registered signature is reused across all class arms assigned to that teacher for the subject. Existing category-only signatures are preserved and are not automatically attributed to a teacher.</p>'+
     '<div style="display:flex;gap:8px;margin:16px 0;"><button class="btn '+(activeSignatureLevel==='BASIC'?'btn-primary':'')+' signature-level-btn" data-level="BASIC">BASIC Classes</button><button class="btn '+(activeSignatureLevel==='SS'?'btn-primary':'')+' signature-level-btn" data-level="SS">SS Classes</button></div>'+
-    '<div style="overflow-x:auto;"><table><thead><tr><th>Subject</th><th>Registered Signature</th><th>Upload / Replace</th><th>Action</th></tr></thead><tbody>';
-  subjects.forEach(function(subject){
+    '<div class="input-group"><label for="signatureTeacherProfile">Assigned Subject Teacher</label><select id="signatureTeacherProfile"><option value="">'+(teachers.length?'Select teacher':'No teacher allocations found for this category')+'</option>'+teachers.map(function(p){return '<option value="'+escapeManagementText(p.id)+'" '+(String(p.id)===String(activeSignatureTeacherId)?'selected':'')+'>'+escapeManagementText(p.full_name||'Unnamed staff')+'</option>';}).join('')+'</select></div>'+
+    '<div style="overflow-x:auto;"><table><thead><tr><th>Subject</th><th>Assigned Class Arms</th><th>Registered Signature</th><th>Upload / Replace</th><th>Action</th></tr></thead><tbody>';
+  assignedSubjects.forEach(function(subject){
+    var classNames=sectionAllocations.filter(function(a){return String(a.teacherId)===String(activeSignatureTeacherId)&&a.subject===subject;}).map(function(a){return a.className;}).sort();
     var signature=getTeacherSignatureForPhase(subject,activeSignatureLevel,activeSignatureTeacherId);
     var teacherSpecificSignature=teacherSignatures[getTeacherSignatureKey(activeSignatureLevel,subject,activeSignatureTeacherId)]||teacherSignatures[getTeacherSignatureKey('BOTH',subject,activeSignatureTeacherId)]||'';
     var categoryOnlySignature=teacherSignatures[getTeacherSignatureKey(activeSignatureLevel,subject,'')]||teacherSignatures[getTeacherSignatureKey('BOTH',subject,'')]||'';
-    var signatureStatus=teacherSpecificSignature?'Linked to selected teacher':(categoryOnlySignature?'Existing category signature · retained':'Not registered');
-    var removeAction=teacherSpecificSignature?'<button class="btn btn-danger remove-teacher-signature" data-subject="'+escapeManagementText(subject)+'" data-phase="'+activeSignatureLevel+'">Remove</button>':'<span style="color:#777;">'+(categoryOnlySignature?'Category record retained':'—')+'</span>';
-    html+='<tr><td>'+escapeManagementText(subject)+'</td><td>'+(signature?'<img src="'+escapeManagementText(signature)+'" alt="Teacher signature" style="max-width:120px;max-height:44px;object-fit:contain;"><div style="font-size:11px;color:#667;margin-top:4px;">'+signatureStatus+'</div>':'<span style="color:#999;">Not registered for this section</span>')+'</td><td><input type="file" class="teacher-signature-upload" data-subject="'+escapeManagementText(subject)+'" data-phase="'+activeSignatureLevel+'" accept="image/png,image/jpeg,image/webp" '+(!activeSignatureTeacherId?'disabled':'')+'></td><td>'+removeAction+'</td></tr>';
+    var signatureStatus=teacherSpecificSignature?'Linked to selected teacher':(categoryOnlySignature?'Legacy category signature · retained':'Not registered');
+    var removeAction=teacherSpecificSignature?'<button class="btn btn-danger remove-teacher-signature" data-subject="'+escapeManagementText(subject)+'" data-phase="'+activeSignatureLevel+'">Remove</button>':'<span style="color:#777;">'+(categoryOnlySignature?'Legacy record protected':'—')+'</span>';
+    html+='<tr><td>'+escapeManagementText(subject)+'</td><td>'+escapeManagementText(classNames.join(', '))+'</td><td>'+(signature?'<img src="'+escapeManagementText(signature)+'" alt="Teacher signature" style="max-width:120px;max-height:44px;object-fit:contain;"><div style="font-size:11px;color:#667;margin-top:4px;">'+signatureStatus+'</div>':'<span style="color:#999;">Not registered</span>')+'</td><td><input type="file" class="teacher-signature-upload" data-subject="'+escapeManagementText(subject)+'" data-phase="'+activeSignatureLevel+'" accept="image/png,image/jpeg,image/webp" '+(!activeSignatureTeacherId?'disabled':'')+'></td><td>'+removeAction+'</td></tr>';
   });
+  if(!assignedSubjects.length) html+='<tr><td colspan="5" style="text-align:center;color:#777;padding:18px;">'+(activeSignatureTeacherId?'This teacher has no subject allocation in the selected category for the active session and term.':'Select an assigned teacher to view their subjects.')+'</td></tr>';
   html+='</tbody></table></div></div>';
   document.getElementById('teacherSignaturesTab').innerHTML=html;
   document.getElementById('signatureTeacherProfile').addEventListener('change',function(){activeSignatureTeacherId=this.value;renderTeacherSignatures();});
-  document.querySelectorAll('.signature-level-btn').forEach(function(button){button.addEventListener('click',function(){activeSignatureLevel=this.getAttribute('data-level');renderTeacherSignatures();});});
+  document.querySelectorAll('.signature-level-btn').forEach(function(button){button.addEventListener('click',function(){activeSignatureLevel=this.getAttribute('data-level');activeSignatureTeacherId='';renderTeacherSignatures();});});
   document.querySelectorAll('.teacher-signature-upload').forEach(function(input){input.addEventListener('change',async function(){
     var file=input.files&&input.files[0];if(!file)return;
     var subject=input.getAttribute('data-subject'),phase=input.getAttribute('data-phase')||activeSignatureLevel,teacherId=activeSignatureTeacherId;
@@ -12735,7 +12789,8 @@ function buildStudentSheetHTML(student) {
 
   var rows = student.subjects.map(function(sub) {
     var stats = getSubjectPerformanceStats(student, sub.name);
-    var studentSignature = getTeacherSignatureForPhase(sub.name, getStudentSignaturePhase(student));
+    var signatureTeacherId = getStudentSignatureTeacherId(student, sub.name);
+    var studentSignature = getTeacherSignatureForPhase(sub.name, getStudentSignaturePhase(student), signatureTeacherId);
     var signatureHtml = studentSignature ? '<img class="subject-signature" src="' + escapeManagementText(studentSignature) + '" alt="Teacher signature">' : '';
     return '<tr><td>' + sub.name + '</td><td>' + sub.ca1 + '</td><td>' + sub.ca2 + '</td><td>' + sub.ca3 + '</td><td>' + sub.exam + '</td><td><strong>' + sub.total + '</strong></td><td>' + stats.average.toFixed(1) + '</td><td>' + getOrdinalPosition(stats.position) + '</td><td>' + stats.highest + '</td><td>' + stats.lowest + '</td><td><strong>' + sub.grade + '</strong></td><td>' + sub.remark + '</td><td>' + signatureHtml + '</td></tr>';
   }).join('');
