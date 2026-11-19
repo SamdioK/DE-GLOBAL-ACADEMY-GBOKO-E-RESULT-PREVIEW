@@ -11201,51 +11201,102 @@ var activeSignatureLevel = 'BASIC';
 
 var activeSignatureTeacherId = '';
 async function renderTeacherSignatures() {
-  if (!currentUser || currentUser.type !== 'admin') return;
-  var allocations = await loadTeacherSignatureAssignments();
-  var section = activeSignatureLevel === 'SS' ? 'SS' : 'BASIC';
-  var sectionAllocations = allocations.filter(function(a){return /^(BASIC|JSS)/i.test(a.level)?section==='BASIC':section==='SS';});
-  var assignedTeacherIds = Array.from(new Set(sectionAllocations.map(function(a){return String(a.teacherId);})));
-  var teacherResult = assignedTeacherIds.length ? await supabaseClient.from('profiles').select('id,full_name,role,is_active')
-    .eq('school_id', authenticatedProfile.school_id).eq('is_active', true).in('id',assignedTeacherIds).order('full_name') : {data:[],error:null};
-  if (teacherResult.error) throw teacherResult.error;
-  var teachers = teacherResult.data || [];
-  if (!activeSignatureTeacherId || !teachers.some(function(p){return String(p.id)===String(activeSignatureTeacherId);})) activeSignatureTeacherId = teachers.length ? String(teachers[0].id) : '';
-  var selectedTeacher = teachers.find(function(p){return String(p.id)===String(activeSignatureTeacherId);});
-  var assignedSubjects = Array.from(new Set(sectionAllocations.filter(function(a){return String(a.teacherId)===String(activeSignatureTeacherId);}).map(function(a){return a.subject;}))).sort();
-  var html = '<div class="card"><h2>Teachers\' Signature Registration</h2><p style="color:#666;margin:8px 0 16px;">Select a category and an assigned subject teacher. Only subjects allocated to that teacher in the active session and term are listed. One registered signature is reused across all class arms assigned to that teacher for the subject. Existing category-only signatures are preserved and are not automatically attributed to a teacher.</p>'+
-    '<div style="display:flex;gap:8px;margin:16px 0;"><button class="btn '+(activeSignatureLevel==='BASIC'?'btn-primary':'')+' signature-level-btn" data-level="BASIC">BASIC Classes</button><button class="btn '+(activeSignatureLevel==='SS'?'btn-primary':'')+' signature-level-btn" data-level="SS">SS Classes</button></div>'+
-    '<div class="input-group"><label for="signatureTeacherProfile">Assigned Subject Teacher</label><select id="signatureTeacherProfile"><option value="">'+(teachers.length?'Select teacher':'No teacher allocations found for this category')+'</option>'+teachers.map(function(p){return '<option value="'+escapeManagementText(p.id)+'" '+(String(p.id)===String(activeSignatureTeacherId)?'selected':'')+'>'+escapeManagementText(p.full_name||'Unnamed staff')+'</option>';}).join('')+'</select></div>'+
-    '<div style="overflow-x:auto;"><table><thead><tr><th>Subject</th><th>Assigned Class Arms</th><th>Registered Signature</th><th>Upload / Replace</th><th>Action</th></tr></thead><tbody>';
-  assignedSubjects.forEach(function(subject){
-    var classNames=sectionAllocations.filter(function(a){return String(a.teacherId)===String(activeSignatureTeacherId)&&a.subject===subject;}).map(function(a){return a.className;}).sort();
-    var signature=getTeacherSignatureForPhase(subject,activeSignatureLevel,activeSignatureTeacherId);
-    var teacherSpecificSignature=teacherSignatures[getTeacherSignatureKey(activeSignatureLevel,subject,activeSignatureTeacherId)]||teacherSignatures[getTeacherSignatureKey('BOTH',subject,activeSignatureTeacherId)]||'';
-    var categoryOnlySignature=teacherSignatures[getTeacherSignatureKey(activeSignatureLevel,subject,'')]||teacherSignatures[getTeacherSignatureKey('BOTH',subject,'')]||'';
-    var signatureStatus=teacherSpecificSignature?'Linked to selected teacher':(categoryOnlySignature?'Legacy category signature · retained':'Not registered');
-    var removeAction=teacherSpecificSignature?'<button class="btn btn-danger remove-teacher-signature" data-subject="'+escapeManagementText(subject)+'" data-phase="'+activeSignatureLevel+'">Remove</button>':'<span style="color:#777;">'+(categoryOnlySignature?'Legacy record protected':'—')+'</span>';
-    html+='<tr><td>'+escapeManagementText(subject)+'</td><td>'+escapeManagementText(classNames.join(', '))+'</td><td>'+(signature?'<img src="'+escapeManagementText(signature)+'" alt="Teacher signature" style="max-width:120px;max-height:44px;object-fit:contain;"><div style="font-size:11px;color:#667;margin-top:4px;">'+signatureStatus+'</div>':'<span style="color:#999;">Not registered</span>')+'</td><td><input type="file" class="teacher-signature-upload" data-subject="'+escapeManagementText(subject)+'" data-phase="'+activeSignatureLevel+'" accept="image/png,image/jpeg,image/webp" '+(!activeSignatureTeacherId?'disabled':'')+'></td><td>'+removeAction+'</td></tr>';
-  });
-  if(!assignedSubjects.length) html+='<tr><td colspan="5" style="text-align:center;color:#777;padding:18px;">'+(activeSignatureTeacherId?'This teacher has no subject allocation in the selected category for the active session and term.':'Select an assigned teacher to view their subjects.')+'</td></tr>';
-  html+='</tbody></table></div></div>';
-  document.getElementById('teacherSignaturesTab').innerHTML=html;
-  document.getElementById('signatureTeacherProfile').addEventListener('change',function(){activeSignatureTeacherId=this.value;renderTeacherSignatures();});
-  document.querySelectorAll('.signature-level-btn').forEach(function(button){button.addEventListener('click',function(){activeSignatureLevel=this.getAttribute('data-level');activeSignatureTeacherId='';renderTeacherSignatures();});});
-  document.querySelectorAll('.teacher-signature-upload').forEach(function(input){input.addEventListener('change',async function(){
-    var file=input.files&&input.files[0];if(!file)return;
-    var subject=input.getAttribute('data-subject'),phase=input.getAttribute('data-phase')||activeSignatureLevel,teacherId=activeSignatureTeacherId;
-    input.disabled=true;
-    try{var url=await saveTeacherSignatureToSupabase(subject,file,phase,teacherId);teacherSignatures[getTeacherSignatureKey(phase,subject,teacherId)]=url;logActivity('Uploaded assigned subject teacher signature',subject+' / '+(selectedTeacher&&selectedTeacher.full_name||teacherId));showToast('Teacher signature saved and linked to the selected staff profile.','success');await renderTeacherSignatures();}
-    catch(error){showToast(error&&error.message||'Could not save the signature.','error');}finally{input.disabled=false;}
-  });});
-  document.querySelectorAll('.remove-teacher-signature').forEach(function(button){button.addEventListener('click',async function(){
-    var subject=button.getAttribute('data-subject'),phase=button.getAttribute('data-phase')||activeSignatureLevel,teacherId=activeSignatureTeacherId;
-    var confirmation=window.prompt('Enter 12345 to confirm removal of this teacher signature, or press Cancel.');
-    if(confirmation!=='12345'){showToast(confirmation===null?'Removal cancelled.':'Incorrect confirmation code.','info');return;}
-    button.disabled=true;
-    try{await removeTeacherSignatureFromSupabase(subject,phase,teacherId);delete teacherSignatures[getTeacherSignatureKey(phase,subject,teacherId)];logActivity('Removed assigned subject teacher signature',subject+' / '+teacherId);showToast('Teacher signature removed.','info');await renderTeacherSignatures();}
-    catch(error){showToast(error&&error.message||'Could not remove the signature.','error');}finally{button.disabled=false;}
-  });});
+  if (!currentUser || currentUser.type !== 'admin' || !authenticatedProfile || authenticatedProfile.role !== 'administrator') return;
+  var panel = document.getElementById('teacherSignaturesTab');
+  if (!panel) return;
+  panel.innerHTML = '<div class="card"><p>Loading current subject allocations from Supabase…</p></div>';
+  try {
+    if (!supabaseClient || !authenticatedProfile.school_id || !activeAcademicSession || !activeAcademicSession.id) {
+      throw new Error('An active Supabase session and academic session are required.');
+    }
+    var assignmentQuery = supabaseClient.from('teacher_assignments')
+      .select('id,teacher_id,class_id,subject_id,academic_session_id,term_id,is_active')
+      .eq('school_id', authenticatedProfile.school_id)
+      .eq('academic_session_id', activeAcademicSession.id)
+      .eq('is_active', true);
+    if (activeAssessmentTerm && activeAssessmentTerm.id) assignmentQuery = assignmentQuery.eq('term_id', activeAssessmentTerm.id);
+    var assignmentResult = await assignmentQuery;
+    if (assignmentResult.error) throw assignmentResult.error;
+    var assignments = assignmentResult.data || [];
+    var classIds = Array.from(new Set(assignments.map(function(x){return x.class_id;}).filter(Boolean)));
+    var subjectIds = Array.from(new Set(assignments.map(function(x){return x.subject_id;}).filter(Boolean)));
+    var teacherIds = Array.from(new Set(assignments.map(function(x){return x.teacher_id;}).filter(Boolean)));
+    var lookups = await Promise.all([
+      classIds.length ? supabaseClient.from('classes').select('id,class_name,level').eq('school_id',authenticatedProfile.school_id).in('id',classIds) : Promise.resolve({data:[],error:null}),
+      subjectIds.length ? supabaseClient.from('subjects').select('id,name,section').eq('school_id',authenticatedProfile.school_id).in('id',subjectIds) : Promise.resolve({data:[],error:null}),
+      teacherIds.length ? supabaseClient.from('profiles').select('id,full_name,role,is_active').eq('school_id',authenticatedProfile.school_id).in('id',teacherIds) : Promise.resolve({data:[],error:null})
+    ]);
+    lookups.forEach(function(x){if(x.error) throw x.error;});
+    var classMap={}, subjectMap={}, teacherMap={};
+    (lookups[0].data||[]).forEach(function(x){classMap[String(x.id)]=x;});
+    (lookups[1].data||[]).forEach(function(x){subjectMap[String(x.id)]=x;});
+    (lookups[2].data||[]).forEach(function(x){teacherMap[String(x.id)]=x;});
+    var allocations={};
+    assignments.forEach(function(a){
+      var cl=classMap[String(a.class_id)]||{}, su=subjectMap[String(a.subject_id)]||{}, te=teacherMap[String(a.teacher_id)]||{};
+      if(!su.name || !a.teacher_id) return;
+      var level=String(cl.level||cl.class_name||'').toUpperCase();
+      var phase=/^(BASIC|JSS)/.test(level) ? 'BASIC' : 'SS';
+      var key=[phase,String(su.name),String(a.teacher_id)].join('::');
+      if(!allocations[key]) allocations[key]={phase:phase,subject:su.name,teacherId:String(a.teacher_id),teacherName:te.full_name||'Staff profile unavailable',arms:[]};
+      if(cl.class_name && allocations[key].arms.indexOf(cl.class_name)===-1) allocations[key].arms.push(cl.class_name);
+    });
+    var rows=Object.keys(allocations).map(function(k){return allocations[k];}).sort(function(a,b){return a.phase.localeCompare(b.phase)||a.subject.localeCompare(b.subject)||a.teacherName.localeCompare(b.teacherName);});
+    var html='<div class="card"><h2>Teachers’ Signatures</h2><p style="color:#64748b;margin:8px 0 14px">This register follows active subject-teacher allocations for the current academic session'+(activeAssessmentTerm?' and term':'')+'. One signature is registered per teacher, subject and school section, then reused across every allocated class arm. A teacher may appear under several subjects, and several teachers may appear under the same subject.</p>'+
+      '<div style="overflow-x:auto"><table><thead><tr><th>Section</th><th>Subject</th><th>Assigned teacher</th><th>Allocated class arms</th><th>Registered signature</th><th>Upload / Replace</th><th>Action</th></tr></thead><tbody>';
+    if(!rows.length) html+='<tr><td colspan="7">No active subject-teacher allocations were found for the current session'+(activeAssessmentTerm?' and term':'')+'. Register subject teachers first.</td></tr>';
+    rows.forEach(function(item){
+      var key=getTeacherSignatureKey(item.phase,item.subject,item.teacherId);
+      var bothKey=getTeacherSignatureKey('BOTH',item.subject,item.teacherId);
+      var legacyKey=getTeacherSignatureKey(item.phase,item.subject,'');
+      var legacyBothKey=getTeacherSignatureKey('BOTH',item.subject,'');
+      var signature=teacherSignatures[key]||teacherSignatures[bothKey]||'';
+      var legacy=teacherSignatures[legacyKey]||teacherSignatures[legacyBothKey]||'';
+      var status=signature?'Linked to this teacher':(legacy?'Legacy category signature retained — not attributed':'Not registered');
+      var remove=signature?'<button type="button" class="btn btn-danger remove-teacher-signature" data-subject="'+escapeManagementText(item.subject)+'" data-phase="'+item.phase+'" data-teacher-id="'+escapeManagementText(item.teacherId)+'">Remove</button>':'<span style="color:#777">—</span>';
+      html+='<tr><td>'+item.phase+'</td><td>'+escapeManagementText(item.subject)+'</td><td>'+escapeManagementText(item.teacherName)+'</td><td>'+escapeManagementText(item.arms.join(', '))+'</td><td>'+(signature?'<img src="'+escapeManagementText(signature)+'" alt="Teacher signature" style="max-width:120px;max-height:44px;object-fit:contain"><div style="font-size:11px;color:#667;margin-top:4px">'+status+'</div>':(legacy?'<div style="font-size:11px;color:#9a6700">'+status+'</div>':'<span style="color:#999">'+status+'</span>'))+'</td><td><input type="file" class="teacher-signature-upload" data-subject="'+escapeManagementText(item.subject)+'" data-phase="'+item.phase+'" data-teacher-id="'+escapeManagementText(item.teacherId)+'" accept="image/png,image/jpeg,image/webp"></td><td>'+remove+'</td></tr>';
+    });
+    html+='</tbody></table></div></div>';
+    panel.innerHTML=html;
+    panel.querySelectorAll('.teacher-signature-upload').forEach(function(input){
+      input.addEventListener('change',async function(){
+        var file=input.files&&input.files[0]; if(!file)return;
+        var subject=input.dataset.subject,phase=input.dataset.phase,teacherId=input.dataset.teacherId;
+        input.disabled=true;
+        try{
+          var url=await saveTeacherSignatureToSupabase(subject,file,phase,teacherId);
+          teacherSignatures[getTeacherSignatureKey(phase,subject,teacherId)]=url;
+          var person=teacherMap[teacherId]||{};
+          logActivity('Uploaded assigned subject teacher signature',subject+' / '+(person.full_name||teacherId));
+          showToast('Signature saved in Supabase and linked to '+(person.full_name||'the selected teacher')+'.','success');
+          await renderTeacherSignatures();
+        }catch(error){showToast(error&&error.message||'Could not save the signature.','error');}
+        finally{input.disabled=false;}
+      });
+    });
+    panel.querySelectorAll('.remove-teacher-signature').forEach(function(button){
+      button.addEventListener('click',async function(){
+        var subject=button.dataset.subject,phase=button.dataset.phase,teacherId=button.dataset.teacherId;
+        var confirmation=window.prompt('Enter 12345 to confirm removal of this teacher signature, or press Cancel.');
+        if(confirmation!=='12345'){showToast(confirmation===null?'Removal cancelled.':'Incorrect confirmation code.','info');return;}
+        button.disabled=true;
+        try{
+          await removeTeacherSignatureFromSupabase(subject,phase,teacherId);
+          delete teacherSignatures[getTeacherSignatureKey(phase,subject,teacherId)];
+          delete teacherSignatures[getTeacherSignatureKey('BOTH',subject,teacherId)];
+          logActivity('Removed assigned subject teacher signature',subject+' / '+teacherId);
+          showToast('Teacher signature removed.','success');
+          await renderTeacherSignatures();
+        }catch(error){showToast(error&&error.message||'Could not remove the signature.','error');}
+        finally{button.disabled=false;}
+      });
+    });
+  } catch(error) {
+    console.error('Teacher signature register failed:',error);
+    panel.innerHTML='<div class="card"><p class="alert alert-error">Could not load teacher allocations from Supabase: '+escapeManagementText(error.message||'Unknown error')+'</p><button type="button" class="btn btn-primary" id="retryTeacherSignatureLoad">Retry</button></div>';
+    var retry=panel.querySelector('#retryTeacherSignatureLoad');
+    if(retry) retry.addEventListener('click',renderTeacherSignatures);
+  }
 }
 // ===================== INPUT (MANUAL + EXCEL BULK) =====================
 async function loadAdminResultRoster(className) {
