@@ -9205,9 +9205,23 @@ async function printArmScoreSheet(className, sessionOverride, termOverride) {
         .select('storage_path').eq('school_id', schoolId).eq('teacher_id', teacherProfile.data.id)
         .eq('subject_name', subjectRow.name).eq('phase', classPhase).maybeSingle();
       if (teacherSignature.error) throw teacherSignature.error;
+      // Existing school signatures are category-based (BASIC / SS). Preserve and
+      // use those records when no teacher-specific signature has been registered.
+      if (!teacherSignature.data) {
+        teacherSignature = await supabaseClient.from('school_teacher_signatures')
+          .select('storage_path').eq('school_id', schoolId).is('teacher_id', null)
+          .eq('subject_name', subjectRow.name).eq('phase', classPhase).maybeSingle();
+        if (teacherSignature.error) throw teacherSignature.error;
+      }
       if (!teacherSignature.data) {
         teacherSignature = await supabaseClient.from('school_teacher_signatures')
           .select('storage_path').eq('school_id', schoolId).eq('teacher_id', teacherProfile.data.id)
+          .eq('subject_name', subjectRow.name).eq('phase', 'BOTH').maybeSingle();
+        if (teacherSignature.error) throw teacherSignature.error;
+      }
+      if (!teacherSignature.data) {
+        teacherSignature = await supabaseClient.from('school_teacher_signatures')
+          .select('storage_path').eq('school_id', schoolId).is('teacher_id', null)
           .eq('subject_name', subjectRow.name).eq('phase', 'BOTH').maybeSingle();
         if (teacherSignature.error) throw teacherSignature.error;
       }
@@ -10612,7 +10626,10 @@ async function loadSchoolBrandingAssets() {
 function getTeacherSignatureKey(phase, subject, teacherId) { return String(phase || 'BASIC').toUpperCase() + '::' + String(subject || '') + '::' + String(teacherId || ''); }
 function getTeacherSignatureForPhase(subject, phase, teacherId) {
   var exact = teacherSignatures[getTeacherSignatureKey(phase, subject, teacherId)];
-  return exact || teacherSignatures[getTeacherSignatureKey('BOTH', subject, teacherId)] || '';
+  var categorySignature = teacherSignatures[getTeacherSignatureKey(phase, subject, '')];
+  var bothTeacher = teacherSignatures[getTeacherSignatureKey('BOTH', subject, teacherId)];
+  var bothCategory = teacherSignatures[getTeacherSignatureKey('BOTH', subject, '')];
+  return exact || categorySignature || bothTeacher || bothCategory || '';
 }
 function getStudentSignaturePhase(student) {
   var className = String(student && (student.className || student.class_name) || '').toUpperCase();
@@ -10630,7 +10647,8 @@ async function loadTeacherSignaturesFromSupabase() {
     if (!item.storage_path || !item.subject_name) continue;
     var signed = await supabaseClient.storage.from('school-private-assets').createSignedUrl(item.storage_path, 3600);
     if (signed.error) { console.warn('Could not load signature for ' + item.subject_name, signed.error); continue; }
-    if (item.teacher_id) refreshed[getTeacherSignatureKey(item.phase || 'BOTH', item.subject_name, item.teacher_id)] = signed.data.signedUrl;
+    // Load category-based legacy signatures as well as newer teacher-linked records.
+    refreshed[getTeacherSignatureKey(item.phase || 'BOTH', item.subject_name, item.teacher_id || '')] = signed.data.signedUrl;
   }
   teacherSignatures = Object.assign({}, teacherSignatures || {}, refreshed);
 }
@@ -11143,7 +11161,7 @@ async function renderTeacherSignatures() {
   var teachers = (teacherResult.data || []).filter(function(p) { return ['subject_teacher','form_master','principal','administrator'].indexOf(String(p.role||'')) >= 0; });
   if (!activeSignatureTeacherId || !teachers.some(function(p){return String(p.id)===String(activeSignatureTeacherId);})) activeSignatureTeacherId = teachers.length ? String(teachers[0].id) : '';
   var selectedTeacher = teachers.find(function(p){return String(p.id)===String(activeSignatureTeacherId);});
-  var html = '<div class="card"><h2>Teachers\' Signature</h2><p style="color:#666;margin:8px 0 16px;">Select the actual staff member first. Each uploaded signature is securely linked to that teacher, subject and school section.</p>'+
+  var html = '<div class="card"><h2>Teachers\' Signature</h2><p style="color:#666;margin:8px 0 16px;">Existing signatures are retained by subject and school section (BASIC / SS). You may continue using them as registered; new uploads can also be linked to an individual teacher.</p>'+
     '<div class="input-group"><label for="signatureTeacherProfile">Assigned Subject Teacher</label><select id="signatureTeacherProfile"><option value="">Select teacher</option>'+teachers.map(function(p){return '<option value="'+escapeManagementText(p.id)+'" '+(String(p.id)===String(activeSignatureTeacherId)?'selected':'')+'>'+escapeManagementText(p.full_name||'Unnamed staff')+'</option>';}).join('')+'</select></div>'+
     '<div style="display:flex;gap:8px;margin:16px 0;"><button class="btn '+(activeSignatureLevel==='BASIC'?'btn-primary':'')+' signature-level-btn" data-level="BASIC">BASIC Classes</button><button class="btn '+(activeSignatureLevel==='SS'?'btn-primary':'')+' signature-level-btn" data-level="SS">SS Classes</button></div>'+
     '<div style="overflow-x:auto;"><table><thead><tr><th>Subject</th><th>Registered Signature</th><th>Upload / Replace</th><th>Action</th></tr></thead><tbody>';
