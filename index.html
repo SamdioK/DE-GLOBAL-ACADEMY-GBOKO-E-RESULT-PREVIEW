@@ -10662,16 +10662,18 @@ async function loadTeacherSignatureAssignments() {
     subjectIds.length ? supabaseClient.from('subjects').select('id,name').eq('school_id',authenticatedProfile.school_id).in('id',subjectIds) : Promise.resolve({data:[],error:null})
   ]);
   lookups.forEach(function(x){if(x.error)throw x.error;});
-  var classMap={}, subjectMap={}, index={};
+  var classMap={}, subjectMap={}, index={}, conflicts={};
   (lookups[0].data||[]).forEach(function(x){classMap[String(x.id)]=x;});
   (lookups[1].data||[]).forEach(function(x){subjectMap[String(x.id)]=x;});
   rows.forEach(function(row){
     var cl=classMap[String(row.class_id)]||{}, su=subjectMap[String(row.subject_id)]||{};
     if(!cl.class_name||!su.name) return;
     var key=String(cl.class_name).trim().toLowerCase()+'::'+String(su.name).trim().toLowerCase();
+    if(conflicts[key]) return;
     if(index[key] && String(index[key])!==String(row.teacher_id)) {
-      console.error('Conflicting active subject-teacher allocations for',key);
-      index[key]='';
+      console.warn('Multiple teachers are allocated to',key,'; result ownership must identify the responsible teacher.');
+      delete index[key];
+      conflicts[key]=true;
       return;
     }
     index[key]=row.teacher_id;
@@ -12840,7 +12842,7 @@ function buildStudentSheetHTML(student) {
 
   var rows = student.subjects.map(function(sub) {
     var stats = getSubjectPerformanceStats(student, sub.name);
-    var signatureTeacherId = getStudentSignatureTeacherId(student, sub.name);
+    var signatureTeacherId = sub.entered_by || sub.teacher_id || sub.teacherId || getStudentSignatureTeacherId(student, sub.name);
     var studentSignature = getTeacherSignatureForPhase(sub.name, getStudentSignaturePhase(student), signatureTeacherId);
     var signatureHtml = studentSignature ? '<img class="subject-signature" src="' + escapeManagementText(studentSignature) + '" alt="Teacher signature">' : '';
     return '<tr><td>' + sub.name + '</td><td>' + sub.ca1 + '</td><td>' + sub.ca2 + '</td><td>' + sub.ca3 + '</td><td>' + sub.exam + '</td><td><strong>' + sub.total + '</strong></td><td>' + stats.average.toFixed(1) + '</td><td>' + getOrdinalPosition(stats.position) + '</td><td>' + stats.highest + '</td><td>' + stats.lowest + '</td><td><strong>' + sub.grade + '</strong></td><td>' + sub.remark + '</td><td>' + signatureHtml + '</td></tr>';
