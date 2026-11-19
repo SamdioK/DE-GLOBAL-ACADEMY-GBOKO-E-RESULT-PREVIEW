@@ -755,10 +755,10 @@ async function loadLandingSchoolIdentity() {
     var fallbackEl = document.getElementById('landingCrestFallback');
     if (nameEl && school.name) nameEl.textContent = school.name;
     if (addressEl && addressWrap && school.address) { addressEl.textContent = school.address; addressWrap.hidden = false; }
-    if (phoneEl && phoneWrap && school.phone) { phoneEl.textContent = school.phone; phoneEl.href = 'tel:' + String(school.phone).replace(/[^+\\d]/g, ''); phoneWrap.hidden = false; }
+    if (phoneEl && phoneWrap && school.phone) { phoneEl.textContent = school.phone; phoneEl.href = 'tel:' + String(school.phone).replace(/[^+\d]/g, ''); phoneWrap.hidden = false; }
     if (emailEl && emailWrap && school.email) { emailEl.textContent = school.email; emailEl.href = 'mailto:' + school.email; emailWrap.hidden = false; }
     if (logoEl && school.logo_url) {
-      var logoUrl = /^https?:\\/\\//i.test(school.logo_url) ? school.logo_url : supabaseClient.storage.from('school-public-assets').getPublicUrl(school.logo_url).data.publicUrl;
+      var logoUrl = /^https?:\/\//i.test(school.logo_url) ? school.logo_url : supabaseClient.storage.from('school-public-assets').getPublicUrl(school.logo_url).data.publicUrl;
       logoEl.onload = function() { logoEl.hidden = false; if (fallbackEl) fallbackEl.hidden = true; };
       logoEl.onerror = function() { logoEl.hidden = true; if (fallbackEl) fallbackEl.hidden = false; };
       logoEl.src = logoUrl;
