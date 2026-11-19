@@ -1272,7 +1272,7 @@ th { background: #f5f5f5; font-weight: 600; }
       </div>
       <div class="input-group">
         <label>Login Type</label>
-        <select id="userType" onchange="handleUserTypeChange({target:this})" oninput="handleUserTypeChange({target:this})">
+        <select id="userType" onchange="window.handleUserTypeChange(event)" oninput="window.handleUserTypeChange(event)">
           <option value="">Select Login Type</option>
           <option value="admin">School Administrator</option>
           <option value="principal">Principal</option>
@@ -1334,8 +1334,8 @@ th { background: #f5f5f5; font-weight: 600; }
       </div>
 
       <button class="btn btn-primary" id="loginBtn" style="width: 100%; padding: 12px; font-size: 16px;">Login</button>
-      <button class="btn" id="viewManagementBtn" style="width: 100%; padding: 10px; margin-top: 10px; background: #f1f2ff; color: #5568d3;">View School Management</button>
-      <button class="btn" id="openPortalBtn" style="width: 100%; padding: 10px; margin-top: 8px; background: #f1f2ff; color: #5568d3;">School Portal</button>
+      <button type="button" class="btn" id="viewManagementBtn" onclick="window.showPublicManagement()" style="width: 100%; padding: 10px; margin-top: 10px; background: #f1f2ff; color: #5568d3;">View School Management</button>
+      <button type="button" class="btn" id="openPortalBtn" onclick="window.showPublicPortal()" style="width: 100%; padding: 10px; margin-top: 8px; background: #f1f2ff; color: #5568d3;">School Portal</button>
       <div id="loginError" class="hidden" role="alert" style="background: #ffebee; color: #c62828; padding: 10px; border-radius: 6px; font-size: 13px; text-align: center; margin-top: 15px;"></div>
     </div>
 
@@ -1360,7 +1360,7 @@ th { background: #f5f5f5; font-weight: 600; }
 <div id="publicPortalModal" class="management-modal hidden" role="dialog" aria-modal="true" aria-labelledby="publicPortalTitle">
   <div class="management-modal-content">
     <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:18px;">
-      <h2 id="publicPortalTitle">School Portal</h2><button class="btn btn-danger" id="closePortalBtn">Close</button>
+      <h2 id="publicPortalTitle">School Portal</h2><button type="button" class="btn btn-danger" id="closePortalBtn" onclick="window.closePublicPortal()">Close</button>
     </div>
     <div id="publicWelcomeNote" class="hidden welcome-marquee" style="overflow:hidden;white-space:nowrap;background:#667eea;color:white;padding:10px;border-radius:6px;margin-bottom:14px;"><span id="publicWelcomeText"></span></div>
     <div id="publicPortalContent"></div>
@@ -1371,7 +1371,7 @@ th { background: #f5f5f5; font-weight: 600; }
   <div class="management-modal-content">
     <div style="display:flex; justify-content:space-between; align-items:center; gap:12px; margin-bottom:18px;">
       <h2 id="managementPublicTitle">School Management</h2>
-      <button class="btn btn-danger" id="closeManagementBtn">Close</button>
+      <button type="button" class="btn btn-danger" id="closeManagementBtn" onclick="window.closePublicManagement()">Close</button>
     </div>
     <div id="publicManagementProfiles"></div>
   </div>
@@ -1929,16 +1929,8 @@ function setupEventListeners() {
   var logoutBtn = document.getElementById('logoutBtn');
   if (logoutBtn) logoutBtn.addEventListener('click', handleLogout);
 
-  var viewManagementBtn = document.getElementById('viewManagementBtn');
-  if (viewManagementBtn) viewManagementBtn.addEventListener('click', showPublicManagement);
-  var closeManagementBtn = document.getElementById('closeManagementBtn');
-  if (closeManagementBtn) closeManagementBtn.addEventListener('click', closePublicManagement);
   var managementModal = document.getElementById('managementPublicModal');
   if (managementModal) managementModal.addEventListener('click', function(e) { if (e.target === managementModal) closePublicManagement(); });
-  var openPortalBtn = document.getElementById('openPortalBtn');
-  if (openPortalBtn) openPortalBtn.addEventListener('click', showPublicPortal);
-  var closePortalBtn = document.getElementById('closePortalBtn');
-  if (closePortalBtn) closePortalBtn.addEventListener('click', closePublicPortal);
   var portalModal = document.getElementById('publicPortalModal');
   if (portalModal) portalModal.addEventListener('click', function(e) { if (e.target === portalModal) closePublicPortal(); });
   if (supabaseClient) supabaseClient.auth.onAuthStateChange(function(event) {
@@ -1969,14 +1961,14 @@ function setupEventListeners() {
   });
 }
 
-function handleUserTypeChange(e) {
-  var select = e && e.target && e.target.id === 'userType'
-    ? e.target
+function handleUserTypeChange(event) {
+  var select = event && event.target && event.target.id === 'userType'
+    ? event.target
     : document.getElementById('userType');
   if (!select) return;
 
-  var userType = String(select.value || '').trim();
-  var fieldMap = {
+  var role = String(select.value || '').trim();
+  var panels = {
     principal: 'principalLoginFields',
     admin: 'adminLoginFields',
     formmaster: 'formmasterFields',
@@ -1985,60 +1977,41 @@ function handleUserTypeChange(e) {
     student: 'studentLoginFields',
     developer: 'developerLoginFields'
   };
-
-  var genericEmailGroup = document.getElementById('genericAuthEmailGroup');
-  if (genericEmailGroup) {
-    var hideGenericEmail = userType === 'student' || userType === 'developer' || userType === 'principal';
-    genericEmailGroup.classList.toggle('hidden', hideGenericEmail);
-    genericEmailGroup.hidden = hideGenericEmail;
-    genericEmailGroup.setAttribute('aria-hidden', hideGenericEmail ? 'true' : 'false');
-    genericEmailGroup.style.setProperty('display', hideGenericEmail ? 'none' : 'block', 'important');
-    genericEmailGroup.style.setProperty('visibility', hideGenericEmail ? 'hidden' : 'visible', 'important');
+  var emailGroup = document.getElementById('genericAuthEmailGroup');
+  if (emailGroup) {
+    var hideEmail = role === 'student' || role === 'developer' || role === 'principal';
+    emailGroup.hidden = hideEmail;
+    emailGroup.classList.toggle('hidden', hideEmail);
+    emailGroup.style.display = hideEmail ? 'none' : 'block';
   }
 
-  // Every login responsibility has one dedicated panel. Explicitly update
-  // class, hidden attribute, ARIA state and inline visibility together so
-  // responsive CSS or a stale hidden attribute cannot suppress the fields.
-  Object.keys(fieldMap).forEach(function(role) {
-    var panel = document.getElementById(fieldMap[role]);
+  Object.keys(panels).forEach(function(key) {
+    var panel = document.getElementById(panels[key]);
     if (!panel) return;
-    var active = role === userType;
-
-    panel.classList.toggle('hidden', !active);
+    var active = key === role;
     panel.hidden = !active;
+    panel.classList.toggle('hidden', !active);
+    panel.style.display = active ? 'block' : 'none';
+    panel.style.visibility = active ? 'visible' : 'hidden';
     panel.setAttribute('aria-hidden', active ? 'false' : 'true');
-    panel.style.setProperty('display', active ? 'block' : 'none', 'important');
-    panel.style.setProperty('visibility', active ? 'visible' : 'hidden', 'important');
-    panel.style.setProperty('opacity', active ? '1' : '0', 'important');
-
     panel.querySelectorAll('.input-group').forEach(function(group) {
-      group.classList.toggle('hidden', !active);
       group.hidden = !active;
-      group.setAttribute('aria-hidden', active ? 'false' : 'true');
-      group.style.setProperty('display', active ? 'block' : 'none', 'important');
-      group.style.setProperty('visibility', active ? 'visible' : 'hidden', 'important');
-      group.style.setProperty('opacity', active ? '1' : '0', 'important');
+      group.classList.toggle('hidden', !active);
+      group.style.display = active ? 'block' : 'none';
+      group.style.visibility = active ? 'visible' : 'hidden';
     });
-
     panel.querySelectorAll('input, select').forEach(function(input) {
       input.disabled = !active;
-      input.setAttribute('aria-hidden', active ? 'false' : 'true');
     });
   });
 
-  var loginError = document.getElementById('loginError');
-  if (loginError) {
-    loginError.classList.add('hidden');
-    loginError.textContent = '';
-  }
+  var error = document.getElementById('loginError');
+  if (error) { error.classList.add('hidden'); error.textContent = ''; }
 
-  if (userType === 'formmaster' && typeof loadArmDropdown === 'function') {
-    loadArmDropdown();
-  }
-  if (userType === 'subjectteacher' && typeof loadAssignmentDropdown === 'function') {
-    loadAssignmentDropdown();
-  }
+  if (role === 'formmaster' && typeof loadArmDropdown === 'function') loadArmDropdown();
+  if (role === 'subjectteacher' && typeof loadAssignmentDropdown === 'function') loadAssignmentDropdown();
 }
+window.handleUserTypeChange = handleUserTypeChange;
 
 async function loadArmDropdown() {
   // Form Master assignments are private. They are fetched from Supabase
@@ -9383,12 +9356,21 @@ function activatePublicPortalDirectories() {
 
 async function showPublicPortal() {
   var modal = document.getElementById('publicPortalModal');
-  if (!modal || !supabaseClient) return;
-  var portalResult = await supabaseClient.rpc('get_public_school_portal_content');
-  if (portalResult.error) {
-    console.error('Public portal content could not be loaded from Supabase:', portalResult.error);
-    document.getElementById('publicPortalContent').innerHTML = '<p class="alert alert-info">The school portal is temporarily unavailable. Please try again later.</p>';
-    modal.classList.remove('hidden');
+  var content = document.getElementById('publicPortalContent');
+  if (!modal || !content) return;
+  modal.classList.remove('hidden');
+  content.innerHTML = '<p role="status" style="text-align:center;padding:24px">Loading the school portal…</p>';
+  if (!supabaseClient) {
+    content.innerHTML = '<p class="alert alert-info" role="alert">The secure school service is not available. Please check your connection and reload the page.</p>';
+    return;
+  }
+  var portalResult;
+  try {
+    portalResult = await supabaseClient.rpc('get_public_school_portal_content');
+    if (portalResult.error) throw portalResult.error;
+  } catch (error) {
+    console.error('Public portal content could not be loaded from Supabase:', error);
+    content.innerHTML = '<p class="alert alert-info" role="alert">The school portal could not load its published information. Please try again shortly.</p>';
     return;
   }
   var publicData = portalResult.data || {};
@@ -9755,7 +9737,13 @@ function escapeManagementText(value) {
 window.showPublicManagement = async function() {
   var profilesEl = document.getElementById('publicManagementProfiles');
   var modal = document.getElementById('managementPublicModal');
-  if (!profilesEl || !modal || !supabaseClient) return;
+  if (!profilesEl || !modal) return;
+  modal.classList.remove('hidden');
+  profilesEl.innerHTML = '<p role="status" style="text-align:center;padding:24px">Loading school management profiles…</p>';
+  if (!supabaseClient) {
+    profilesEl.innerHTML = '<p class="alert alert-info" role="alert">The secure school service is not available. Please check your connection and reload the page.</p>';
+    return;
+  }
   try {
     var result = await supabaseClient.rpc('get_public_school_portal_content');
     if (result.error) throw result.error;
