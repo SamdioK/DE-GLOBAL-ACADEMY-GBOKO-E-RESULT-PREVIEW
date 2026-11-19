@@ -10609,7 +10609,7 @@ async function loadSchoolBrandingAssets() {
   };
 }
 
-function getTeacherSignatureKey(phase, subject) { return String(phase || 'BASIC').toUpperCase() + '::' + String(subject || ''); }
+function getTeacherSignatureKey(phase, subject, teacherId) { return String(phase || 'BASIC').toUpperCase() + '::' + String(subject || '') + '::' + String(teacherId || ''); }
 function getTeacherSignatureForPhase(subject, phase) {
   var exact = teacherSignatures[getTeacherSignatureKey(phase, subject)];
   return exact || teacherSignatures[getTeacherSignatureKey('BOTH', subject)] || '';
@@ -10621,7 +10621,7 @@ function getStudentSignaturePhase(student) {
 async function loadTeacherSignaturesFromSupabase() {
   if (!supabaseClient || !authenticatedProfile || !authenticatedProfile.school_id) return;
   var result = await supabaseClient.from('school_teacher_signatures')
-    .select('subject_name, storage_path, phase')
+    .select('subject_name, storage_path, phase, teacher_id')
     .eq('school_id', authenticatedProfile.school_id);
   if (result.error) throw result.error;
   var refreshed = {};
@@ -10630,18 +10630,19 @@ async function loadTeacherSignaturesFromSupabase() {
     if (!item.storage_path || !item.subject_name) continue;
     var signed = await supabaseClient.storage.from('school-private-assets').createSignedUrl(item.storage_path, 3600);
     if (signed.error) { console.warn('Could not load signature for ' + item.subject_name, signed.error); continue; }
-    refreshed[getTeacherSignatureKey(item.phase || 'BOTH', item.subject_name)] = signed.data.signedUrl;
+    if (item.teacher_id) refreshed[getTeacherSignatureKey(item.phase || 'BOTH', item.subject_name, item.teacher_id)] = signed.data.signedUrl;
   }
   teacherSignatures = Object.assign({}, teacherSignatures || {}, refreshed);
 }
 
-async function saveTeacherSignatureToSupabase(subject, file, phase) {
+async function saveTeacherSignatureToSupabase(subject, file, phase, teacherId) {
   if (!supabaseClient || !authenticatedProfile || authenticatedProfile.role !== 'administrator') throw new Error('An active School Administrator account is required to upload signatures.');
   phase = String(phase || activeSignatureLevel || 'BASIC').toUpperCase();
   if (phase !== 'BASIC' && phase !== 'SS') throw new Error('Select Basic or SS Classes before uploading.');
+  if (!teacherId) throw new Error('Select the assigned subject teacher before uploading this signature.');
   if (!file || !/^image\/(png|jpeg|webp)$/i.test(file.type || '') || file.size > 5 * 1024 * 1024) throw new Error('Choose a PNG, JPG or WEBP signature image up to 5 MB.');
   var existing = await supabaseClient.from('school_teacher_signatures').select('storage_path')
-    .eq('school_id', authenticatedProfile.school_id).eq('subject_name', subject).eq('phase', phase).maybeSingle();
+    .eq('school_id', authenticatedProfile.school_id).eq('teacher_id', teacherId).eq('subject_name', subject).eq('phase', phase).maybeSingle();
   if (existing.error) throw existing.error;
   if (existing.data) {
     var confirmation = window.prompt('Are you sure you want to remove the existing teacher signature and replace it?\n\nEnter 12345 to confirm, or press Cancel.');
@@ -10653,9 +10654,9 @@ async function saveTeacherSignatureToSupabase(subject, file, phase) {
   var uploaded = await bucket.upload(path, file, { contentType: file.type, cacheControl: '3600', upsert: false });
   if (uploaded.error) throw uploaded.error;
   var saved = await supabaseClient.from('school_teacher_signatures').upsert({
-    school_id: authenticatedProfile.school_id, subject_name: subject, phase: phase, storage_path: path,
+    school_id: authenticatedProfile.school_id, teacher_id: teacherId, subject_name: subject, phase: phase, storage_path: path,
     created_by: authenticatedProfile.id, updated_at: new Date().toISOString()
-  }, { onConflict: 'school_id,subject_name,phase' }).select('storage_path').single();
+  }, { onConflict: 'school_id,teacher_id,subject_name,phase' }).select('storage_path').single();
   if (saved.error || !saved.data) { await bucket.remove([path]); throw saved.error || new Error('Supabase did not confirm the signature record.'); }
   if (existing.data && existing.data.storage_path && existing.data.storage_path !== path) {
     var refs = await supabaseClient.from('school_teacher_signatures').select('id').eq('storage_path', existing.data.storage_path);
@@ -10665,15 +10666,16 @@ async function saveTeacherSignatureToSupabase(subject, file, phase) {
   if (signed.error) throw signed.error;
   return signed.data.signedUrl;
 }
-async function removeTeacherSignatureFromSupabase(subject, phase) {
+async function removeTeacherSignatureFromSupabase(subject, phase, teacherId) {
   if (!supabaseClient || !authenticatedProfile || authenticatedProfile.role !== 'administrator') throw new Error('An active School Administrator account is required to remove signatures.');
   phase = String(phase || activeSignatureLevel || 'BASIC').toUpperCase();
+  if (!teacherId) throw new Error('Select the subject teacher whose signature should be removed.');
   var existing = await supabaseClient.from('school_teacher_signatures').select('storage_path')
-    .eq('school_id', authenticatedProfile.school_id).eq('subject_name', subject).eq('phase', phase).maybeSingle();
+    .eq('school_id', authenticatedProfile.school_id).eq('teacher_id', teacherId).eq('subject_name', subject).eq('phase', phase).maybeSingle();
   if (existing.error) throw existing.error;
   if (!existing.data) return true;
   var removed = await supabaseClient.from('school_teacher_signatures').delete()
-    .eq('school_id', authenticatedProfile.school_id).eq('subject_name', subject).eq('phase', phase).select('storage_path').maybeSingle();
+    .eq('school_id', authenticatedProfile.school_id).eq('teacher_id', teacherId).eq('subject_name', subject).eq('phase', phase).select('storage_path').maybeSingle();
   if (removed.error) throw removed.error;
   var path = removed.data && removed.data.storage_path || existing.data.storage_path;
   if (path) {
