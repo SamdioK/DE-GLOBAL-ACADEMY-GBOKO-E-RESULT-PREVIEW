@@ -3366,25 +3366,29 @@ function idCardOwnRecord() {
 
 function idCardBuildData(record, kind) {
   if (!record) return null;
-
   if (kind === 'student') {
     return {
       kind: 'Student',
       name: record.studentName || record.fullName || record.full_name || '',
-      identifier: record.admNo || record.admissionNumber || '',
+      identifier: record.sid || record.admNo || record.admissionNumber || '',
+      sid: record.sid || record.admNo || '',
+      admissionNumber: record.admissionNumber || record.admission_number || record.admNo || '',
       className: record.className || record.class_name || '',
-      photo: record.photoUrl || record.photo_url ||
-        record.passportUrl || record.passport_url || record.photo || '',
+      session: record.session || record.academicSession || activeAcademicSession && activeAcademicSession.name || '',
+      house: record.studentHouse || record.student_house || '',
+      photo: record.photoUrl || record.photo_url || record.passportUrl || record.passport_url || record.photo || '',
       phone: record.guardianPhone || record.guardian_phone || ''
     };
   }
-
   return {
     kind: 'Staff',
-    name: record.fullName || record.full_name || currentUser.name || '',
+    name: record.fullName || record.full_name || currentUser && currentUser.name || '',
     identifier: record.staffId || record.staff_id || record.id || '',
+    designation: record.designation || '',
+    department: record.department || '',
     className: record.designation || record.department || '',
-    photo: record.photoUrl || record.photo_url || record.photo || '',
+    dateEmployed: record.dateEmployed || record.date_employed || '',
+    photo: record.photoUrl || record.photo_url || record.passportUrl || record.photo || '',
     phone: record.phone || '',
     email: record.email || ''
   };
@@ -3398,7 +3402,7 @@ function renderSchoolIdCard() {
     '<div class="card">' +
       '<h2>School ID Card</h2>' +
       '<p style="color:#66736b;margin:8px 0 16px;">' +
-        'Preview and print authorised identification cards.' +
+        'Generate staff and student identity cards with matching front and reverse sides.' +
       '</p>' +
       '<div id="idCardMessage" class="alert alert-info">' +
         'Checking card access…' +
@@ -3477,14 +3481,14 @@ function renderSchoolIdCardContent() {
       '</div>';
   }
 
-  html += '<div class="card"><h3>My ID Card</h3><div id="myIdCardPreview"></div>' +
+  html += '<div class="card"><h3>My Two-Sided ID Card</h3><p style="font-size:12px;color:#66736b;">Standard CR80 / ID-1 size: 85.60 × 53.98 mm. Front and reverse are produced together.</p><div id="myIdCardPreview"></div>' +
     '<button class="btn btn-primary" id="idCardPrintOwn">Print My Card</button> ' +
     '<button class="btn btn-success" id="idCardDownloadJpg">Download JPG</button> ' +
     '<button class="btn btn-success" id="idCardDownloadPdf">Download PDF</button></div>';
 
   if (idCardIsDeveloper() || currentUser.type === 'admin') {
     html +=
-      '<div class="card"><h3>Bulk Student Card Preview</h3>' +
+      '<div class="card"><h3>Bulk Student ID Cards — Front and Back</h3>' +
         '<p style="font-size:12px;color:#66736b;">' +
           'This stage supports preview only. Payment and bulk print authorisation ' +
           'will be added later.' +
@@ -3515,19 +3519,18 @@ function renderSchoolIdCardContent() {
 
   document.getElementById('idCardDownloadJpg').addEventListener('click', function () {
     if (!idCardCanAccess() || !ownData) { showToast('Card access is not authorised.', 'error'); return; }
-    downloadRenderedCard(document.querySelector('#myIdCardPreview > div'), 'jpg', 'DE-Global-' + (ownData.identifier || 'ID-Card'));
+    downloadIdCardSet(document.querySelector('#myIdCardPreview .id-card-set'), 'jpg', 'DE-Global-' + (ownData.identifier || 'ID-Card'));
   });
   document.getElementById('idCardDownloadPdf').addEventListener('click', function () {
     if (!idCardCanAccess() || !ownData) { showToast('Card access is not authorised.', 'error'); return; }
-    downloadRenderedCard(document.querySelector('#myIdCardPreview > div'), 'pdf', 'DE-Global-' + (ownData.identifier || 'ID-Card'));
+    downloadIdCardSet(document.querySelector('#myIdCardPreview .id-card-set'), 'pdf', 'DE-Global-' + (ownData.identifier || 'ID-Card'));
   });
-
   document.getElementById('idCardPrintOwn').addEventListener('click', function () {
     if (!idCardCanAccess() || !ownData) {
       showToast('Card access is not authorised.', 'error');
       return;
     }
-    window.print();
+    printIdCardSet(document.querySelector('#myIdCardPreview .id-card-set'));
   });
 
   if (idCardIsDeveloper()) {
@@ -3590,49 +3593,119 @@ async function updateIdCardPermission(allowed) {
   }
 }
 
+function idCardFaceStyles() {
+  return '<style id="officialIdCardStyles">'+
+    '.id-card-set{display:flex;flex-wrap:wrap;align-items:flex-start;gap:14px;margin:12px 0 18px;font-family:Arial,Helvetica,sans-serif;color:#172033}'+
+    '.id1-face{position:relative;width:85.6mm;height:53.98mm;flex:0 0 85.6mm;overflow:hidden;border:1.1mm solid #064b39;border-radius:3mm;background:#fff;box-sizing:border-box;box-shadow:0 3px 12px rgba(0,0,0,.14);-webkit-print-color-adjust:exact;print-color-adjust:exact}'+
+    '.id1-top{height:15mm;display:flex;align-items:center;gap:2mm;padding:1.6mm 2.2mm;background:linear-gradient(112deg,#006b4d 0%,#003c30 62%,#002d27 100%);color:#fff;border-bottom:1mm solid #e6b83e}'+
+    '.id1-crest{width:12mm;height:12mm;flex:0 0 12mm;object-fit:contain;background:#fff;border:0.45mm solid #e7bd49;border-radius:1.3mm;padding:.4mm;box-sizing:border-box}'+
+    '.id1-brand{min-width:0;flex:1;text-align:center;line-height:1.1}'+
+    '.id1-school{font-size:7.4pt;font-weight:900;letter-spacing:.15px;text-transform:uppercase;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}'+
+    '.id1-address{font-size:4.4pt;font-weight:700;color:#f9d76a;margin-top:.7mm;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}'+
+    '.id1-contact{font-size:4.2pt;font-weight:700;margin-top:.8mm;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}'+
+    '.id1-type{position:absolute;right:2mm;top:15.7mm;background:#70008a;color:#fff;border-radius:4mm;padding:.65mm 2mm;font-size:4.5pt;font-weight:900;letter-spacing:.3px}'+
+    '.id1-front-body{height:31.5mm;display:flex;gap:2mm;padding:2mm 2.2mm 1.5mm;position:relative}'+
+    '.id1-details{flex:1;min-width:0;position:relative;z-index:1;padding-top:1mm}'+
+    '.id1-name-label{font-size:4.6pt;font-weight:800;color:#6a287f;text-transform:uppercase;letter-spacing:.4px}'+
+    '.id1-name{font-size:9pt;font-weight:900;line-height:1.05;color:#064b39;text-transform:uppercase;margin:.6mm 0 1.8mm;overflow-wrap:anywhere;max-height:7mm;overflow:hidden}'+
+    '.id1-detail{display:flex;gap:1mm;align-items:baseline;font-size:5.4pt;line-height:1.35;margin:.45mm 0;min-width:0}'+
+    '.id1-detail b{color:#57206f;min-width:14mm;font-size:4.7pt;text-transform:uppercase;letter-spacing:.1px}'+
+    '.id1-detail span{font-weight:700;overflow-wrap:anywhere;min-width:0}'+
+    '.id1-photo-wrap{width:21mm;height:26mm;flex:0 0 21mm;border:.55mm solid #91aa9e;border-radius:2mm;padding:.5mm;background:#fff;align-self:center;box-sizing:border-box}'+
+    '.id1-photo{width:100%;height:100%;display:block;object-fit:cover;border-radius:1.2mm}'+
+    '.id1-photo-empty{height:100%;display:grid;place-items:center;text-align:center;color:#75847d;font-size:5pt;font-weight:700;line-height:1.2;border:1px dashed #91aa9e;border-radius:1mm}'+
+    '.id1-front-foot{position:absolute;left:0;right:0;bottom:0;height:5.3mm;padding:1mm 2.2mm;background:linear-gradient(100deg,#00664a,#003c30);border-top:.7mm solid #e6bb43;color:#fff;display:flex;align-items:center;justify-content:space-between;gap:2mm;font-size:4.8pt;font-weight:800}'+
+    '.id1-front-foot em{font-style:italic;color:#f9d76a;white-space:nowrap}'+
+    '.id1-back{background:linear-gradient(135deg,#fff 0%,#f7fbf8 100%)}'+
+    '.id1-back-head{height:11mm;padding:1.8mm 2.5mm;background:linear-gradient(112deg,#006b4d,#00382d);border-bottom:1mm solid #e6b83e;color:#fff;text-align:center}'+
+    '.id1-back-head strong{display:block;font-size:7pt;letter-spacing:.25px;text-transform:uppercase}'+
+    '.id1-back-head span{display:block;margin-top:.8mm;color:#f9d76a;font-size:4.8pt;font-weight:800;letter-spacing:.8px}'+
+    '.id1-back-content{padding:2.1mm 3mm 1mm;display:grid;grid-template-columns:1fr 1fr;column-gap:3mm;row-gap:1.2mm}'+
+    '.id1-back-item{min-width:0;border-bottom:.2mm solid #dbe4df;padding-bottom:.65mm}'+
+    '.id1-back-item small{display:block;color:#6a287f;font-size:4.2pt;font-weight:800;text-transform:uppercase;letter-spacing:.25px}'+
+    '.id1-back-item b{display:block;margin-top:.35mm;color:#1f352c;font-size:5.5pt;line-height:1.15;overflow-wrap:anywhere}'+
+    '.id1-back-note{margin:1.3mm 3mm 0;padding:1mm 1.5mm;background:#f0ebf8;border-left:1mm solid #70008a;color:#3d3150;font-size:4.4pt;line-height:1.2;font-weight:700}'+
+    '.id1-back-foot{position:absolute;left:0;right:0;bottom:0;min-height:5.5mm;padding:1mm 2.5mm;background:#003c30;color:#fff;border-top:.7mm solid #e6bb43;display:flex;align-items:center;justify-content:space-between;gap:2mm;font-size:4.4pt;font-weight:700}'+
+    '.id1-back-foot b{color:#f9d76a}'+
+    '@media(max-width:600px){.id-card-set{flex-direction:column;align-items:center}.id1-face{width:min(85.6mm,100%);flex-basis:auto;height:auto;aspect-ratio:85.6/53.98}.id1-top{height:27.8%;padding:2.8% 3.8%;gap:2.5%}.id1-crest{width:13.5%;height:90%;flex-basis:13.5%;padding:1%}.id1-school{font-size:clamp(7px,2.1vw,10px)}.id1-address,.id1-contact{font-size:clamp(4px,1.25vw,6px)}.id1-type{top:29%;font-size:clamp(4px,1.2vw,6px)}.id1-front-body{height:58.4%;padding:3% 3.8%;gap:3%}.id1-name-label{font-size:clamp(4px,1.3vw,6px)}.id1-name{font-size:clamp(9px,2.5vw,12px);margin:1% 0 2.5%;max-height:22%}.id1-detail{font-size:clamp(5px,1.55vw,7px);margin:1% 0}.id1-detail b{font-size:clamp(4px,1.3vw,6px);min-width:35%}.id1-photo-wrap{width:27%;height:86%;flex-basis:27%;padding:1%}.id1-front-foot{height:9.8%;padding:1.5% 3.8%;font-size:clamp(4px,1.3vw,6px)}.id1-back-head{height:20.4%;padding:3%}.id1-back-head strong{font-size:clamp(7px,2vw,10px)}.id1-back-head span{font-size:clamp(4px,1.3vw,6px)}.id1-back-content{height:48%;padding:3% 4%;column-gap:4%;row-gap:3%}.id1-back-item small{font-size:clamp(4px,1.15vw,5.5px)}.id1-back-item b{font-size:clamp(5px,1.5vw,7px)}.id1-back-note{font-size:clamp(4px,1.15vw,5.5px);margin:1% 4%;padding:1.5%}.id1-back-foot{min-height:10%;padding:1.5% 3.5%;font-size:clamp(4px,1.15vw,5.5px)}}'+
+    '@media print{@page{size:85.6mm 53.98mm;margin:0}.id-card-set{display:block;margin:0;gap:0}.id1-face{width:85.6mm!important;height:53.98mm!important;max-width:none!important;aspect-ratio:auto!important;border-radius:3mm;box-shadow:none;margin:0;break-after:page;page-break-after:always}.id1-face:last-child{break-after:auto;page-break-after:auto}}'+
+    '</style>';
+}
+function idCardDisplayValue(value, fallback) {
+  var text = String(value == null ? '' : value).trim();
+  return idCardEscape(text || fallback || '—');
+}
 function renderIdCardPreview(data, targetId) {
   var target = document.getElementById(targetId);
-  if (!target) return;
-
-  var schoolName = (currentSchool &&
-    (currentSchool.schoolName || currentSchool.name)) ||
-    'DE-GLOBAL ACADEMY GBOKO';
-
-  var validUntil = schoolIdCardSettings.validUntil || 'As configured by the school';
-
-  target.innerHTML =
-    '<div style="width:100%;max-width:350px;border:1px solid #ddd;' +
-      'border-radius:10px;overflow:hidden;background:#fff;margin:10px 0 16px;' +
-      'box-shadow:0 2px 8px #0001;">' +
-      '<div style="background:#176b43;color:white;text-align:center;padding:14px;">' +
-        (schoolIdCardSettings.logo ?
-          '<img src="' + idCardEscape(schoolIdCardSettings.logo) +
-          '" alt="School logo" style="width:42px;height:42px;object-fit:contain;">' : '') +
-        '<strong style="display:block;">' + idCardEscape(schoolName) + '</strong>' +
-        '<small>SCHOOL IDENTIFICATION CARD</small>' +
-      '</div>' +
-      '<div style="height:4px;background:#d5ad45;"></div>' +
-      '<div style="display:flex;gap:12px;padding:14px;min-height:130px;">' +
-        '<img src="' + idCardEscape(data.photo || '') + '" alt="Cardholder photo" ' +
-          'style="width:84px;height:102px;object-fit:cover;border:1px solid #ddd;" ' +
-          'onerror="this.style.visibility=\'hidden\'">' +
-        '<div style="font-size:12px;line-height:1.7;overflow-wrap:anywhere;">' +
-          '<strong style="display:block;font-size:14px;color:#176b43;">' +
-            idCardEscape(data.name) + '</strong>' +
-          '<div>Type: ' + idCardEscape(data.kind) + '</div>' +
-          '<div>ID: ' + idCardEscape(data.identifier) + '</div>' +
-          '<div>' + idCardEscape(data.className) + '</div>' +
-          '<div>Valid until: ' + idCardEscape(validUntil) + '</div>' +
-        '</div>' +
-      '</div>' +
-      '<div style="height:4px;background:#d5ad45;"></div>' +
-      '<div style="padding:10px;font-size:11px;color:#555;">' +
-        idCardEscape(schoolIdCardSettings.schoolAddress || '') + '<br>' +
-        idCardEscape(schoolIdCardSettings.schoolPhone || '') +
-      '</div>' +
-    '</div>';
+  if (!target || !data) return;
+  var school = schoolInfo || {};
+  var schoolName = school.name || school.schoolName || currentSchool && currentSchool.schoolName || 'DE-GLOBAL ACADEMY GBOKO';
+  var address = schoolIdCardSettings.schoolAddress || school.address || currentSchool && currentSchool.address || 'GBOKO NORTH, BENUE STATE';
+  var phone = schoolIdCardSettings.schoolPhone || school.phone || currentSchool && currentSchool.phone || '';
+  var email = school.email || currentSchool && currentSchool.email || '';
+  var logo = schoolIdCardSettings.logo || school.portalLogo || school.logo || currentSchool && currentSchool.logo || '';
+  var motto = school.motto || 'We Are The World Best';
+  var isStudent = String(data.kind || '').toLowerCase() === 'student';
+  var name = idCardDisplayValue(data.name, 'Name not available');
+  var identifier = idCardDisplayValue(data.identifier, 'Not assigned');
+  var designation = idCardDisplayValue(data.className, isStudent ? 'Class not assigned' : 'Staff');
+  var photo = String(data.photo || '').trim();
+  var typeLabel = isStudent ? 'STUDENT IDENTITY CARD' : 'STAFF IDENTITY CARD';
+  var frontDetails = isStudent
+    ? [['STUDENT ID', data.sid || data.identifier], ['CLASS / ARM', data.className], ['SESSION', data.session || activeAcademicSession && activeAcademicSession.name]]
+    : [['STAFF ID', data.identifier], ['POSITION', data.designation || data.className], ['DEPARTMENT', data.department]];
+  var backDetails = isStudent
+    ? [['ADMISSION NO.', data.admissionNumber || data.identifier], ['STUDENT ID', data.sid || data.identifier], ['CLASS / ARM', data.className], ['ACADEMIC SESSION', data.session || activeAcademicSession && activeAcademicSession.name], ['GUARDIAN CONTACT', data.phone], ['STUDENT HOUSE', data.house]]
+    : [['STAFF ID', data.identifier], ['DESIGNATION', data.designation || data.className], ['DEPARTMENT', data.department], ['PHONE', data.phone], ['EMAIL', data.email], ['DATE EMPLOYED', data.dateEmployed]];
+  var front = '<article class="id1-face id1-front" aria-label="ID card front">'+
+    '<header class="id1-top">'+(logo?'<img class="id1-crest" src="'+idCardEscape(logo)+'" alt="School crest">':'<div class="id1-crest"></div>')+
+    '<div class="id1-brand"><div class="id1-school">'+idCardDisplayValue(schoolName)+'</div><div class="id1-address">'+idCardDisplayValue(address)+'</div><div class="id1-contact">'+(email?'✉ '+idCardEscape(email)+' &nbsp; ':'')+(phone?'☎ '+idCardEscape(phone):'')+'</div></div></header>'+
+    '<span class="id1-type">'+typeLabel+'</span><section class="id1-front-body"><div class="id1-details"><div class="id1-name-label">Full name</div><div class="id1-name">'+name+'</div>'+
+    frontDetails.map(function(item){return '<div class="id1-detail"><b>'+idCardEscape(item[0])+'</b><span>'+idCardDisplayValue(item[1])+'</span></div>';}).join('')+
+    '</div><div class="id1-photo-wrap">'+(photo?'<img class="id1-photo" src="'+idCardEscape(photo)+'" alt="Cardholder photograph" onerror="this.style.display=\'none\'">':'<div class="id1-photo-empty">PASSPORT<br>PHOTOGRAPH</div>')+'</div></section>'+
+    '<footer class="id1-front-foot"><span>'+idCardEscape(isStudent?'OFFICIAL STUDENT':'OFFICIAL STAFF')+'</span><em>'+idCardEscape(motto)+'</em></footer></article>';
+  var back = '<article class="id1-face id1-back" aria-label="ID card back"><header class="id1-back-head"><strong>'+idCardEscape(schoolName)+'</strong><span>OFFICIAL '+(isStudent?'STUDENT':'STAFF')+' IDENTIFICATION</span></header>'+
+    '<section class="id1-back-content">'+backDetails.map(function(item){return '<div class="id1-back-item"><small>'+idCardEscape(item[0])+'</small><b>'+idCardDisplayValue(item[1])+'</b></div>';}).join('')+'</section>'+
+    '<div class="id1-back-note">This card remains the property of '+idCardEscape(schoolName)+'. If found, please return it to the school office. It is not transferable.</div>'+
+    '<footer class="id1-back-foot"><span>'+idCardEscape(address)+'</span><span>VALID UNTIL: <b>'+idCardDisplayValue(schoolIdCardSettings.validUntil,'As determined by school')+'</b></span></footer></article>';
+  target.innerHTML = idCardFaceStyles()+'<div class="id-card-set" data-card-kind="'+(isStudent?'student':'staff')+'">'+front+back+'</div>';
 }
-
+function printIdCardSet(element) {
+  if (!element) { showToast('The front and back ID card preview is not available.','error'); return; }
+  var win = window.open('','_blank');
+  if (!win) { showToast('Allow pop-ups to print the ID card.','error'); return; }
+  var styles = element.parentElement && element.parentElement.querySelector('#officialIdCardStyles');
+  win.document.open();
+  win.document.write('<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Official ID Card</title>'+
+    (styles?styles.outerHTML:'')+'<style>html,body{margin:0;padding:0;background:#fff}.id-card-set{display:block!important;margin:0!important}.id1-face{box-sizing:border-box!important}</style></head><body>'+element.outerHTML+
+    '<script>window.onload=function(){var imgs=[].slice.call(document.images);Promise.all(imgs.map(function(i){return i.complete?Promise.resolve():new Promise(function(r){i.onload=r;i.onerror=r;});})).then(function(){setTimeout(function(){window.print();},250);});};<\\/script></body></html>');
+  win.document.close();
+}
+async function downloadIdCardSet(element, format, filename) {
+  if (!element) { showToast('The front and back ID card preview is not available.','error'); return; }
+  if (format === 'jpg') {
+    await downloadRenderedCard(element, 'jpg', filename+'-Front-and-Back');
+    return;
+  }
+  if (format !== 'pdf') return;
+  if (typeof html2canvas !== 'function' || !window.jspdf || !window.jspdf.jsPDF) {
+    showToast('The ID card PDF export library is unavailable. Reload and try again.','error'); return;
+  }
+  try {
+    var faces = Array.prototype.slice.call(element.querySelectorAll('.id1-face'));
+    if (faces.length !== 2) throw new Error('Both sides of the ID card must be present.');
+    var pdf = new window.jspdf.jsPDF({orientation:'landscape',unit:'mm',format:[85.6,53.98]});
+    for (var i=0;i<faces.length;i++) {
+      var canvas = await html2canvas(faces[i],{scale:4,useCORS:true,backgroundColor:'#ffffff',imageTimeout:15000});
+      if (i) pdf.addPage([85.6,53.98],'landscape');
+      pdf.addImage(canvas.toDataURL('image/jpeg',0.96),'JPEG',0,0,85.6,53.98);
+    }
+    pdf.save(filename+'.pdf');
+    showToast('Two-sided CR80 ID card PDF prepared.','success');
+  } catch(error) {
+    showToast(error && error.message || 'Could not prepare the two-sided ID card PDF.','error');
+  }
+}
 async function previewBulkIdCards() {
   if (
     !currentUser ||
@@ -3804,6 +3877,17 @@ async function previewBulkIdCards() {
       return;
     }
 
+    var passportRows = await supabaseClient.from('student_passports')
+      .select('student_id,storage_path').eq('school_id',schoolId)
+      .in('student_id',matched.map(function(item){return item.student.id;}));
+    if (passportRows.error) throw passportRows.error;
+    var passportByStudent = {};
+    for (var passportIndex=0;passportIndex<(passportRows.data||[]).length;passportIndex++) {
+      var passportRow=passportRows.data[passportIndex];
+      if (!passportRow.storage_path) continue;
+      var signedPassport=await supabaseClient.storage.from('student-passports').createSignedUrl(passportRow.storage_path,900);
+      if (!signedPassport.error && signedPassport.data && signedPassport.data.signedUrl) passportByStudent[String(passportRow.student_id)]=signedPassport.data.signedUrl;
+    }
     matched.forEach(function (item, index) {
       var student = item.student;
       var enrolment = item.enrolment || {};
@@ -3824,9 +3908,12 @@ async function previewBulkIdCards() {
             student.last_name
           ].filter(Boolean).join(' '),
         admNo: enrolment.sid || student.admission_number || '',
+        sid: enrolment.sid || '',
         admissionNumber: student.admission_number || '',
-        className: enrolment.class_id || '',
-        photoUrl: student.photo_url || student.passport_url || ''
+        className: studentDbClassLabel(enrolment.class_id) || enrolment.class_id || '',
+        session: activeAcademicSession && activeAcademicSession.name || '',
+        studentHouse: student.student_house || '',
+        photoUrl: passportByStudent[String(student.id)] || student.photo_url || student.passport_url || ''
       });
 
       var wrapper = document.createElement('div');
@@ -5636,7 +5723,8 @@ function renderOfficialStudentRows(isAdmin, query) {
     var actionCell = isAdmin
       ? '<td class="student-login-account-cell"><div class="student-row-actions">' +
           '<div class="student-row-login-action">' + renderOfficialStudentLoginAction(item) + '</div>' +
-          '<button type="button" class="btn btn-primary student-photo-card-print" data-student-id="' + escapeManagementText(student.id) + '" aria-label="Print or download photo card">Print</button>' +
+          '<button type="button" class="btn btn-primary student-photo-card-print" data-student-id="' + escapeManagementText(student.id) + '" aria-label="Print or download photo card">Photo Card</button>' +
+          '<button type="button" class="btn btn-success student-id-card-print" data-student-id="' + escapeManagementText(student.id) + '" aria-label="Generate two-sided student ID card">ID Card</button>' +
         '</div></td>'
       : '<td><button class="btn btn-primary student-correction-start" data-student="' +
           escapeManagementText(student.id) +
@@ -6042,8 +6130,61 @@ async function buildOfficialStudentPhotoCard(studentId, sessionOverride, termOve
     'var code='+JSON.stringify(String(enrolment.sid||student.admission_number||student.id||"STUDENT"))+';try{if(typeof JsBarcode==="function"){JsBarcode("#studentBarcode",code,{format:"CODE128",displayValue:false,margin:0,height:42,width:1.5});}}catch(barcodeError){document.getElementById("studentBarcode").setAttribute("aria-label","Barcode unavailable");}'+
     'window.onload=function(){var imgs=[].slice.call(document.images);Promise.all(imgs.map(function(i){return i.complete?Promise.resolve():new Promise(function(r){i.onload=r;i.onerror=r;});})).then(function(){setTimeout(function(){window.print();},250);});};<\/script></body></html>';
 }
+async function printOfficialStudentIdCard(studentId) {
+  var isAllowedAdmin = currentUser && currentUser.type === 'admin' && authenticatedProfile && authenticatedProfile.role === 'administrator';
+  var isAllowedPrincipal = currentUser && currentUser.type === 'principal' && authenticatedProfile && (authenticatedProfile.role === 'principal' || (Array.isArray(authenticatedProfile.active_roles) && authenticatedProfile.active_roles.indexOf('principal') !== -1));
+  if ((!isAllowedAdmin && !isAllowedPrincipal) || !authenticatedProfile || authenticatedProfile.is_active !== true || !supabaseClient) {
+    showToast('An active School Administrator or Principal account is required to generate student ID cards.','error'); return;
+  }
+  var item=(studentDbState.official||[]).find(function(x){return String(x.student&&x.student.id)===String(studentId);});
+  if(!item||!item.student){showToast('Student record is no longer available. Refresh the Student Database.','error');return;}
+  var student=item.student,enrolment=item.enrolment||{},schoolId=authenticatedProfile.school_id,photoUrl='';
+  try {
+    await loadSchoolIdCardSettings();
+    var passport=await supabaseClient.from('student_passports').select('storage_path').eq('school_id',schoolId).eq('student_id',student.id).maybeSingle();
+    if(passport.error)throw passport.error;
+    if(passport.data&&passport.data.storage_path){
+      var signed=await supabaseClient.storage.from('student-passports').createSignedUrl(passport.data.storage_path,900);
+      if(signed.error)throw signed.error;
+      photoUrl=signed.data.signedUrl;
+    }
+    var record=Object.assign({},student,{
+      studentName:studentDbName(student),
+      fullName:studentDbName(student),
+      sid:enrolment.sid||'',
+      admNo:enrolment.sid||student.admission_number||'',
+      admissionNumber:student.admission_number||'',
+      className:studentDbClassLabel(enrolment.class_id)||'',
+      session:activeAcademicSession&&activeAcademicSession.name||'',
+      studentHouse:student.student_house||'',
+      photoUrl:photoUrl||student.photo_url||student.passport_url||'',
+      guardianPhone:student.guardian_phone||''
+    });
+    var data=idCardBuildData(record,'student');
+    var host=document.createElement('div');
+    var hostId='studentIdCardPrintHost';
+    var previous=document.getElementById(hostId);if(previous)previous.remove();
+    host.id=hostId;host.style.cssText='position:fixed;left:-10000px;top:0;width:700px;height:auto;overflow:visible;';
+    document.body.appendChild(host);
+    renderIdCardPreview(data,hostId);
+    var set=host.querySelector('.id-card-set');
+    if(!set)throw new Error('The student ID card could not be rendered.');
+    printIdCardSet(set);
+    host.remove();
+  } catch(error) {
+    showToast(error&&error.message||'Unable to generate the student ID card.','error');
+  }
+}
 function bindStudentPhotoCardPrintEvents(root){
   if(!root)return;
+  root.querySelectorAll('.student-id-card-print').forEach(function(button){
+    if(button.dataset.idCardBound==='true')return;
+    button.dataset.idCardBound='true';
+    button.addEventListener('click',function(){
+      button.disabled=true;button.textContent='Preparing…';
+      printOfficialStudentIdCard(button.getAttribute('data-student-id')).finally(function(){button.disabled=false;button.textContent='ID Card';});
+    });
+  });
   root.querySelectorAll('.student-photo-card-print').forEach(function(button){
     if(button.dataset.bound==='true')return;
     button.dataset.bound='true';
