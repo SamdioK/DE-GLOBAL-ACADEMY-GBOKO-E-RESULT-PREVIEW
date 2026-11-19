@@ -10610,9 +10610,9 @@ async function loadSchoolBrandingAssets() {
 }
 
 function getTeacherSignatureKey(phase, subject, teacherId) { return String(phase || 'BASIC').toUpperCase() + '::' + String(subject || '') + '::' + String(teacherId || ''); }
-function getTeacherSignatureForPhase(subject, phase) {
-  var exact = teacherSignatures[getTeacherSignatureKey(phase, subject)];
-  return exact || teacherSignatures[getTeacherSignatureKey('BOTH', subject)] || '';
+function getTeacherSignatureForPhase(subject, phase, teacherId) {
+  var exact = teacherSignatures[getTeacherSignatureKey(phase, subject, teacherId)];
+  return exact || teacherSignatures[getTeacherSignatureKey('BOTH', subject, teacherId)] || '';
 }
 function getStudentSignaturePhase(student) {
   var className = String(student && (student.className || student.class_name) || '').toUpperCase();
@@ -11133,63 +11133,44 @@ function renderAssessment() {
 // ===================== TEACHER SIGNATURES =====================
 var activeSignatureLevel = 'BASIC';
 
-function renderTeacherSignatures() {
+var activeSignatureTeacherId = '';
+async function renderTeacherSignatures() {
   if (!currentUser || currentUser.type !== 'admin') return;
-  var subjects = activeSignatureLevel === 'SS'
-    ? seniorCoreSubjects.concat(tradeSubjects)
-    : basicCoreSubjects.concat(tradeSubjects);
-  var html = '<div class="card"><h2>Teachers\' Signature</h2><p style="color:#666; margin:8px 0 16px;">Upload a signature image for each subject. It will appear in the Sign column of that subject on printed result sheets.</p>' +
-    '<div style="display:flex; gap:8px; margin-bottom:18px;"><button class="btn ' + (activeSignatureLevel === 'BASIC' ? 'btn-primary' : '') + ' signature-level-btn" data-level="BASIC" style="' + (activeSignatureLevel !== 'BASIC' ? 'background:#eee;' : '') + '">BASIC Classes</button><button class="btn ' + (activeSignatureLevel === 'SS' ? 'btn-primary' : '') + ' signature-level-btn" data-level="SS" style="' + (activeSignatureLevel !== 'SS' ? 'background:#eee;' : '') + '">SS Classes</button></div>' +
-    '<div style="overflow-x:auto;"><table><thead><tr><th>Subject</th><th>Uploaded Signature</th><th>Upload / Replace</th><th>Action</th></tr></thead><tbody>';
-  subjects.forEach(function(subject) {
-    var signature = getTeacherSignatureForPhase(subject, activeSignatureLevel);
-    html += '<tr><td>' + escapeManagementText(subject) + '</td><td>' + (signature ? '<img src="' + escapeManagementText(signature) + '" alt="' + escapeManagementText(subject) + ' teacher signature" style="max-width:120px;max-height:44px;object-fit:contain;">' : '<span style="color:#999;">Not uploaded</span>') + '</td><td><input type="file" class="teacher-signature-upload" data-subject="' + escapeManagementText(subject) + '" data-phase="' + activeSignatureLevel + '" accept="image/*"></td><td>' + (signature ? '<button class="btn btn-danger remove-teacher-signature" data-subject="' + escapeManagementText(subject) + '" data-phase="' + activeSignatureLevel + '">Remove</button>' : '—') + '</td></tr>';
+  var subjects = activeSignatureLevel === 'SS' ? seniorCoreSubjects.concat(tradeSubjects) : basicCoreSubjects.concat(tradeSubjects);
+  var teacherResult = await supabaseClient.from('profiles').select('id,full_name,role,is_active')
+    .eq('school_id', authenticatedProfile.school_id).eq('is_active', true).order('full_name');
+  if (teacherResult.error) throw teacherResult.error;
+  var teachers = (teacherResult.data || []).filter(function(p) { return ['subject_teacher','form_master','principal','administrator'].indexOf(String(p.role||'')) >= 0; });
+  if (!activeSignatureTeacherId || !teachers.some(function(p){return String(p.id)===String(activeSignatureTeacherId);})) activeSignatureTeacherId = teachers.length ? String(teachers[0].id) : '';
+  var selectedTeacher = teachers.find(function(p){return String(p.id)===String(activeSignatureTeacherId);});
+  var html = '<div class="card"><h2>Teachers\' Signature</h2><p style="color:#666;margin:8px 0 16px;">Select the actual staff member first. Each uploaded signature is securely linked to that teacher, subject and school section.</p>'+
+    '<div class="input-group"><label for="signatureTeacherProfile">Assigned Subject Teacher</label><select id="signatureTeacherProfile"><option value="">Select teacher</option>'+teachers.map(function(p){return '<option value="'+escapeManagementText(p.id)+'" '+(String(p.id)===String(activeSignatureTeacherId)?'selected':'')+'>'+escapeManagementText(p.full_name||'Unnamed staff')+'</option>';}).join('')+'</select></div>'+
+    '<div style="display:flex;gap:8px;margin:16px 0;"><button class="btn '+(activeSignatureLevel==='BASIC'?'btn-primary':'')+' signature-level-btn" data-level="BASIC">BASIC Classes</button><button class="btn '+(activeSignatureLevel==='SS'?'btn-primary':'')+' signature-level-btn" data-level="SS">SS Classes</button></div>'+
+    '<div style="overflow-x:auto;"><table><thead><tr><th>Subject</th><th>Registered Signature</th><th>Upload / Replace</th><th>Action</th></tr></thead><tbody>';
+  subjects.forEach(function(subject){
+    var signature=getTeacherSignatureForPhase(subject,activeSignatureLevel,activeSignatureTeacherId);
+    html+='<tr><td>'+escapeManagementText(subject)+'</td><td>'+(signature?'<img src="'+escapeManagementText(signature)+'" alt="Teacher signature" style="max-width:120px;max-height:44px;object-fit:contain;">':'<span style="color:#999;">Not registered for this teacher</span>')+'</td><td><input type="file" class="teacher-signature-upload" data-subject="'+escapeManagementText(subject)+'" data-phase="'+activeSignatureLevel+'" accept="image/png,image/jpeg,image/webp" '+(!activeSignatureTeacherId?'disabled':'')+'></td><td>'+(signature?'<button class="btn btn-danger remove-teacher-signature" data-subject="'+escapeManagementText(subject)+'" data-phase="'+activeSignatureLevel+'">Remove</button>':'—')+'</td></tr>';
   });
-  html += '</tbody></table></div></div>';
-  document.getElementById('teacherSignaturesTab').innerHTML = html;
-
-  document.querySelectorAll('.signature-level-btn').forEach(function(button) {
-    button.addEventListener('click', function() {
-      activeSignatureLevel = this.getAttribute('data-level');
-      renderTeacherSignatures();
-    });
-  });
-  document.querySelectorAll('.teacher-signature-upload').forEach(function(input) {
-    input.addEventListener('change', async function() {
-      var file = input.files && input.files[0];
-      if (!file) return;
-      var subject = input.getAttribute('data-subject');
-      var phase = input.getAttribute('data-phase') || activeSignatureLevel;
-      input.disabled = true;
-      try {
-        teacherSignatures[getTeacherSignatureKey(phase, subject)] = await saveTeacherSignatureToSupabase(subject, file, phase);
-        logActivity('Uploaded subject teacher signature', subject);
-        showToast('Signature uploaded securely to Supabase Storage.', 'success');
-        renderTeacherSignatures();
-      } catch (error) {
-        showToast(error && error.message || 'Could not save the signature.', 'error');
-      } finally { input.disabled = false; }
-    });
-  });
-  document.querySelectorAll('.remove-teacher-signature').forEach(function(button) {
-    button.addEventListener('click', async function() {
-      var subject = button.getAttribute('data-subject');
-      var phase = button.getAttribute('data-phase') || activeSignatureLevel;
-      var confirmation = window.prompt('Are you sure you want to remove the existing teacher signature and replace it?\n\nEnter 12345 to confirm, or press Cancel.');
-      if (confirmation !== '12345') { showToast(confirmation === null ? 'Removal cancelled. The existing signature was kept.' : 'Incorrect confirmation code. The existing signature was kept.', 'info'); return; }
-      button.disabled = true;
-      try {
-        await removeTeacherSignatureFromSupabase(subject, phase);
-        delete teacherSignatures[getTeacherSignatureKey(phase, subject)];
-        logActivity('Removed subject teacher signature', subject);
-        showToast('Signature removed from Supabase Storage.', 'info');
-        renderTeacherSignatures();
-      } catch (error) { showToast(error && error.message || 'Could not remove the signature.', 'error'); }
-      finally { button.disabled = false; }
-    });
-  });
+  html+='</tbody></table></div></div>';
+  document.getElementById('teacherSignaturesTab').innerHTML=html;
+  document.getElementById('signatureTeacherProfile').addEventListener('change',function(){activeSignatureTeacherId=this.value;renderTeacherSignatures();});
+  document.querySelectorAll('.signature-level-btn').forEach(function(button){button.addEventListener('click',function(){activeSignatureLevel=this.getAttribute('data-level');renderTeacherSignatures();});});
+  document.querySelectorAll('.teacher-signature-upload').forEach(function(input){input.addEventListener('change',async function(){
+    var file=input.files&&input.files[0];if(!file)return;
+    var subject=input.getAttribute('data-subject'),phase=input.getAttribute('data-phase')||activeSignatureLevel,teacherId=activeSignatureTeacherId;
+    input.disabled=true;
+    try{var url=await saveTeacherSignatureToSupabase(subject,file,phase,teacherId);teacherSignatures[getTeacherSignatureKey(phase,subject,teacherId)]=url;logActivity('Uploaded assigned subject teacher signature',subject+' / '+(selectedTeacher&&selectedTeacher.full_name||teacherId));showToast('Teacher signature saved and linked to the selected staff profile.','success');await renderTeacherSignatures();}
+    catch(error){showToast(error&&error.message||'Could not save the signature.','error');}finally{input.disabled=false;}
+  });});
+  document.querySelectorAll('.remove-teacher-signature').forEach(function(button){button.addEventListener('click',async function(){
+    var subject=button.getAttribute('data-subject'),phase=button.getAttribute('data-phase')||activeSignatureLevel,teacherId=activeSignatureTeacherId;
+    var confirmation=window.prompt('Enter 12345 to confirm removal of this teacher signature, or press Cancel.');
+    if(confirmation!=='12345'){showToast(confirmation===null?'Removal cancelled.':'Incorrect confirmation code.','info');return;}
+    button.disabled=true;
+    try{await removeTeacherSignatureFromSupabase(subject,phase,teacherId);delete teacherSignatures[getTeacherSignatureKey(phase,subject,teacherId)];logActivity('Removed assigned subject teacher signature',subject+' / '+teacherId);showToast('Teacher signature removed.','info');await renderTeacherSignatures();}
+    catch(error){showToast(error&&error.message||'Could not remove the signature.','error');}finally{button.disabled=false;}
+  });});
 }
-
 // ===================== INPUT (MANUAL + EXCEL BULK) =====================
 async function loadAdminResultRoster(className) {
   var select = document.getElementById('studentName');
