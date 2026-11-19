@@ -1272,7 +1272,7 @@ th { background: #f5f5f5; font-weight: 600; }
       </div>
       <div class="input-group">
         <label>Login Type</label>
-        <select id="userType">
+        <select id="userType" onchange="handleUserTypeChange({target:this})" oninput="handleUserTypeChange({target:this})">
           <option value="">Select Login Type</option>
           <option value="admin">School Administrator</option>
           <option value="principal">Principal</option>
