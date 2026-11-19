@@ -776,12 +776,117 @@ th { background: #f5f5f5; font-weight: 600; }
   #loginContainer .landing-footer-item{font-size:13px!important}
   #loginContainer .landing-footer-icon{font-size:21px!important}
 }
+
+/* Landing page role showcase and refreshed background */
+#loginContainer{background:#250642!important;isolation:isolate;overflow:hidden}
+#loginContainer:before{z-index:-2!important;inset:0!important;height:100%!important;background:radial-gradient(ellipse at 12% 12%,rgba(190,45,255,.24),transparent 34%),radial-gradient(ellipse at 87% 76%,rgba(0,145,75,.22),transparent 30%),linear-gradient(120deg,rgba(35,4,68,.98),rgba(74,13,116,.95) 48%,rgba(22,8,49,.98))!important;opacity:1!important}
+#loginContainer:after{z-index:-1!important;inset:0!important;opacity:1!important;background-image:radial-gradient(circle,rgba(255,255,255,.13) 1px,transparent 1.7px),linear-gradient(145deg,transparent 0 78%,rgba(255,193,7,.92) 78.15% 78.55%,transparent 78.7%),linear-gradient(155deg,transparent 0 81%,rgba(0,125,61,.78) 81.2% 87%,transparent 87.2%)!important;background-size:19px 19px,100% 100%,100% 100%!important;background-position:0 0,center,center!important;pointer-events:none}
+#loginContainer .landing-campus-scene{display:none!important}
+#loginContainer .landing-shell{position:relative;z-index:1}
+#loginContainer .landing-role-gallery{width:100%;max-width:760px;margin:clamp(20px,2.4vw,34px) 0 0;padding:clamp(15px,1.8vw,23px);border:1px solid rgba(255,255,255,.22);border-radius:24px;background:linear-gradient(135deg,rgba(38,8,67,.82),rgba(53,13,87,.76));box-shadow:0 16px 42px rgba(8,0,25,.28);backdrop-filter:blur(12px);color:#fff}
+#loginContainer .role-gallery-heading{display:flex;justify-content:space-between;align-items:flex-end;gap:12px;margin-bottom:15px}
+#loginContainer .role-gallery-kicker{display:block;color:#ffd45a;font-size:10px;font-weight:900;letter-spacing:1.6px;margin-bottom:5px}
+#loginContainer .role-gallery-heading h2{font-size:clamp(17px,1.8vw,23px);line-height:1.15;font-weight:900;color:#fff}
+#loginContainer .role-gallery-heading p{font-size:clamp(10px,1vw,12px);line-height:1.45;color:rgba(255,255,255,.72);margin-top:5px}
+#loginContainer .role-gallery-counter{display:flex;align-items:center;gap:7px;color:rgba(255,255,255,.55);font-size:11px;font-weight:800;white-space:nowrap;padding-bottom:2px}
+#loginContainer .role-gallery-counter span:first-child{color:#ffd34f;font-size:19px}
+#loginContainer .role-gallery-counter i{display:block;width:24px;height:1px;background:rgba(255,255,255,.4)}
+#loginContainer .role-gallery-stage{position:relative;min-height:250px;overflow:hidden;border-radius:17px;background:linear-gradient(130deg,rgba(255,255,255,.10),rgba(255,255,255,.035));border:1px solid rgba(255,255,255,.16)}
+#loginContainer .role-slide{display:none;grid-template-columns:minmax(0,.78fr) minmax(0,1.22fr);align-items:center;gap:16px;padding:15px;min-height:250px}
+#loginContainer .role-slide.is-active{display:grid;animation:roleSlideIn .55s ease both}
+@keyframes roleSlideIn{from{opacity:0;transform:translateX(16px)}to{opacity:1;transform:translateX(0)}}
+#loginContainer .role-slide-copy{min-width:0}
+#loginContainer .role-pill{display:inline-block;padding:5px 8px;border:1px solid rgba(255,210,73,.5);border-radius:30px;color:#ffdc73;background:rgba(255,196,35,.09);font-size:8px;font-weight:900;letter-spacing:.7px}
+#loginContainer .role-slide-copy h3{font-size:clamp(17px,1.9vw,24px);line-height:1.08;margin:10px 0 8px;color:#fff;font-weight:900}
+#loginContainer .role-slide-copy p{font-size:clamp(10px,.95vw,12px);line-height:1.55;color:rgba(255,255,255,.76);max-width:280px}
+#loginContainer .role-slide-tags{display:flex;flex-wrap:wrap;gap:5px;margin-top:12px}
+#loginContainer .role-slide-tags span{font-size:8px;color:#fff;background:rgba(255,255,255,.10);border:1px solid rgba(255,255,255,.14);padding:5px 7px;border-radius:20px}
+#loginContainer .role-screen{min-width:0;overflow:hidden;border-radius:12px;background:#f8f9fc;color:#1f2937;box-shadow:0 9px 25px rgba(0,0,0,.26);border:1px solid rgba(255,255,255,.55);transform:perspective(900px) rotateY(-3deg)}
+#loginContainer .role-screen-top{height:29px;display:flex;align-items:center;gap:8px;padding:0 10px;background:#34105c;color:#fff;font-size:7px;letter-spacing:.35px}
+#loginContainer .role-screen-top b{font-size:8px;font-weight:900}
+#loginContainer .role-screen-top span{margin-left:auto;color:#ffdc69;font-size:6px;font-weight:900}
+#loginContainer .role-screen-top i{width:6px;height:6px;border-radius:50%;background:#34d399}
+#loginContainer .role-screen-body{display:grid;grid-template-columns:31px minmax(0,1fr);min-height:180px}
+#loginContainer .role-screen-body aside{display:flex;flex-direction:column;align-items:center;gap:11px;padding:10px 0;background:#271044}
+#loginContainer .role-screen-body aside b{display:grid;place-items:center;width:19px;height:19px;border-radius:6px;background:#ffc928;color:#35105f;font-size:8px}
+#loginContainer .role-screen-body aside span{width:12px;height:5px;border-radius:5px;background:rgba(255,255,255,.35)}
+#loginContainer .role-screen-body aside span.on{background:#ffd34e;width:17px}
+#loginContainer .role-screen-main{min-width:0;padding:11px 10px}
+#loginContainer .role-screen-title{display:flex;flex-direction:column;gap:3px;margin-bottom:9px}
+#loginContainer .role-screen-title b{font-size:10px;color:#2f1749}
+#loginContainer .role-screen-title small{font-size:7px;color:#87909e}
+#loginContainer .role-stat-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px}
+#loginContainer .role-stat-grid>div{display:flex;flex-direction:column;gap:3px;padding:7px 6px;background:#fff;border:1px solid #e7e4ed;border-radius:6px;min-width:0}
+#loginContainer .role-stat-grid small{font-size:5px;color:#8a8297;font-weight:900;letter-spacing:.45px}
+#loginContainer .role-stat-grid b{font-size:6px;color:#4b3c5e;font-weight:700}
+#loginContainer .role-stat-grid strong{font-size:10px;color:#16834b;font-weight:900}
+#loginContainer .role-screen-table{margin-top:9px;padding:7px;background:#fff;border:1px solid #e7e4ed;border-radius:6px}
+#loginContainer .role-screen-table>b{display:block;font-size:7px;color:#392052;margin-bottom:5px}
+#loginContainer .role-screen-table>span{display:flex;justify-content:space-between;gap:6px;padding:4px 0;border-top:1px solid #f0edf4;font-size:6px;color:#665b70}
+#loginContainer .role-screen-table em{font-style:normal;color:#16834b;font-weight:800}
+#loginContainer .role-score-meta,#loginContainer .role-score-row{display:grid;grid-template-columns:1.5fr repeat(5,minmax(0,1fr));gap:3px;align-items:center}
+#loginContainer .role-score-meta{margin-top:15px;padding:6px 4px;background:#35105e;color:#fff;border-radius:5px;font-size:5px;text-align:center}
+#loginContainer .role-score-row{padding:7px 4px;border-bottom:1px solid #e8e4ed;font-size:6px;text-align:center;color:#61586c}
+#loginContainer .role-score-row b{text-align:left;font-size:6px;color:#3b2b4c}
+#loginContainer .role-score-row strong{color:#14834a}
+#loginContainer .role-screen-actions{display:flex;justify-content:flex-end;gap:6px;margin-top:10px}
+#loginContainer .role-screen-actions span,#loginContainer .role-screen-actions b{font-size:6px;padding:6px 8px;border-radius:5px;background:#eee9f5;color:#49216a}
+#loginContainer .role-screen-actions b{background:#08733c;color:#fff}
+#loginContainer .role-student-card{display:flex;flex-direction:column;gap:5px;padding:12px;background:linear-gradient(110deg,#35105e,#6920a0);border-radius:7px;color:#fff}
+#loginContainer .role-student-card span{font-size:6px;color:#ffdc68;font-weight:900}
+#loginContainer .role-student-card b{font-size:11px}
+#loginContainer .role-student-card small{font-size:7px;color:rgba(255,255,255,.8)}
+#loginContainer .role-result-card{display:flex;align-items:center;justify-content:space-between;gap:6px;padding:8px;margin-top:7px;background:#eaf7ef;border:1px solid #ccebd7;border-radius:6px}
+#loginContainer .role-result-card div{display:flex;flex-direction:column;gap:3px}
+#loginContainer .role-result-card small{font-size:5px;color:#16834b;font-weight:900}
+#loginContainer .role-result-card b{font-size:8px;color:#253b30}
+#loginContainer .role-result-card strong{font-size:6px;color:#fff;background:#08733c;border-radius:5px;padding:6px}
+#loginContainer .role-gallery-controls{display:flex;align-items:center;gap:9px;margin-top:12px}
+#loginContainer .role-gallery-arrow{width:29px;height:29px;display:grid;place-items:center;border:1px solid rgba(255,255,255,.3);border-radius:50%;background:rgba(255,255,255,.08);color:#fff;font-size:22px;line-height:1;cursor:pointer;transition:background .2s,border-color .2s}
+#loginContainer .role-gallery-arrow:hover,#loginContainer .role-gallery-arrow:focus-visible{background:#ffc928;color:#30104f;border-color:#ffc928;outline:none}
+#loginContainer .role-gallery-dots{display:flex;align-items:center;gap:6px}
+#loginContainer .role-gallery-dots button{width:7px;height:7px;padding:0;border:0;border-radius:9px;background:rgba(255,255,255,.38);cursor:pointer;transition:width .25s,background .25s}
+#loginContainer .role-gallery-dots button.active{width:22px;background:#ffd34f}
+#loginContainer .role-gallery-timer{margin-left:auto;color:rgba(255,255,255,.58);font-size:7px;font-weight:900;letter-spacing:.7px}
+@media(max-width:1050px){#loginContainer .role-slide{grid-template-columns:minmax(0,.7fr) minmax(0,1.3fr);gap:10px;padding:12px}#loginContainer .role-screen-body{min-height:170px}}
+@media(max-width:760px){
+ #loginContainer .landing-role-gallery{max-width:100%;margin:18px 0 0;padding:13px;border-radius:19px}
+ #loginContainer .role-gallery-heading h2{font-size:18px}
+ #loginContainer .role-gallery-heading p{font-size:11px}
+ #loginContainer .role-slide{grid-template-columns:1fr;gap:11px;padding:12px;min-height:0}
+ #loginContainer .role-slide.is-active{display:grid}
+ #loginContainer .role-slide-copy h3{font-size:19px;margin:7px 0 5px}
+ #loginContainer .role-slide-copy p{max-width:none;font-size:11px}
+ #loginContainer .role-slide-tags{margin-top:8px}
+ #loginContainer .role-screen{transform:none}
+ #loginContainer .role-screen-body{min-height:155px}
+ #loginContainer .role-screen-main{padding:9px}
+ #loginContainer .role-gallery-timer{font-size:6px}
+ #loginContainer .role-gallery-controls{gap:7px}
+}
+@media(max-width:420px){
+ #loginContainer .role-gallery-heading{align-items:flex-start}
+ #loginContainer .role-gallery-counter{font-size:9px}
+ #loginContainer .role-gallery-counter span:first-child{font-size:16px}
+ #loginContainer .role-slide{padding:10px}
+ #loginContainer .role-screen-body{grid-template-columns:25px minmax(0,1fr);min-height:148px}
+ #loginContainer .role-screen-body aside{gap:9px}
+ #loginContainer .role-screen-main{padding:8px 6px}
+ #loginContainer .role-stat-grid{gap:4px}
+ #loginContainer .role-stat-grid>div{padding:6px 4px}
+ #loginContainer .role-score-row,#loginContainer .role-score-meta{font-size:5px}
+ #loginContainer .role-gallery-dots{gap:4px}
+ #loginContainer .role-gallery-dots button{width:6px;height:6px}
+ #loginContainer .role-gallery-dots button.active{width:16px}
+}
+@media(prefers-reduced-motion:reduce){#loginContainer .role-slide.is-active{animation:none}#loginContainer .role-gallery-arrow,#loginContainer .role-gallery-dots button{transition:none}}
+
 </style>
 </head>
 <body>
 
 <div class="login-container" id="loginContainer">
-<div class="landing-campus-scene" aria-hidden="true"></div>
+
   <div class="landing-shell">
     <div class="landing-academic-strip" aria-label="Current academic session and term">
       <div class="landing-academic-item"><span class="landing-academic-icon">▦</span><div><div class="landing-academic-label">Academic Session</div><div class="landing-academic-value" id="landingAcademicSession">Loading session…</div></div></div>
@@ -799,16 +904,60 @@ th { background: #f5f5f5; font-weight: 600; }
       </div>
       
       <p class="landing-intro" id="landingSchoolTagline">A Digital Platform for Result Processing, Management and Academic Reporting</p>
-      <div class="landing-features" aria-label="Platform features">
-        <div class="landing-feature"><div class="landing-feature-icon">📊</div>Result<br>Processing</div>
-        <div class="landing-feature"><div class="landing-feature-icon">👥</div>Student<br>Records</div>
-        <div class="landing-feature"><div class="landing-feature-icon">🧑‍🏫</div>Staff<br>Management</div>
-        <div class="landing-feature"><div class="landing-feature-icon">🛡️</div>Secure<br>&amp; Reliable</div>
-      </div>
-      <div class="landing-graduation" aria-label="Graduation cap on stacked academic books beside a rolled diploma tied with a red ribbon">
-        <img class="landing-graduation-art" src="assets/landing/graduation-reference.webp" alt="Black graduation cap resting on brown and green academic books with a white diploma tied in a red ribbon" width="800" height="680" fetchpriority="high" decoding="async">
-      </div>
-    </section>
+      <section class="landing-role-gallery" aria-label="Preview of system workspaces by login role">
+        <div class="role-gallery-heading">
+          <div>
+            <span class="role-gallery-kicker">EXPLORE THE PLATFORM</span>
+            <h2>One school. Connected workspaces.</h2>
+            <p>See how each authorised user works within the E-Result Management System</p>
+          </div>
+          <div class="role-gallery-counter" aria-live="polite"><span id="roleGalleryCurrent">01</span><i></i><span>07</span></div>
+        </div>
+        <div class="role-gallery-stage" id="roleGalleryStage" aria-roledescription="carousel" aria-label="Role workspace previews">
+          <article class="role-slide is-active" data-role-slide="0" aria-hidden="false">
+            <div class="role-slide-copy"><span class="role-pill">01 · ADMINISTRATION</span><h3>School Administrator</h3><p>School-wide control of users, academic structure, student records, staff, results and system configuration</p><div class="role-slide-tags"><span>School overview</span><span>Staff &amp; students</span><span>Results control</span></div></div>
+            <div class="role-screen" aria-label="Illustrative administrator dashboard preview"><div class="role-screen-top"><b>DE-GLOBAL ACADEMY</b><span>ADMIN WORKSPACE</span><i></i></div><div class="role-screen-body"><aside><b>DG</b><span class="on"></span><span></span><span></span><span></span><span></span></aside><div class="role-screen-main"><div class="role-screen-title"><b>Administrator Overview</b><small>Academic management at a glance</small></div><div class="role-stat-grid"><div><small>STUDENTS</small><b>Enrolment</b><strong>2,000+</strong></div><div><small>STAFF</small><b>Personnel</b><strong>Active</strong></div><div><small>RESULTS</small><b>Processing</b><strong>In view</strong></div></div><div class="role-screen-table"><b>Management modules</b><span>Student records <em>Manage</em></span><span>Staff database <em>Manage</em></span><span>Academic sessions <em>Configure</em></span></div></div></div></div>
+          </article>
+          <article class="role-slide" data-role-slide="1" aria-hidden="true">
+            <div class="role-slide-copy"><span class="role-pill">02 · OVERSIGHT</span><h3>Principal</h3><p>Monitor academic performance, review submitted results, follow school activities and exercise approval oversight</p><div class="role-slide-tags"><span>Performance</span><span>Result review</span><span>Oversight</span></div></div>
+            <div class="role-screen" aria-label="Illustrative principal dashboard preview"><div class="role-screen-top"><b>DE-GLOBAL ACADEMY</b><span>PRINCIPAL DESK</span><i></i></div><div class="role-screen-body"><aside><b>DG</b><span class="on"></span><span></span><span></span><span></span><span></span></aside><div class="role-screen-main"><div class="role-screen-title"><b>Principal's Overview</b><small>School performance and approvals</small></div><div class="role-stat-grid"><div><small>RESULTS</small><b>Awaiting review</b><strong>Review</strong></div><div><small>CLASSES</small><b>Academic view</b><strong>All arms</strong></div><div><small>REPORTS</small><b>Performance</b><strong>Progress</strong></div></div><div class="role-screen-table"><b>Approval workspace</b><span>Submitted class results <em>Review</em></span><span>Academic performance <em>View</em></span><span>School reports <em>Open</em></span></div></div></div></div>
+          </article>
+          <article class="role-slide" data-role-slide="2" aria-hidden="true">
+            <div class="role-slide-copy"><span class="role-pill">03 · CLASS MANAGEMENT</span><h3>Form Master / Mistress</h3><p>Manage assigned class-arm records, attendance-related information, student comments and class result workflows</p><div class="role-slide-tags"><span>Assigned class</span><span>Student records</span><span>Comments</span></div></div>
+            <div class="role-screen" aria-label="Illustrative form master workspace preview"><div class="role-screen-top"><b>DE-GLOBAL ACADEMY</b><span>CLASS WORKSPACE</span><i></i></div><div class="role-screen-body"><aside><b>DG</b><span class="on"></span><span></span><span></span><span></span><span></span></aside><div class="role-screen-main"><div class="role-screen-title"><b>My Class Arm</b><small>Class administration workspace</small></div><div class="role-stat-grid"><div><small>CLASS</small><b>Assigned arm</b><strong>My class</strong></div><div><small>STUDENTS</small><b>Class list</b><strong>Records</strong></div><div><small>REPORTS</small><b>Term review</b><strong>Prepare</strong></div></div><div class="role-screen-table"><b>Class activities</b><span>Student biodata <em>Open</em></span><span>Student comments <em>Enter</em></span><span>Class result review <em>View</em></span></div></div></div></div>
+          </article>
+          <article class="role-slide" data-role-slide="3" aria-hidden="true">
+            <div class="role-slide-copy"><span class="role-pill">04 · ASSESSMENT ENTRY</span><h3>Subject Teacher</h3><p>Open assigned class-arm and subject combinations, enter continuous assessment and examination scores, then submit results</p><div class="role-slide-tags"><span>Score entry</span><span>Smart navigation</span><span>Submission</span></div></div>
+            <div class="role-screen" aria-label="Illustrative subject teacher score-entry preview"><div class="role-screen-top"><b>DE-GLOBAL ACADEMY</b><span>TEACHER WORKSPACE</span><i></i></div><div class="role-screen-body"><aside><b>DG</b><span class="on"></span><span></span><span></span><span></span><span></span></aside><div class="role-screen-main"><div class="role-screen-title"><b>Subject Score Entry</b><small>Assigned subject · Selected class arm</small></div><div class="role-score-meta"><span>CA 1</span><span>CA 2</span><span>CA 3</span><span>EXAM</span><span>TOTAL</span></div><div class="role-score-row"><b>Student 01</b><span>08</span><span>09</span><span>10</span><span>54</span><strong>81</strong></div><div class="role-score-row"><b>Student 02</b><span>07</span><span>08</span><span>09</span><span>49</span><strong>73</strong></div><div class="role-score-row"><b>Student 03</b><span>09</span><span>10</span><span>08</span><span>58</span><strong>85</strong></div><div class="role-screen-actions"><span>Save draft</span><b>Submit for approval</b></div></div></div></div>
+          </article>
+          <article class="role-slide" data-role-slide="4" aria-hidden="true">
+            <div class="role-slide-copy"><span class="role-pill">05 · DELEGATED ACCESS</span><h3>Sub-Administrator</h3><p>Carry out delegated administrative responsibilities within the permissions assigned by the School Administrator</p><div class="role-slide-tags"><span>Assigned permissions</span><span>Operational tasks</span><span>Accountability</span></div></div>
+            <div class="role-screen" aria-label="Illustrative sub-administrator workspace preview"><div class="role-screen-top"><b>DE-GLOBAL ACADEMY</b><span>DELEGATED DESK</span><i></i></div><div class="role-screen-body"><aside><b>DG</b><span class="on"></span><span></span><span></span><span></span></aside><div class="role-screen-main"><div class="role-screen-title"><b>Assigned Operations</b><small>Access based on granted permissions</small></div><div class="role-stat-grid"><div><small>ACCESS</small><b>Permission set</b><strong>Active</strong></div><div><small>TASKS</small><b>Operations</b><strong>Assigned</strong></div><div><small>LOGS</small><b>Activity</b><strong>Tracked</strong></div></div><div class="role-screen-table"><b>Authorised work areas</b><span>Permitted records <em>Open</em></span><span>Assigned operations <em>Work</em></span><span>Activity history <em>View</em></span></div></div></div></div>
+          </article>
+          <article class="role-slide" data-role-slide="5" aria-hidden="true">
+            <div class="role-slide-copy"><span class="role-pill">06 · STUDENT ACCESS</span><h3>Student Portal</h3><p>Give students a secure personal route to their academic information and released results</p><div class="role-slide-tags"><span>Personal account</span><span>Result access</span><span>Secure login</span></div></div>
+            <div class="role-screen role-screen-student" aria-label="Illustrative student portal preview"><div class="role-screen-top"><b>DE-GLOBAL ACADEMY</b><span>STUDENT PORTAL</span><i></i></div><div class="role-screen-body"><aside><b>DG</b><span class="on"></span><span></span><span></span></aside><div class="role-screen-main"><div class="role-screen-title"><b>My Academic Portal</b><small>Welcome to your student space</small></div><div class="role-student-card"><span>STUDENT PROFILE</span><b>My academic record</b><small>Personal details · Class information</small></div><div class="role-result-card"><div><small>RESULT ACCESS</small><b>My Term Result</b></div><strong>View result&nbsp; →</strong></div><div class="role-screen-table"><b>Student services</b><span>Academic history <em>View</em></span><span>Result documents <em>Access</em></span></div></div></div></div>
+          </article>
+          <article class="role-slide" data-role-slide="6" aria-hidden="true">
+            <div class="role-slide-copy"><span class="role-pill">07 · PLATFORM CONTROL</span><h3>Portal Developer</h3><p>Restricted technical workspace for platform maintenance, diagnostics and authorised developer operations</p><div class="role-slide-tags"><span>System health</span><span>Diagnostics</span><span>Restricted access</span></div></div>
+            <div class="role-screen" aria-label="Illustrative developer workspace preview"><div class="role-screen-top"><b>DE-GLOBAL ACADEMY</b><span>DEVELOPER CONSOLE</span><i></i></div><div class="role-screen-body"><aside><b>DG</b><span class="on"></span><span></span><span></span><span></span></aside><div class="role-screen-main"><div class="role-screen-title"><b>Platform Operations</b><small>Authorised technical workspace</small></div><div class="role-stat-grid"><div><small>SERVICES</small><b>Core status</b><strong>Monitor</strong></div><div><small>DATABASE</small><b>Connectivity</b><strong>Check</strong></div><div><small>SECURITY</small><b>Access</b><strong>Audit</strong></div></div><div class="role-screen-table"><b>Technical tools</b><span>Service diagnostics <em>Inspect</em></span><span>System activity <em>Review</em></span><span>Maintenance tools <em>Open</em></span></div></div></div></div>
+          </article>
+        </div>
+        <div class="role-gallery-controls">
+          <button type="button" class="role-gallery-arrow" id="roleGalleryPrev" aria-label="Previous role preview">‹</button>
+          <div class="role-gallery-dots" role="group" aria-label="Choose a role preview">
+            <button type="button" class="active" data-role-dot="0" aria-label="School Administrator" aria-current="true"></button>
+            <button type="button" data-role-dot="1" aria-label="Principal"></button>
+            <button type="button" data-role-dot="2" aria-label="Form Master or Mistress"></button>
+            <button type="button" data-role-dot="3" aria-label="Subject Teacher"></button>
+            <button type="button" data-role-dot="4" aria-label="Sub-Administrator"></button>
+            <button type="button" data-role-dot="5" aria-label="Student"></button>
+            <button type="button" data-role-dot="6" aria-label="Portal Developer"></button>
+          </div>
+          <button type="button" class="role-gallery-arrow" id="roleGalleryNext" aria-label="Next role preview">›</button>
+          <span class="role-gallery-timer">AUTO-ROTATES · 6 SECONDS</span>
+        </div>
+      </section>    </section>
   <div class="login-box">
     <div class="logo-section">
       <div class="logo-icon" id="loginLogoIcon">📊</div>
@@ -6104,7 +6253,41 @@ function printOfficialStudentProfiles() {
     ' &nbsp; | &nbsp; Total Students: ' + rows.length + '</p>' +
     '<table>' + tableHead + tableBody + '</table>' +
     '<script>window.onload=function(){window.print();};<\/script>' +
-    '</body></html>';
+    '
+<script>
+(function(){
+  var stage=document.getElementById('roleGalleryStage');
+  if(!stage)return;
+  var slides=Array.from(stage.querySelectorAll('[data-role-slide]'));
+  var dots=Array.from(document.querySelectorAll('[data-role-dot]'));
+  var current=document.getElementById('roleGalleryCurrent');
+  var prev=document.getElementById('roleGalleryPrev');
+  var next=document.getElementById('roleGalleryNext');
+  if(!slides.length||!dots.length)return;
+  var index=0,timer=null,paused=false,delay=6000;
+  var reduced=window.matchMedia&&window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  function show(nextIndex){
+    index=(nextIndex+slides.length)%slides.length;
+    slides.forEach(function(slide,i){var active=i===index;slide.classList.toggle('is-active',active);slide.setAttribute('aria-hidden',active?'false':'true');});
+    dots.forEach(function(dot,i){var active=i===index;dot.classList.toggle('active',active);if(active)dot.setAttribute('aria-current','true');else dot.removeAttribute('aria-current');});
+    if(current)current.textContent=String(index+1).padStart(2,'0');
+  }
+  function stop(){if(timer){window.clearInterval(timer);timer=null;}}
+  function start(){stop();if(reduced||paused||document.hidden)return;timer=window.setInterval(function(){show(index+1);},delay);}
+  function userNavigate(nextIndex){show(nextIndex);start();}
+  if(prev)prev.addEventListener('click',function(){userNavigate(index-1);});
+  if(next)next.addEventListener('click',function(){userNavigate(index+1);});
+  dots.forEach(function(dot){dot.addEventListener('click',function(){userNavigate(Number(dot.getAttribute('data-role-dot')));});});
+  stage.addEventListener('mouseenter',function(){paused=true;stop();});
+  stage.addEventListener('mouseleave',function(){paused=false;start();});
+  stage.addEventListener('focusin',function(){paused=true;stop();});
+  stage.addEventListener('focusout',function(event){if(!stage.contains(event.relatedTarget)){paused=false;start();}});
+  document.addEventListener('visibilitychange',start);
+  show(0);start();
+})();
+</script>
+
+</body></html>';
 
   printWindow.document.open();
   printWindow.document.write(documentHtml);
