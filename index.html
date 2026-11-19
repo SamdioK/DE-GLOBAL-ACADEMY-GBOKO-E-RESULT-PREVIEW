@@ -682,6 +682,39 @@ th { background: #f5f5f5; font-weight: 600; }
   #loginContainer .login-box #loginBtn{min-height:51px!important;font-size:18px!important}
   #loginContainer .login-box #viewManagementBtn,#loginContainer .login-box #openPortalBtn{min-height:47px!important;font-size:14px!important}
 }
+
+
+/* School identity hierarchy: crest centred above bold, centred name and location */
+#loginContainer .landing-brand{
+  align-items:center!important;
+  text-align:center!important;
+}
+#loginContainer .landing-crest{
+  align-self:center!important;
+  margin:0 auto 8px!important;
+}
+#loginContainer .landing-school-name{
+  width:100%!important;
+  max-width:100%!important;
+  text-align:center!important;
+  font-weight:1000!important;
+  letter-spacing:-.45px!important;
+  text-shadow:0 3px 12px rgba(0,0,0,.34)!important;
+}
+#loginContainer .landing-school-location{
+  width:100%!important;
+  text-align:center!important;
+  font-weight:850!important;
+  font-size:clamp(20px,2.35vw,33px)!important;
+  line-height:1.15!important;
+  text-shadow:0 2px 9px rgba(0,0,0,.32)!important;
+}
+@media(max-width:760px){
+  #loginContainer .landing-brand{align-items:center!important;text-align:center!important}
+  #loginContainer .landing-crest{margin:0 auto 7px!important}
+  #loginContainer .landing-school-name,
+  #loginContainer .landing-school-location{text-align:center!important}
+}
 </style>
 </head>
 <body>
