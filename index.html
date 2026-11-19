@@ -3784,8 +3784,8 @@ async function downloadIdCardSet(element, format, filename) {
     var pdf = new window.jspdf.jsPDF({orientation:'portrait',unit:'mm',format:[53.98,85.6]});
     for (var i=0;i<faces.length;i++) {
       var canvas = await html2canvas(faces[i],{scale:4,useCORS:true,backgroundColor:'#ffffff',imageTimeout:15000});
-      if (i) pdf.addPage([85.6,53.98],'landscape');
-      pdf.addImage(canvas.toDataURL('image/jpeg',0.96),'JPEG',0,0,85.6,53.98);
+      if (i) pdf.addPage([53.98,85.6],'portrait');
+      pdf.addImage(canvas.toDataURL('image/jpeg',0.96),'JPEG',0,0,53.98,85.6);
     }
     pdf.save(filename+'.pdf');
     showToast('Two-sided CR80 ID card PDF prepared.','success');
