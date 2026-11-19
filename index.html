@@ -984,6 +984,19 @@ th { background: #f5f5f5; font-weight: 600; }
   #loginContainer .landing-footer{padding:14px 4px 6px!important}
 }
 
+
+/* Landing page visual and first-paint repair */
+#loginContainer{
+  background:#321064!important;
+  background-image:linear-gradient(90deg,rgba(48,5,91,.72) 0%,rgba(48,5,91,.34) 42%,rgba(22,10,45,.08) 100%),url("assets/landing/school-background.webp")!important;
+  background-size:cover!important;
+  background-position:center 44%!important;
+  background-repeat:no-repeat!important;
+}
+#loginContainer .login-box{display:block!important;visibility:visible!important}
+#loginContainer #loginView{display:block!important;visibility:visible!important}
+#loginContainer #setupView.hidden{display:none!important}
+
 </style>
 </head>
 <body>
@@ -1082,7 +1095,7 @@ th { background: #f5f5f5; font-weight: 600; }
       <div id="setupError" class="hidden alert alert-error" style="margin-top: 15px;"></div>
     </div>
 
-    <div id="loginView" class="hidden">
+    <div id="loginView">
       <div class="input-group" id="genericAuthEmailGroup">
         <label>Email Address (Supabase account)</label>
         <input type="email" id="authEmail" autocomplete="username" placeholder="Enter your account email">
