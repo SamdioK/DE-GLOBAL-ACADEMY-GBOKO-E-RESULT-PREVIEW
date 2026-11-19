@@ -6240,33 +6240,54 @@ async function printOfficialStudentIdCard(studentId) {
       photoUrl=signed.data.signedUrl;
     }
     var record=Object.assign({},student,{
-      studentName:studentDbName(student),
-      fullName:studentDbName(student),
-      sid:enrolment.sid||'',
-      admNo:enrolment.sid||student.admission_number||'',
-      admissionNumber:student.admission_number||'',
-      className:studentDbClassLabel(enrolment.class_id)||'',
-      session:activeAcademicSession&&activeAcademicSession.name||'',
-      registerNumber:enrolment.register_number||'',
-      gender:student.gender||student.sex||'',
-      guardianName:student.guardian_name||'',
-      studentHouse:student.student_house||'',
-      photoUrl:photoUrl||student.photo_url||student.passport_url||'',
+      studentName:studentDbName(student),fullName:studentDbName(student),
+      sid:enrolment.sid||'',admNo:enrolment.sid||student.admission_number||'',
+      admissionNumber:student.admission_number||'',className:studentDbClassLabel(enrolment.class_id)||'',
+      session:activeAcademicSession&&activeAcademicSession.name||'',registerNumber:enrolment.register_number||'',
+      gender:student.gender||student.sex||'',guardianName:student.guardian_name||'',
+      studentHouse:student.student_house||'',photoUrl:photoUrl||student.photo_url||student.passport_url||'',
       guardianPhone:student.guardian_phone||''
     });
     var data=idCardBuildData(record,'student');
+    var old=document.getElementById('studentIdCardOptions');
+    if(old)old.remove();
+    var overlay=document.createElement('div');
+    overlay.id='studentIdCardOptions';
+    overlay.style.cssText='position:fixed;inset:0;z-index:10060;background:rgba(10,20,18,.78);display:flex;align-items:center;justify-content:center;padding:12px;overflow:auto;';
+    overlay.innerHTML='<section role="dialog" aria-modal="true" aria-labelledby="studentIdCardOptionsTitle" style="width:min(100%,560px);max-height:96vh;overflow:auto;background:#f7faf8;border:1px solid #b9cfc3;border-radius:16px;padding:14px;box-shadow:0 20px 60px rgba(0,0,0,.35);font-family:Arial,Helvetica,sans-serif;">'+
+      '<header style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:8px;"><div><h3 id="studentIdCardOptionsTitle" style="margin:0;color:#064b39;font-size:18px;">Student ID Card</h3><p style="margin:3px 0 0;color:#5c6b64;font-size:12px;">Preview both sides, then choose your print format</p></div><button type="button" data-idcard-close aria-label="Close" style="border:0;border-radius:9px;background:#e7ece9;color:#23342c;width:38px;height:38px;font-size:23px;cursor:pointer;">&times;</button></header>'+
+      '<div id="studentIdCardOptionsPreview" style="display:flex;justify-content:center;align-items:flex-start;overflow:auto;padding:8px;background:#e8eeeb;border:1px solid #d0ddd6;border-radius:12px;"></div>'+
+      '<div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin-top:12px;">'+
+      '<button type="button" data-idcard-action="print" style="border:0;border-radius:9px;padding:12px 5px;background:#075b43;color:#fff;font-weight:800;font-size:13px;">Print Card</button>'+
+      '<button type="button" data-idcard-action="jpg" style="border:0;border-radius:9px;padding:12px 5px;background:#6b1685;color:#fff;font-weight:800;font-size:13px;">Save as JPG</button>'+
+      '<button type="button" data-idcard-action="pdf" style="border:0;border-radius:9px;padding:12px 5px;background:#b78313;color:#fff;font-weight:800;font-size:13px;">Save as PDF</button>'+
+      '</div><p style="margin:9px 0 0;text-align:center;color:#718078;font-size:11px;">The output buttons will not appear on the printed ID card.</p></section>';
+    document.body.appendChild(overlay);
+    var preview=overlay.querySelector('#studentIdCardOptionsPreview');
     var host=document.createElement('div');
-    var hostId='studentIdCardPrintHost';
-    var previous=document.getElementById(hostId);if(previous)previous.remove();
-    host.id=hostId;host.style.cssText='position:fixed;left:-10000px;top:0;width:700px;height:auto;overflow:visible;';
-    document.body.appendChild(host);
-    renderIdCardPreview(data,hostId);
+    host.id='studentIdCardOptionsCard';
+    host.style.cssText='width:100%;display:flex;justify-content:center;overflow:visible;';
+    preview.appendChild(host);
+    renderIdCardPreview(data,host.id);
     var set=host.querySelector('.id-card-set');
     if(!set)throw new Error('The student ID card could not be rendered.');
-    printIdCardSet(set);
-    host.remove();
+    overlay.querySelector('[data-idcard-close]').addEventListener('click',function(){overlay.remove();});
+    overlay.addEventListener('click',function(event){if(event.target===overlay)overlay.remove();});
+    overlay.querySelectorAll('[data-idcard-action]').forEach(function(action){
+      action.addEventListener('click',async function(){
+        var format=action.getAttribute('data-idcard-action');
+        if(format==='print'){printIdCardSet(set);return;}
+        action.disabled=true;
+        var original=action.textContent;
+        action.textContent='Preparing…';
+        try { await downloadIdCardSet(set,format,'DE-Global-'+(data.identifier||data.sid||'Student-ID-Card')); }
+        finally { action.disabled=false; action.textContent=original; }
+      });
+    });
   } catch(error) {
-    showToast(error&&error.message||'Unable to generate the student ID card.','error');
+    var existing=document.getElementById('studentIdCardOptions');
+    if(existing)existing.remove();
+    showToast(error&&error.message||'Unable to prepare the student ID card.','error');
   }
 }
 function bindStudentPhotoCardPrintEvents(root){
