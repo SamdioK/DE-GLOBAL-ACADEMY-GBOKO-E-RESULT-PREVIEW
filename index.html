@@ -9,6 +9,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jsbarcode/3.11.6/JsBarcode.all.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="supabase-persistence.js?v=2026110901"></script>
 <script src="score-entry-engine.js"></script>
@@ -3369,12 +3370,16 @@ function idCardBuildData(record, kind) {
   if (kind === 'student') {
     return {
       kind: 'Student',
-      name: record.studentName || record.fullName || record.full_name || '',
+      name: record.studentName || record.fullName || record.full_name || [record.first_name,record.middle_name,record.last_name].filter(Boolean).join(' ') || '',
       identifier: record.sid || record.admNo || record.admissionNumber || '',
       sid: record.sid || record.admNo || '',
       admissionNumber: record.admissionNumber || record.admission_number || record.admNo || '',
+      registerNumber: record.registerNumber || record.register_number || '',
       className: record.className || record.class_name || '',
       session: record.session || record.academicSession || activeAcademicSession && activeAcademicSession.name || '',
+      gender: record.gender || record.sex || '',
+      dateOfBirth: record.dateOfBirth || record.date_of_birth || '',
+      guardianName: record.guardianName || record.guardian_name || '',
       house: record.studentHouse || record.student_house || '',
       photo: record.photoUrl || record.photo_url || record.passportUrl || record.passport_url || record.photo || '',
       phone: record.guardianPhone || record.guardian_phone || ''
@@ -3393,7 +3398,6 @@ function idCardBuildData(record, kind) {
     email: record.email || ''
   };
 }
-
 function renderSchoolIdCard() {
   var root = document.getElementById('schoolIdCardTab');
   if (!root) return;
@@ -3410,7 +3414,8 @@ function renderSchoolIdCard() {
       '<div id="idCardContent"></div>' +
     '</div>';
 
-  loadSchoolIdCardSettings().then(function () {
+  loadSchoolIdCardSettings().then(async function () {
+    await loadSchoolBrandingAssets();
     renderSchoolIdCardContent();
   }).catch(function () {
     var msg = document.getElementById('idCardMessage');
@@ -3593,41 +3598,74 @@ async function updateIdCardPermission(allowed) {
   }
 }
 
+function idCardExpectedGraduationYear(className, sessionName) {
+  var sessionMatch = String(sessionName || '').match(/(20\d{2})\s*[\/\-–]\s*(20\d{2})/);
+  if (!sessionMatch) return '';
+  var startYear = Number(sessionMatch[1]);
+  var label = String(className || '').toLowerCase().replace(/[\s_-]+/g, ' ').trim();
+  var rank = null;
+  var match;
+  if ((match = label.match(/\b(?:basic|primary)\s*(\d{1,2})(?:[a-z])?\b/))) {
+    rank = Number(match[1]);
+  } else if ((match = label.match(/\bjss\s*(\d)\b/))) {
+    rank = 6 + Number(match[1]);
+  } else if ((match = label.match(/\b(?:ss|sss|senior secondary)\s*(\d)\b/))) {
+    rank = 9 + Number(match[1]);
+  }
+  if (!Number.isFinite(rank) || rank < 1 || rank > 12) return '';
+  return String(startYear + (12 - rank) + 1);
+}
 function idCardFaceStyles() {
   return '<style id="officialIdCardStyles">'+
-    '.id-card-set{display:flex;flex-wrap:wrap;align-items:flex-start;gap:14px;margin:12px 0 18px;font-family:Arial,Helvetica,sans-serif;color:#172033}'+
-    '.id1-face{position:relative;width:85.6mm;height:53.98mm;flex:0 0 85.6mm;overflow:hidden;border:1.1mm solid #064b39;border-radius:3mm;background:#fff;box-sizing:border-box;box-shadow:0 3px 12px rgba(0,0,0,.14);-webkit-print-color-adjust:exact;print-color-adjust:exact}'+
-    '.id1-top{height:15mm;display:flex;align-items:center;gap:2mm;padding:1.6mm 2.2mm;background:linear-gradient(112deg,#006b4d 0%,#003c30 62%,#002d27 100%);color:#fff;border-bottom:1mm solid #e6b83e}'+
-    '.id1-crest{width:12mm;height:12mm;flex:0 0 12mm;object-fit:contain;background:#fff;border:0.45mm solid #e7bd49;border-radius:1.3mm;padding:.4mm;box-sizing:border-box}'+
-    '.id1-brand{min-width:0;flex:1;text-align:center;line-height:1.1}'+
-    '.id1-school{font-size:7.4pt;font-weight:900;letter-spacing:.15px;text-transform:uppercase;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}'+
-    '.id1-address{font-size:4.4pt;font-weight:700;color:#f9d76a;margin-top:.7mm;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}'+
-    '.id1-contact{font-size:4.2pt;font-weight:700;margin-top:.8mm;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}'+
-    '.id1-type{position:absolute;right:2mm;top:15.7mm;background:#70008a;color:#fff;border-radius:4mm;padding:.65mm 2mm;font-size:4.5pt;font-weight:900;letter-spacing:.3px}'+
-    '.id1-front-body{height:31.5mm;display:flex;gap:2mm;padding:2mm 2.2mm 1.5mm;position:relative}'+
-    '.id1-details{flex:1;min-width:0;position:relative;z-index:1;padding-top:1mm}'+
-    '.id1-name-label{font-size:4.6pt;font-weight:800;color:#6a287f;text-transform:uppercase;letter-spacing:.4px}'+
-    '.id1-name{font-size:9pt;font-weight:900;line-height:1.05;color:#064b39;text-transform:uppercase;margin:.6mm 0 1.8mm;overflow-wrap:anywhere;max-height:7mm;overflow:hidden}'+
-    '.id1-detail{display:flex;gap:1mm;align-items:baseline;font-size:5.4pt;line-height:1.35;margin:.45mm 0;min-width:0}'+
-    '.id1-detail b{color:#57206f;min-width:14mm;font-size:4.7pt;text-transform:uppercase;letter-spacing:.1px}'+
-    '.id1-detail span{font-weight:700;overflow-wrap:anywhere;min-width:0}'+
-    '.id1-photo-wrap{width:21mm;height:26mm;flex:0 0 21mm;border:.55mm solid #91aa9e;border-radius:2mm;padding:.5mm;background:#fff;align-self:center;box-sizing:border-box}'+
-    '.id1-photo{width:100%;height:100%;display:block;object-fit:cover;border-radius:1.2mm}'+
+    '.id-card-set{display:flex;flex-wrap:wrap;align-items:flex-start;justify-content:center;gap:5mm;margin:12px 0 18px;font-family:Arial,Helvetica,sans-serif;color:#172033}'+
+    '.id1-face{position:relative;width:85.6mm;height:53.98mm;flex:0 0 85.6mm;overflow:hidden;border:1mm solid #07523d;border-radius:3mm;background:#fff;box-sizing:border-box;box-shadow:0 2mm 4mm rgba(0,0,0,.16);-webkit-print-color-adjust:exact;print-color-adjust:exact}'+
+    '.id1-top{height:13mm;display:flex;align-items:center;gap:2mm;padding:1.3mm 2.1mm;background:linear-gradient(112deg,#006b4d 0%,#003c30 62%,#002d27 100%);color:#fff;border-bottom:1mm solid #e6b83e}'+
+    '.id1-crest{width:15mm;height:12.5mm;flex:0 0 15mm;object-fit:contain;background:#fff;border:.5mm solid #e7bd49;border-radius:1.4mm;padding:.35mm;box-sizing:border-box}'+
+    '.id1-brand{min-width:0;flex:1;text-align:center;line-height:1.04}'+
+    '.id1-school{font-size:8pt;font-weight:900;letter-spacing:.1px;text-transform:uppercase;line-height:1.08}'+
+    '.id1-address{font-size:5.1pt;font-weight:800;color:#ffe15b;margin-top:.7mm;line-height:1.05}'+
+    '.id1-motto{display:inline-block;margin-top:.8mm;padding:.65mm 3mm;background:#70008a;border:.25mm solid #f1d9f7;border-radius:4mm;color:#fff;font-size:6pt;font-weight:900;font-style:italic;white-space:nowrap}'+
+    '.id1-front-title{height:6mm;margin:1mm 5.5mm .5mm;display:flex;align-items:center;justify-content:center;border:.7mm solid #e5b934;border-radius:5mm;background:linear-gradient(100deg,#00694c,#003b30);color:#fff;font-size:10pt;font-weight:900;letter-spacing:.45px;text-align:center;text-transform:uppercase}'+
+    '.id1-front-body{height:19mm;display:flex;gap:1.7mm;padding:0 1.7mm;position:relative}'+
+    '.id1-photo-wrap{width:19mm;height:19.5mm;flex:0 0 19mm;border:.55mm solid #cfd9d5;border-radius:2.4mm;padding:.5mm;background:#fff;box-sizing:border-box;align-self:center;box-shadow:0 .5mm 1mm rgba(0,0,0,.12)}'+
+    '.id1-photo{width:100%;height:100%;display:block;object-fit:cover;border-radius:1.5mm}'+
     '.id1-photo-empty{height:100%;display:grid;place-items:center;text-align:center;color:#75847d;font-size:5pt;font-weight:700;line-height:1.2;border:1px dashed #91aa9e;border-radius:1mm}'+
-    '.id1-front-foot{position:absolute;left:0;right:0;bottom:0;height:5.3mm;padding:1mm 2.2mm;background:linear-gradient(100deg,#00664a,#003c30);border-top:.7mm solid #e6bb43;color:#fff;display:flex;align-items:center;justify-content:space-between;gap:2mm;font-size:4.8pt;font-weight:800}'+
-    '.id1-front-foot em{font-style:italic;color:#f9d76a;white-space:nowrap}'+
-    '.id1-back{background:linear-gradient(135deg,#fff 0%,#f7fbf8 100%)}'+
-    '.id1-back-head{height:11mm;padding:1.8mm 2.5mm;background:linear-gradient(112deg,#006b4d,#00382d);border-bottom:1mm solid #e6b83e;color:#fff;text-align:center}'+
-    '.id1-back-head strong{display:block;font-size:7pt;letter-spacing:.25px;text-transform:uppercase}'+
-    '.id1-back-head span{display:block;margin-top:.8mm;color:#f9d76a;font-size:4.8pt;font-weight:800;letter-spacing:.8px}'+
-    '.id1-back-content{padding:2.1mm 3mm 1mm;display:grid;grid-template-columns:1fr 1fr;column-gap:3mm;row-gap:1.2mm}'+
-    '.id1-back-item{min-width:0;border-bottom:.2mm solid #dbe4df;padding-bottom:.65mm}'+
-    '.id1-back-item small{display:block;color:#6a287f;font-size:4.2pt;font-weight:800;text-transform:uppercase;letter-spacing:.25px}'+
-    '.id1-back-item b{display:block;margin-top:.35mm;color:#1f352c;font-size:5.5pt;line-height:1.15;overflow-wrap:anywhere}'+
-    '.id1-back-note{margin:1.3mm 3mm 0;padding:1mm 1.5mm;background:#f0ebf8;border-left:1mm solid #70008a;color:#3d3150;font-size:4.4pt;line-height:1.2;font-weight:700}'+
-    '.id1-back-foot{position:absolute;left:0;right:0;bottom:0;min-height:5.5mm;padding:1mm 2.5mm;background:#003c30;color:#fff;border-top:.7mm solid #e6bb43;display:flex;align-items:center;justify-content:space-between;gap:2mm;font-size:4.4pt;font-weight:700}'+
-    '.id1-back-foot b{color:#f9d76a}'+
-    '@media(max-width:600px){.id-card-set{flex-direction:column;align-items:center}.id1-face{width:min(85.6mm,100%);flex-basis:auto;height:auto;aspect-ratio:85.6/53.98}.id1-top{height:27.8%;padding:2.8% 3.8%;gap:2.5%}.id1-crest{width:13.5%;height:90%;flex-basis:13.5%;padding:1%}.id1-school{font-size:clamp(7px,2.1vw,10px)}.id1-address,.id1-contact{font-size:clamp(4px,1.25vw,6px)}.id1-type{top:29%;font-size:clamp(4px,1.2vw,6px)}.id1-front-body{height:58.4%;padding:3% 3.8%;gap:3%}.id1-name-label{font-size:clamp(4px,1.3vw,6px)}.id1-name{font-size:clamp(9px,2.5vw,12px);margin:1% 0 2.5%;max-height:22%}.id1-detail{font-size:clamp(5px,1.55vw,7px);margin:1% 0}.id1-detail b{font-size:clamp(4px,1.3vw,6px);min-width:35%}.id1-photo-wrap{width:27%;height:86%;flex-basis:27%;padding:1%}.id1-front-foot{height:9.8%;padding:1.5% 3.8%;font-size:clamp(4px,1.3vw,6px)}.id1-back-head{height:20.4%;padding:3%}.id1-back-head strong{font-size:clamp(7px,2vw,10px)}.id1-back-head span{font-size:clamp(4px,1.3vw,6px)}.id1-back-content{height:48%;padding:3% 4%;column-gap:4%;row-gap:3%}.id1-back-item small{font-size:clamp(4px,1.15vw,5.5px)}.id1-back-item b{font-size:clamp(5px,1.5vw,7px)}.id1-back-note{font-size:clamp(4px,1.15vw,5.5px);margin:1% 4%;padding:1.5%}.id1-back-foot{min-height:10%;padding:1.5% 3.5%;font-size:clamp(4px,1.15vw,5.5px)}}'+
+    '.id1-details{flex:1;min-width:0;border:.35mm solid #d8d3df;border-radius:2.4mm;padding:1mm 1.3mm;background:rgba(255,255,255,.96);display:flex;flex-direction:column;justify-content:space-around}'+
+    '.id1-detail{display:flex;align-items:center;gap:1mm;min-width:0;padding:.45mm 0;border-bottom:.2mm solid #ded8e4;line-height:1.05}'+
+    '.id1-detail:last-child{border-bottom:0}'+
+    '.id1-detail-icon{width:4mm;flex:0 0 4mm;color:#70008a;font-size:8pt;font-weight:900;text-align:center}'+
+    '.id1-detail-copy{min-width:0;flex:1}'+
+    '.id1-detail b{display:block;color:#70008a;font-size:5.2pt;font-weight:900;text-transform:uppercase;letter-spacing:.12px}'+
+    '.id1-detail span{display:block;margin-top:.35mm;color:#111827;font-size:7pt;font-weight:800;overflow-wrap:anywhere;line-height:1.05}'+
+    '.id1-code-row{height:7.5mm;display:flex;align-items:center;gap:2mm;padding:0 3mm;margin-top:.5mm}'+
+    '.id1-qr-wrap{width:11.5mm;height:11.5mm;flex:0 0 11.5mm;align-self:flex-start;margin-top:-1mm;border:.6mm solid #07523d;border-radius:1.5mm;padding:.55mm;background:#fff;box-sizing:border-box}'+
+    '.id1-qr{display:block;width:100%;height:100%;object-fit:contain}'+
+    '.id1-barcode-area{flex:1;min-width:0;text-align:center;align-self:center}'+
+    '.id1-barcode{width:100%;height:7mm;display:block}'+
+    '.id1-barcode-caption{font-size:6.3pt;font-weight:900;letter-spacing:.65px;line-height:1.05;margin-top:.2mm}'+
+    '.id1-principal{position:absolute;right:3mm;bottom:6.4mm;width:37mm;text-align:center;font-size:5.4pt;color:#1b2630;line-height:1.05}'+
+    '.id1-principal img{display:block;width:27mm;height:5mm;object-fit:contain;margin:0 auto -0.2mm}'+
+    '.id1-principal-line{height:1.5mm;border-bottom:.25mm solid #222;margin:0 1mm .6mm}'+
+    '.id1-principal strong{display:block;font-size:6.2pt;font-weight:900}'+
+    '.id1-principal small{display:block;font-size:5.2pt;font-style:italic;margin-top:.3mm}'+
+    '.id1-front-foot{position:absolute;left:0;right:0;bottom:0;height:5.3mm;padding:.7mm 2mm;background:linear-gradient(100deg,#00664a,#003c30);border-top:.75mm solid #e6bb43;color:#fff;display:flex;align-items:center;justify-content:center;gap:1mm;font-size:7pt;font-weight:900;text-align:center}'+
+    '.id1-front-foot b{color:#ffe04c}'+
+    '.id1-back{background:#fff;background-image:repeating-linear-gradient(135deg,rgba(0,92,65,.035) 0,rgba(0,92,65,.035) .15mm,transparent .15mm,transparent 1.6mm)}'+
+    '.id1-back-notice-title{position:absolute;left:9mm;right:9mm;top:3mm;height:6mm;display:flex;align-items:center;justify-content:center;background:linear-gradient(100deg,#8a079d,#590078);border-radius:4mm;color:#fff;font-size:9pt;font-weight:900;letter-spacing:.35px;text-transform:uppercase}'+
+    '.id1-notices{position:absolute;left:2.2mm;right:2.2mm;top:10.5mm;height:21mm;padding:1mm 1.4mm;border:.25mm solid #78a98a;border-radius:3mm;background:rgba(250,255,248,.97);display:flex;flex-direction:column;justify-content:space-around}'+
+    '.id1-notice{display:flex;align-items:flex-start;gap:1.5mm;padding:.55mm .2mm;border-bottom:.2mm solid #d8d4e0;font-size:5.7pt;line-height:1.12;font-weight:700;color:#18231f}'+
+    '.id1-notice:last-child{border-bottom:0}'+
+    '.id1-notice-num{width:4.4mm;height:4.4mm;flex:0 0 4.4mm;border-radius:50%;background:#80008f;color:#fff;display:flex;align-items:center;justify-content:center;font-size:7pt;font-weight:900}'+
+    '.id1-notice strong{color:#68007f}'+
+    '.id1-stamp-area{position:absolute;left:0;right:0;top:31mm;height:12mm;display:flex;align-items:center;justify-content:center}'+
+    '.id1-stamp-rule{position:absolute;left:4mm;right:4mm;top:50%;height:.45mm;background:linear-gradient(90deg,#e8b927 0 14%,#80008f 14% 22%,transparent 22% 78%,#80008f 78% 86%,#e8b927 86%)}'+
+    '.id1-school-stamp{position:relative;z-index:1;width:14mm;height:14mm;object-fit:contain;background:#fff;border-radius:50%;padding:.3mm}'+
+    '.id1-stamp-placeholder{position:relative;z-index:1;width:14mm;height:14mm;border:1mm double #202c9a;border-radius:50%;background:#fff;color:#202c9a;display:flex;align-items:center;justify-content:center;text-align:center;font-size:5pt;font-weight:900;line-height:1.1;padding:2mm}'+
+    '.id1-contact-title{position:absolute;left:17mm;right:17mm;bottom:7.2mm;height:4.3mm;border-radius:4mm;background:linear-gradient(100deg,#006b4d,#003b30);color:#fff;display:flex;align-items:center;justify-content:center;font-size:6.8pt;font-weight:900;letter-spacing:.3px;text-transform:uppercase}'+
+    '.id1-contact-box{position:absolute;left:2.2mm;right:2.2mm;bottom:1mm;height:5.8mm;border:.25mm solid #b7c7c1;border-radius:2.3mm;background:rgba(255,255,255,.96);display:flex;align-items:center;justify-content:space-around;gap:1mm;padding:0 1.5mm}'+
+    '.id1-contact-item{min-width:0;display:flex;align-items:center;gap:1mm;font-size:5.3pt;font-weight:800;color:#172033;overflow-wrap:anywhere}'+
+    '.id1-contact-icon{font-size:8pt;color:#70008a;font-weight:900}'+
+    '@media(max-width:600px){.id-card-set{flex-direction:column;align-items:center;gap:4mm}.id1-face{width:min(85.6mm,100%);flex-basis:auto;height:auto;aspect-ratio:85.6/53.98}.id1-top{height:26.3%;padding:2.4% 3.8%;gap:2.5%}.id1-crest{width:21%;height:88%;flex-basis:21%;padding:1%}.id1-school{font-size:clamp(8px,2.35vw,11px)}.id1-address{font-size:clamp(5px,1.55vw,7px)}.id1-motto{font-size:clamp(6px,1.8vw,8px);margin-top:1%}.id1-front-title{height:12.6%;margin:2% 7% 1.5%;font-size:clamp(10px,3vw,14px)}.id1-front-body{height:44.5%;padding:0 2%;gap:2%}.id1-photo-wrap{width:30%;height:95%;flex-basis:30%;padding:1%}.id1-detail{padding:1% 0}.id1-detail-icon{width:12%;flex-basis:12%;font-size:clamp(8px,2.3vw,11px)}.id1-detail b{font-size:clamp(5px,1.5vw,7px)}.id1-detail span{font-size:clamp(7px,2vw,9px)}.id1-code-row{height:12.6%;padding:0 3%;margin-top:1%}.id1-qr-wrap{width:18%;height:90%;flex-basis:18%;margin-top:0;padding:1%}.id1-barcode{height:65%}.id1-barcode-caption{font-size:clamp(6px,1.7vw,8px)}.id1-principal{right:3%;bottom:12%;width:43%;font-size:clamp(5px,1.5vw,7px)}.id1-principal img{width:72%;height:4mm}.id1-principal strong{font-size:clamp(6px,1.7vw,8px)}.id1-principal small{font-size:clamp(5px,1.4vw,7px)}.id1-front-foot{height:9.8%;font-size:clamp(7px,2vw,9px)}.id1-back-notice-title{left:10%;right:10%;top:5.5%;height:11%;font-size:clamp(9px,2.6vw,12px)}.id1-notices{left:2.5%;right:2.5%;top:19.5%;height:39%;padding:1.5%}.id1-notice{font-size:clamp(5px,1.5vw,7px);gap:2%;padding:1% 0}.id1-notice-num{width:7%;height:auto;aspect-ratio:1;font-size:clamp(7px,2vw,9px)}.id1-stamp-area{top:59%;height:22%}.id1-school-stamp,.id1-stamp-placeholder{width:34%;height:auto;aspect-ratio:1}.id1-contact-title{left:20%;right:20%;bottom:13%;height:8%;font-size:clamp(6px,1.8vw,8px)}.id1-contact-box{left:2.5%;right:2.5%;bottom:2%;height:10%;padding:0 2%}.id1-contact-item{font-size:clamp(4px,1.25vw,6px)}.id1-contact-icon{font-size:clamp(7px,2vw,9px)}}'+
     '@media print{@page{size:85.6mm 53.98mm;margin:0}.id-card-set{display:block;margin:0;gap:0}.id1-face{width:85.6mm!important;height:53.98mm!important;max-width:none!important;aspect-ratio:auto!important;border-radius:3mm;box-shadow:none;margin:0;break-after:page;page-break-after:always}.id1-face:last-child{break-after:auto;page-break-after:auto}}'+
     '</style>';
 }
@@ -3635,40 +3673,89 @@ function idCardDisplayValue(value, fallback) {
   var text = String(value == null ? '' : value).trim();
   return idCardEscape(text || fallback || '—');
 }
+var idCardRenderSequence = 0;
 function renderIdCardPreview(data, targetId) {
   var target = document.getElementById(targetId);
   if (!target || !data) return;
   var school = schoolInfo || {};
   var schoolName = school.name || school.schoolName || currentSchool && currentSchool.schoolName || 'DE-GLOBAL ACADEMY GBOKO';
-  var address = schoolIdCardSettings.schoolAddress || school.address || currentSchool && currentSchool.address || 'GBOKO NORTH, BENUE STATE';
-  var phone = schoolIdCardSettings.schoolPhone || school.phone || currentSchool && currentSchool.phone || '';
+  var address = school.address || schoolIdCardSettings.schoolAddress || currentSchool && currentSchool.location || 'OPPOSITE ST. JOSEPH CATHOLIC CHURCH, GBOKO NORTH';
+  var phone = school.phone || schoolIdCardSettings.schoolPhone || currentSchool && currentSchool.phone || '';
   var email = school.email || currentSchool && currentSchool.email || '';
-  var logo = schoolIdCardSettings.logo || school.portalLogo || school.logo || currentSchool && currentSchool.logo || '';
+  var logo = school.logo || school.portalLogo || schoolIdCardSettings.logo || currentSchool && currentSchool.logo || '';
   var motto = school.motto || 'We Are The World Best';
   var isStudent = String(data.kind || '').toLowerCase() === 'student';
   var name = idCardDisplayValue(data.name, 'Name not available');
-  var identifier = idCardDisplayValue(data.identifier, 'Not assigned');
-  var designation = idCardDisplayValue(data.className, isStudent ? 'Class not assigned' : 'Staff');
   var photo = String(data.photo || '').trim();
-  var typeLabel = isStudent ? 'STUDENT IDENTITY CARD' : 'STAFF IDENTITY CARD';
+  var sid = String(data.sid || data.identifier || '').trim();
+  var codeId = 'idCardBarcode' + (++idCardRenderSequence);
+  var qrId = 'idCardQr' + idCardRenderSequence;
+  var session = data.session || activeAcademicSession && activeAcademicSession.name || '';
+  var validYear = isStudent ? idCardExpectedGraduationYear(data.className, session) : '';
+  var validityHtml = isStudent ? (validYear ? 'VALID UNTIL: <b>' + idCardEscape(validYear) + '</b>' : 'VALID UNTIL: SS3 GRADUATION') :
+    (schoolIdCardSettings.validUntil ? 'VALID UNTIL: <b>' + idCardEscape(schoolIdCardSettings.validUntil) + '</b>' : 'VALID WHILE IN SERVICE');
+  var principalSignature = String(school.principalSignature || '').trim();
+  var principalName = String(school.principalName || '').trim();
+  if (!principalName && Array.isArray(staffDatabase)) {
+    var principalRecord = staffDatabase.find(function(item) {
+      return /principal/i.test(String(item.designation || item.position || item.role || '')) &&
+        String(item.status || 'Active').toLowerCase() === 'active';
+    });
+    if (principalRecord) principalName = String(principalRecord.fullName || principalRecord.full_name || '').trim();
+  }
   var frontDetails = isStudent
-    ? [['STUDENT ID', data.sid || data.identifier], ['CLASS / ARM', data.className], ['SESSION', data.session || activeAcademicSession && activeAcademicSession.name]]
-    : [['STAFF ID', data.identifier], ['POSITION', data.designation || data.className], ['DEPARTMENT', data.department]];
-  var backDetails = isStudent
-    ? [['ADMISSION NO.', data.admissionNumber || data.identifier], ['STUDENT ID', data.sid || data.identifier], ['CLASS / ARM', data.className], ['ACADEMIC SESSION', data.session || activeAcademicSession && activeAcademicSession.name], ['GUARDIAN CONTACT', data.phone], ['STUDENT HOUSE', data.house]]
-    : [['STAFF ID', data.identifier], ['DESIGNATION', data.designation || data.className], ['DEPARTMENT', data.department], ['PHONE', data.phone], ['EMAIL', data.email], ['DATE EMPLOYED', data.dateEmployed]];
+    ? [['♙','FULL NAME',data.name],['▥','STUDENT ID (SID)',sid],['▱','CLASS / ARM',data.className],['▦','ACADEMIC SESSION',session],['♀','GENDER',data.gender]]
+    : [['♙','FULL NAME',data.name],['▥','STAFF ID',data.identifier],['▱','DESIGNATION',data.designation || data.className],['▦','DEPARTMENT',data.department]];
+  var notices = [
+    'The bearer whose identity appears on this card is a bona fide ' + (isStudent ? 'student' : 'staff member') + ' of <strong>' + idCardEscape(schoolName) + '</strong>.',
+    'This Identity Card remains the property of <strong>' + idCardEscape(schoolName) + '</strong> and must be surrendered upon request by the School Authority.',
+    'If this card is lost, the loss must be reported immediately to the School Authority.',
+    'If found, kindly return it to <strong>' + idCardEscape(schoolName) + '</strong> or submit it to the nearest Police Station.'
+  ];
   var front = '<article class="id1-face id1-front" aria-label="ID card front">'+
     '<header class="id1-top">'+(logo?'<img class="id1-crest" src="'+idCardEscape(logo)+'" alt="School crest">':'<div class="id1-crest"></div>')+
-    '<div class="id1-brand"><div class="id1-school">'+idCardDisplayValue(schoolName)+'</div><div class="id1-address">'+idCardDisplayValue(address)+'</div><div class="id1-contact">'+(email?'✉ '+idCardEscape(email)+' &nbsp; ':'')+(phone?'☎ '+idCardEscape(phone):'')+'</div></div></header>'+
-    '<span class="id1-type">'+typeLabel+'</span><section class="id1-front-body"><div class="id1-details"><div class="id1-name-label">Full name</div><div class="id1-name">'+name+'</div>'+
-    frontDetails.map(function(item){return '<div class="id1-detail"><b>'+idCardEscape(item[0])+'</b><span>'+idCardDisplayValue(item[1])+'</span></div>';}).join('')+
-    '</div><div class="id1-photo-wrap">'+(photo?'<img class="id1-photo" src="'+idCardEscape(photo)+'" alt="Cardholder photograph" onerror="this.style.display=\'none\'">':'<div class="id1-photo-empty">PASSPORT<br>PHOTOGRAPH</div>')+'</div></section>'+
-    '<footer class="id1-front-foot"><span>'+idCardEscape(isStudent?'OFFICIAL STUDENT':'OFFICIAL STAFF')+'</span><em>'+idCardEscape(motto)+'</em></footer></article>';
-  var back = '<article class="id1-face id1-back" aria-label="ID card back"><header class="id1-back-head"><strong>'+idCardEscape(schoolName)+'</strong><span>OFFICIAL '+(isStudent?'STUDENT':'STAFF')+' IDENTIFICATION</span></header>'+
-    '<section class="id1-back-content">'+backDetails.map(function(item){return '<div class="id1-back-item"><small>'+idCardEscape(item[0])+'</small><b>'+idCardDisplayValue(item[1])+'</b></div>';}).join('')+'</section>'+
-    '<div class="id1-back-note">This card remains the property of '+idCardEscape(schoolName)+'. If found, please return it to the school office. It is not transferable.</div>'+
-    '<footer class="id1-back-foot"><span>'+idCardEscape(address)+'</span><span>VALID UNTIL: <b>'+idCardDisplayValue(schoolIdCardSettings.validUntil,'As determined by school')+'</b></span></footer></article>';
+    '<div class="id1-brand"><div class="id1-school">'+idCardDisplayValue(schoolName)+'</div><div class="id1-address">'+idCardDisplayValue(address)+'</div><div class="id1-motto">'+idCardEscape(motto)+'</div></div></header>'+
+    '<div class="id1-front-title">'+(isStudent?'STUDENT ID CARD':'STAFF ID CARD')+'</div>'+
+    '<section class="id1-front-body"><div class="id1-photo-wrap">'+(photo?'<img class="id1-photo" src="'+idCardEscape(photo)+'" alt="Cardholder photograph" onerror="this.style.display=\'none\'">':'<div class="id1-photo-empty">PASSPORT<br>PHOTOGRAPH</div>')+'</div>'+
+    '<div class="id1-details">'+frontDetails.map(function(item){return '<div class="id1-detail"><span class="id1-detail-icon">'+idCardEscape(item[0])+'</span><div class="id1-detail-copy"><b>'+idCardEscape(item[1])+'</b><span>'+idCardDisplayValue(item[2])+'</span></div></div>';}).join('')+'</div></section>'+
+    '<section class="id1-code-row"><div class="id1-qr-wrap"><img id="'+qrId+'" class="id1-qr" alt="Student identity QR code"></div><div class="id1-barcode-area"><svg id="'+codeId+'" class="id1-barcode" role="img" aria-label="Identity barcode"></svg><div class="id1-barcode-caption">'+idCardEscape(sid || data.identifier || '')+'</div></div></section>'+
+    '<div class="id1-principal">'+(principalSignature?'<img src="'+idCardEscape(principalSignature)+'" alt="Principal signature">':'')+'<div class="id1-principal-line"></div><strong>'+idCardEscape(principalName || 'Principal')+'</strong><small>Principal</small></div>'+
+    '<footer class="id1-front-foot">'+validityHtml+'</footer></article>';
+  var back = '<article class="id1-face id1-back" aria-label="ID card reverse">'+
+    '<div class="id1-back-notice-title">IMPORTANT NOTICE</div>'+
+    '<section class="id1-notices">'+notices.map(function(note,index){return '<div class="id1-notice"><span class="id1-notice-num">'+(index+1)+'</span><span>'+note+'</span></div>';}).join('')+'</section>'+
+    '<div class="id1-stamp-area"><div class="id1-stamp-rule"></div>'+(school.schoolStamp?'<img class="id1-school-stamp" src="'+idCardEscape(school.schoolStamp)+'" alt="Official school stamp">':'<div class="id1-stamp-placeholder">OFFICIAL<br>SCHOOL<br>STAMP</div>')+'</div>'+
+    '<div class="id1-contact-title">CONTACT INFORMATION</div>'+
+    '<footer class="id1-contact-box"><span class="id1-contact-item"><b class="id1-contact-icon">✉</b>'+idCardDisplayValue(email,'Email not configured')+'</span><span class="id1-contact-item"><b class="id1-contact-icon">☎</b>'+idCardDisplayValue(phone,'Telephone not configured')+'</span></footer></article>';
   target.innerHTML = idCardFaceStyles()+'<div class="id-card-set" data-card-kind="'+(isStudent?'student':'staff')+'">'+front+back+'</div>';
+  var qrElement = document.getElementById(qrId);
+  if (qrElement && typeof qrcode === 'function' && sid) {
+    try {
+      var qr = qrcode(0,'M');
+      qr.addData('DGA|'+(isStudent?'STUDENT':'STAFF')+'|'+sid);
+      qr.make();
+      qrElement.src = qr.createDataURL(4,1);
+    } catch (qrError) { qrElement.alt = 'QR code unavailable'; }
+  }
+  function drawBarcode() {
+    var barcode = document.getElementById(codeId);
+    if (barcode && typeof JsBarcode === 'function' && (sid || data.identifier)) {
+      try { JsBarcode(barcode, String(sid || data.identifier), {format:'CODE128',displayValue:false,margin:0,height:26,width:1.15}); }
+      catch (barcodeError) { barcode.setAttribute('aria-label','Barcode unavailable'); }
+    }
+  }
+  if (typeof JsBarcode === 'function') drawBarcode();
+  else if (!window.__dgaJsBarcodeLoading) {
+    window.__dgaJsBarcodeLoading = true;
+    var barcodeScript = document.createElement('script');
+    barcodeScript.src = 'https://cdnjs.cloudflare.com/ajax/libs/jsbarcode/3.11.6/JsBarcode.all.min.js';
+    barcodeScript.onload = function(){window.__dgaJsBarcodeLoading=false;drawBarcode();};
+    barcodeScript.onerror = function(){window.__dgaJsBarcodeLoading=false;};
+    document.head.appendChild(barcodeScript);
+  } else {
+    var barcodeWait = setInterval(function(){if(typeof JsBarcode==='function'){clearInterval(barcodeWait);drawBarcode();}},250);
+    setTimeout(function(){clearInterval(barcodeWait);},5000);
+  }
 }
 function printIdCardSet(element) {
   if (!element) { showToast('The front and back ID card preview is not available.','error'); return; }
@@ -3766,7 +3853,7 @@ async function previewBulkIdCards() {
     var studentResult = await supabaseClient
       .from('students')
       .select(
-        'id,school_id,admission_number,first_name,middle_name,last_name,gender,date_of_birth,guardian_phone'
+        'id,school_id,admission_number,first_name,middle_name,last_name,gender,date_of_birth,guardian_name,guardian_phone,student_house'
       )
       .eq('school_id', schoolId)
       .in('admission_number', ids);
@@ -3819,7 +3906,7 @@ async function previewBulkIdCards() {
       var missingResult = await supabaseClient
         .from('students')
         .select(
-          'id,school_id,admission_number,first_name,middle_name,last_name,gender,date_of_birth,guardian_phone'
+          'id,school_id,admission_number,first_name,middle_name,last_name,gender,date_of_birth,guardian_name,guardian_phone,student_house'
         )
         .eq('school_id', schoolId)
         .in('id', missingIds);
@@ -3912,6 +3999,9 @@ async function previewBulkIdCards() {
         admissionNumber: student.admission_number || '',
         className: studentDbClassLabel(enrolment.class_id) || enrolment.class_id || '',
         session: activeAcademicSession && activeAcademicSession.name || '',
+        registerNumber: enrolment.register_number || '',
+        gender: student.gender || student.sex || '',
+        guardianName: student.guardian_name || '',
         studentHouse: student.student_house || '',
         photoUrl: passportByStudent[String(student.id)] || student.photo_url || student.passport_url || ''
       });
@@ -6141,6 +6231,7 @@ async function printOfficialStudentIdCard(studentId) {
   var student=item.student,enrolment=item.enrolment||{},schoolId=authenticatedProfile.school_id,photoUrl='';
   try {
     await loadSchoolIdCardSettings();
+    await loadSchoolBrandingAssets();
     var passport=await supabaseClient.from('student_passports').select('storage_path').eq('school_id',schoolId).eq('student_id',student.id).maybeSingle();
     if(passport.error)throw passport.error;
     if(passport.data&&passport.data.storage_path){
@@ -6156,6 +6247,9 @@ async function printOfficialStudentIdCard(studentId) {
       admissionNumber:student.admission_number||'',
       className:studentDbClassLabel(enrolment.class_id)||'',
       session:activeAcademicSession&&activeAcademicSession.name||'',
+      registerNumber:enrolment.register_number||'',
+      gender:student.gender||student.sex||'',
+      guardianName:student.guardian_name||'',
       studentHouse:student.student_house||'',
       photoUrl:photoUrl||student.photo_url||student.passport_url||'',
       guardianPhone:student.guardian_phone||''
