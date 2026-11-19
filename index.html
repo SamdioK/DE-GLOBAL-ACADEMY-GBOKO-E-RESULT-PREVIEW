@@ -3617,56 +3617,56 @@ function idCardExpectedGraduationYear(className, sessionName) {
 }
 function idCardFaceStyles() {
   return '<style id="officialIdCardStyles">'+
-    '.id-card-set{display:flex;flex-wrap:wrap;align-items:flex-start;justify-content:center;gap:5mm;margin:12px 0 18px;font-family:Arial,Helvetica,sans-serif;color:#172033}'+
-    '.id1-face{position:relative;width:85.6mm;height:53.98mm;flex:0 0 85.6mm;overflow:hidden;border:1mm solid #07523d;border-radius:3mm;background:#fff;box-sizing:border-box;box-shadow:0 2mm 4mm rgba(0,0,0,.16);-webkit-print-color-adjust:exact;print-color-adjust:exact}'+
-    '.id1-top{height:13mm;display:flex;align-items:center;gap:2mm;padding:1.3mm 2.1mm;background:linear-gradient(112deg,#006b4d 0%,#003c30 62%,#002d27 100%);color:#fff;border-bottom:1mm solid #e6b83e}'+
-    '.id1-crest{width:15mm;height:12.5mm;flex:0 0 15mm;object-fit:contain;background:#fff;border:.5mm solid #e7bd49;border-radius:1.4mm;padding:.35mm;box-sizing:border-box}'+
-    '.id1-brand{min-width:0;flex:1;text-align:center;line-height:1.04}'+
-    '.id1-school{font-size:8pt;font-weight:900;letter-spacing:.1px;text-transform:uppercase;line-height:1.08}'+
-    '.id1-address{font-size:5.1pt;font-weight:800;color:#ffe15b;margin-top:.7mm;line-height:1.05}'+
-    '.id1-motto{display:inline-block;margin-top:.8mm;padding:.65mm 3mm;background:#70008a;border:.25mm solid #f1d9f7;border-radius:4mm;color:#fff;font-size:6pt;font-weight:900;font-style:italic;white-space:nowrap}'+
-    '.id1-front-title{height:6mm;margin:1mm 5.5mm .5mm;display:flex;align-items:center;justify-content:center;border:.7mm solid #e5b934;border-radius:5mm;background:linear-gradient(100deg,#00694c,#003b30);color:#fff;font-size:10pt;font-weight:900;letter-spacing:.45px;text-align:center;text-transform:uppercase}'+
-    '.id1-front-body{height:19mm;display:flex;gap:1.7mm;padding:0 1.7mm;position:relative}'+
-    '.id1-photo-wrap{width:19mm;height:19.5mm;flex:0 0 19mm;border:.55mm solid #cfd9d5;border-radius:2.4mm;padding:.5mm;background:#fff;box-sizing:border-box;align-self:center;box-shadow:0 .5mm 1mm rgba(0,0,0,.12)}'+
-    '.id1-photo{width:100%;height:100%;display:block;object-fit:cover;border-radius:1.5mm}'+
+    '.id-card-set{display:flex;flex-direction:column;align-items:center;gap:5mm;margin:12px auto 18px;font-family:Arial,Helvetica,sans-serif;color:#172033}'+
+    '.id1-face{position:relative;width:53.98mm;height:85.6mm;flex:0 0 53.98mm;overflow:hidden;border:1mm solid #07523d;border-radius:3mm;background:#fff;box-sizing:border-box;box-shadow:0 2mm 4mm rgba(0,0,0,.16);-webkit-print-color-adjust:exact;print-color-adjust:exact;display:flex;flex-direction:column}'+
+    '.id1-top{height:18mm;flex:0 0 18mm;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:.7mm;padding:1.1mm 2mm;background:linear-gradient(112deg,#006b4d 0%,#003c30 62%,#002d27 100%);color:#fff;border-bottom:1mm solid #e6b83e;text-align:center}'+
+    '.id1-crest{width:11mm;height:10mm;flex:0 0 10mm;object-fit:contain;background:#fff;border:.5mm solid #e7bd49;border-radius:1.4mm;padding:.25mm;box-sizing:border-box}'+
+    '.id1-brand{min-width:0;width:100%;text-align:center;line-height:1.04}'+
+    '.id1-school{font-size:7.2pt;font-weight:900;letter-spacing:.05px;text-transform:uppercase;line-height:1.08}'+
+    '.id1-address{font-size:4.5pt;font-weight:800;color:#ffe15b;margin-top:.55mm;line-height:1.05;overflow-wrap:anywhere}'+
+    '.id1-motto{display:inline-block;margin-top:.6mm;padding:.45mm 2.5mm;background:#70008a;border:.25mm solid #f1d9f7;border-radius:4mm;color:#fff;font-size:5.2pt;font-weight:900;font-style:italic;white-space:nowrap}'+
+    '.id1-front-title{height:7mm;flex:0 0 7mm;margin:1.2mm 3mm .7mm;display:flex;align-items:center;justify-content:center;border:.65mm solid #e5b934;border-radius:5mm;background:linear-gradient(100deg,#00694c,#003b30);color:#fff;font-size:9pt;font-weight:900;letter-spacing:.35px;text-align:center;text-transform:uppercase}'+
+    '.id1-front-body{flex:1;min-height:0;display:flex;flex-direction:column;align-items:center;gap:1.2mm;padding:0 2.5mm}'+
+    '.id1-photo-wrap{width:20mm;height:22mm;flex:0 0 22mm;border:.55mm solid #cfd9d5;border-radius:2.2mm;padding:.45mm;background:#fff;box-sizing:border-box;box-shadow:0 .5mm 1mm rgba(0,0,0,.12)}'+
+    '.id1-photo{width:100%;height:100%;display:block;object-fit:cover;border-radius:1.4mm}'+
     '.id1-photo-empty{height:100%;display:grid;place-items:center;text-align:center;color:#75847d;font-size:5pt;font-weight:700;line-height:1.2;border:1px dashed #91aa9e;border-radius:1mm}'+
-    '.id1-details{flex:1;min-width:0;border:.35mm solid #d8d3df;border-radius:2.4mm;padding:1mm 1.3mm;background:rgba(255,255,255,.96);display:flex;flex-direction:column;justify-content:space-around}'+
+    '.id1-details{width:100%;flex:1;min-height:0;border:.3mm solid #d8d3df;border-radius:2mm;padding:.8mm 1.4mm;background:rgba(255,255,255,.97);display:flex;flex-direction:column;justify-content:space-around}'+
     '.id1-detail{display:flex;align-items:center;gap:1mm;min-width:0;padding:.45mm 0;border-bottom:.2mm solid #ded8e4;line-height:1.05}'+
     '.id1-detail:last-child{border-bottom:0}'+
-    '.id1-detail-icon{width:4mm;flex:0 0 4mm;color:#70008a;font-size:8pt;font-weight:900;text-align:center}'+
+    '.id1-detail-icon{width:4mm;flex:0 0 4mm;color:#70008a;font-size:7pt;font-weight:900;text-align:center}'+
     '.id1-detail-copy{min-width:0;flex:1}'+
-    '.id1-detail b{display:block;color:#70008a;font-size:5.2pt;font-weight:900;text-transform:uppercase;letter-spacing:.12px}'+
-    '.id1-detail span{display:block;margin-top:.35mm;color:#111827;font-size:7pt;font-weight:800;overflow-wrap:anywhere;line-height:1.05}'+
-    '.id1-code-row{height:7.5mm;display:flex;align-items:center;gap:2mm;padding:0 3mm;margin-top:.5mm}'+
-    '.id1-qr-wrap{width:11.5mm;height:11.5mm;flex:0 0 11.5mm;align-self:flex-start;margin-top:-1mm;border:.6mm solid #07523d;border-radius:1.5mm;padding:.55mm;background:#fff;box-sizing:border-box}'+
+    '.id1-detail b{display:block;color:#70008a;font-size:4.7pt;font-weight:900;text-transform:uppercase;letter-spacing:.12px}'+
+    '.id1-detail span{display:block;margin-top:.25mm;color:#111827;font-size:6.2pt;font-weight:800;overflow-wrap:anywhere;line-height:1.05}'+
+    '.id1-code-row{height:10mm;flex:0 0 10mm;display:flex;align-items:center;gap:2mm;padding:0 3mm;margin-top:.8mm}'+
+    '.id1-qr-wrap{width:9mm;height:9mm;flex:0 0 9mm;border:.5mm solid #07523d;border-radius:1mm;padding:.4mm;background:#fff;box-sizing:border-box}'+
     '.id1-qr{display:block;width:100%;height:100%;object-fit:contain}'+
-    '.id1-barcode-area{flex:1;min-width:0;text-align:center;align-self:center}'+
-    '.id1-barcode{width:100%;height:7mm;display:block}'+
-    '.id1-barcode-caption{font-size:6.3pt;font-weight:900;letter-spacing:.65px;line-height:1.05;margin-top:.2mm}'+
-    '.id1-principal{position:absolute;right:3mm;bottom:6.4mm;width:37mm;text-align:center;font-size:5.4pt;color:#1b2630;line-height:1.05}'+
-    '.id1-principal img{display:block;width:27mm;height:5mm;object-fit:contain;margin:0 auto -0.2mm}'+
-    '.id1-principal-line{height:1.5mm;border-bottom:.25mm solid #222;margin:0 1mm .6mm}'+
-    '.id1-principal strong{display:block;font-size:6.2pt;font-weight:900}'+
-    '.id1-principal small{display:block;font-size:5.2pt;font-style:italic;margin-top:.3mm}'+
-    '.id1-front-foot{position:absolute;left:0;right:0;bottom:0;height:5.3mm;padding:.7mm 2mm;background:linear-gradient(100deg,#00664a,#003c30);border-top:.75mm solid #e6bb43;color:#fff;display:flex;align-items:center;justify-content:center;gap:1mm;font-size:7pt;font-weight:900;text-align:center}'+
+    '.id1-barcode-area{flex:1;min-width:0;text-align:center}'+
+    '.id1-barcode{width:100%;height:6mm;display:block}'+
+    '.id1-barcode-caption{font-size:5.5pt;font-weight:900;letter-spacing:.45px;line-height:1.05;margin-top:.2mm}'+
+    '.id1-principal{height:7mm;flex:0 0 7mm;width:100%;padding:0 2mm;text-align:center;font-size:4.8pt;color:#1b2630;line-height:1.02;box-sizing:border-box}'+
+    '.id1-principal img{display:block;width:18mm;height:3.2mm;object-fit:contain;margin:0 auto -0.2mm}'+
+    '.id1-principal-line{height:1mm;border-bottom:.25mm solid #222;margin:0 13mm .35mm}'+
+    '.id1-principal strong{display:block;font-size:5.3pt;font-weight:900}'+
+    '.id1-principal small{display:block;font-size:4.5pt;font-style:italic;margin-top:.2mm}'+
+    '.id1-front-foot{height:5.5mm;flex:0 0 5.5mm;padding:.6mm 1mm;background:linear-gradient(100deg,#00664a,#003c30);border-top:.65mm solid #e6bb43;color:#fff;display:flex;align-items:center;justify-content:center;font-size:6.2pt;font-weight:900;text-align:center}'+
     '.id1-front-foot b{color:#ffe04c}'+
     '.id1-back{background:#fff;background-image:repeating-linear-gradient(135deg,rgba(0,92,65,.035) 0,rgba(0,92,65,.035) .15mm,transparent .15mm,transparent 1.6mm)}'+
-    '.id1-back-notice-title{position:absolute;left:9mm;right:9mm;top:3mm;height:6mm;display:flex;align-items:center;justify-content:center;background:linear-gradient(100deg,#8a079d,#590078);border-radius:4mm;color:#fff;font-size:9pt;font-weight:900;letter-spacing:.35px;text-transform:uppercase}'+
-    '.id1-notices{position:absolute;left:2.2mm;right:2.2mm;top:10.5mm;height:21mm;padding:1mm 1.4mm;border:.25mm solid #78a98a;border-radius:3mm;background:rgba(250,255,248,.97);display:flex;flex-direction:column;justify-content:space-around}'+
-    '.id1-notice{display:flex;align-items:flex-start;gap:1.5mm;padding:.55mm .2mm;border-bottom:.2mm solid #d8d4e0;font-size:5.7pt;line-height:1.12;font-weight:700;color:#18231f}'+
+    '.id1-back-notice-title{height:7mm;flex:0 0 7mm;margin:2mm 4mm 1.2mm;display:flex;align-items:center;justify-content:center;background:linear-gradient(100deg,#8a079d,#590078);border-radius:4mm;color:#fff;font-size:8.5pt;font-weight:900;letter-spacing:.3px;text-transform:uppercase}'+
+    '.id1-notices{height:39mm;flex:0 0 39mm;margin:0 2mm;padding:1mm 1.1mm;border:.25mm solid #78a98a;border-radius:2.5mm;background:rgba(250,255,248,.97);display:flex;flex-direction:column;justify-content:space-around;box-sizing:border-box}'+
+    '.id1-notice{display:flex;align-items:flex-start;gap:1.2mm;padding:.7mm .2mm;border-bottom:.2mm solid #d8d4e0;font-size:5.4pt;line-height:1.18;font-weight:700;color:#18231f}'+
     '.id1-notice:last-child{border-bottom:0}'+
-    '.id1-notice-num{width:4.4mm;height:4.4mm;flex:0 0 4.4mm;border-radius:50%;background:#80008f;color:#fff;display:flex;align-items:center;justify-content:center;font-size:7pt;font-weight:900}'+
+    '.id1-notice-num{width:4mm;height:4mm;flex:0 0 4mm;border-radius:50%;background:#80008f;color:#fff;display:flex;align-items:center;justify-content:center;font-size:6.5pt;font-weight:900}'+
     '.id1-notice strong{color:#68007f}'+
-    '.id1-stamp-area{position:absolute;left:0;right:0;top:31mm;height:12mm;display:flex;align-items:center;justify-content:center}'+
-    '.id1-stamp-rule{position:absolute;left:4mm;right:4mm;top:50%;height:.45mm;background:linear-gradient(90deg,#e8b927 0 14%,#80008f 14% 22%,transparent 22% 78%,#80008f 78% 86%,#e8b927 86%)}'+
-    '.id1-school-stamp{position:relative;z-index:1;width:14mm;height:14mm;object-fit:contain;background:#fff;border-radius:50%;padding:.3mm}'+
-    '.id1-stamp-placeholder{position:relative;z-index:1;width:14mm;height:14mm;border:1mm double #202c9a;border-radius:50%;background:#fff;color:#202c9a;display:flex;align-items:center;justify-content:center;text-align:center;font-size:5pt;font-weight:900;line-height:1.1;padding:2mm}'+
-    '.id1-contact-title{position:absolute;left:17mm;right:17mm;bottom:7.2mm;height:4.3mm;border-radius:4mm;background:linear-gradient(100deg,#006b4d,#003b30);color:#fff;display:flex;align-items:center;justify-content:center;font-size:6.8pt;font-weight:900;letter-spacing:.3px;text-transform:uppercase}'+
-    '.id1-contact-box{position:absolute;left:2.2mm;right:2.2mm;bottom:1mm;height:5.8mm;border:.25mm solid #b7c7c1;border-radius:2.3mm;background:rgba(255,255,255,.96);display:flex;align-items:center;justify-content:space-around;gap:1mm;padding:0 1.5mm}'+
-    '.id1-contact-item{min-width:0;display:flex;align-items:center;gap:1mm;font-size:5.3pt;font-weight:800;color:#172033;overflow-wrap:anywhere}'+
-    '.id1-contact-icon{font-size:8pt;color:#70008a;font-weight:900}'+
-    '@media(max-width:600px){.id-card-set{flex-direction:column;align-items:center;gap:4mm}.id1-face{width:min(85.6mm,100%);flex-basis:auto;height:auto;aspect-ratio:85.6/53.98}.id1-top{height:26.3%;padding:2.4% 3.8%;gap:2.5%}.id1-crest{width:21%;height:88%;flex-basis:21%;padding:1%}.id1-school{font-size:clamp(8px,2.35vw,11px)}.id1-address{font-size:clamp(5px,1.55vw,7px)}.id1-motto{font-size:clamp(6px,1.8vw,8px);margin-top:1%}.id1-front-title{height:12.6%;margin:2% 7% 1.5%;font-size:clamp(10px,3vw,14px)}.id1-front-body{height:44.5%;padding:0 2%;gap:2%}.id1-photo-wrap{width:30%;height:95%;flex-basis:30%;padding:1%}.id1-detail{padding:1% 0}.id1-detail-icon{width:12%;flex-basis:12%;font-size:clamp(8px,2.3vw,11px)}.id1-detail b{font-size:clamp(5px,1.5vw,7px)}.id1-detail span{font-size:clamp(7px,2vw,9px)}.id1-code-row{height:12.6%;padding:0 3%;margin-top:1%}.id1-qr-wrap{width:18%;height:90%;flex-basis:18%;margin-top:0;padding:1%}.id1-barcode{height:65%}.id1-barcode-caption{font-size:clamp(6px,1.7vw,8px)}.id1-principal{right:3%;bottom:12%;width:43%;font-size:clamp(5px,1.5vw,7px)}.id1-principal img{width:72%;height:4mm}.id1-principal strong{font-size:clamp(6px,1.7vw,8px)}.id1-principal small{font-size:clamp(5px,1.4vw,7px)}.id1-front-foot{height:9.8%;font-size:clamp(7px,2vw,9px)}.id1-back-notice-title{left:10%;right:10%;top:5.5%;height:11%;font-size:clamp(9px,2.6vw,12px)}.id1-notices{left:2.5%;right:2.5%;top:19.5%;height:39%;padding:1.5%}.id1-notice{font-size:clamp(5px,1.5vw,7px);gap:2%;padding:1% 0}.id1-notice-num{width:7%;height:auto;aspect-ratio:1;font-size:clamp(7px,2vw,9px)}.id1-stamp-area{top:59%;height:22%}.id1-school-stamp,.id1-stamp-placeholder{width:34%;height:auto;aspect-ratio:1}.id1-contact-title{left:20%;right:20%;bottom:13%;height:8%;font-size:clamp(6px,1.8vw,8px)}.id1-contact-box{left:2.5%;right:2.5%;bottom:2%;height:10%;padding:0 2%}.id1-contact-item{font-size:clamp(4px,1.25vw,6px)}.id1-contact-icon{font-size:clamp(7px,2vw,9px)}}'+
-    '@media print{@page{size:85.6mm 53.98mm;margin:0}.id-card-set{display:block;margin:0;gap:0}.id1-face{width:85.6mm!important;height:53.98mm!important;max-width:none!important;aspect-ratio:auto!important;border-radius:3mm;box-shadow:none;margin:0;break-after:page;page-break-after:always}.id1-face:last-child{break-after:auto;page-break-after:auto}}'+
+    '.id1-stamp-area{height:22mm;flex:0 0 22mm;display:flex;align-items:center;justify-content:center;position:relative}'+
+    '.id1-stamp-rule{position:absolute;left:4mm;right:4mm;top:50%;height:.45mm;background:linear-gradient(90deg,#e8b927 0 18%,#80008f 18% 28%,transparent 28% 72%,#80008f 72% 82%,#e8b927 82%)}'+
+    '.id1-school-stamp{position:relative;z-index:1;width:18mm;height:18mm;object-fit:contain;background:#fff;border-radius:50%;padding:.3mm}'+
+    '.id1-stamp-placeholder{position:relative;z-index:1;width:18mm;height:18mm;border:1mm double #202c9a;border-radius:50%;background:#fff;color:#202c9a;display:flex;align-items:center;justify-content:center;text-align:center;font-size:5pt;font-weight:900;line-height:1.1;padding:2mm;box-sizing:border-box}'+
+    '.id1-contact-title{height:5mm;flex:0 0 5mm;margin:0 7mm .7mm;border-radius:4mm;background:linear-gradient(100deg,#006b4d,#003b30);color:#fff;display:flex;align-items:center;justify-content:center;font-size:6.2pt;font-weight:900;letter-spacing:.3px;text-transform:uppercase}'+
+    '.id1-contact-box{height:7mm;flex:0 0 7mm;margin:0 1.8mm 1.5mm;border:.25mm solid #b7c7c1;border-radius:2mm;background:rgba(255,255,255,.97);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:.5mm;padding:.4mm 1mm;box-sizing:border-box}'+
+    '.id1-contact-item{max-width:100%;display:flex;align-items:center;gap:1mm;font-size:5pt;font-weight:800;color:#172033;overflow-wrap:anywhere;text-align:center}'+
+    '.id1-contact-icon{font-size:6.5pt;color:#70008a;font-weight:900}'+
+    '@media(max-width:600px){.id-card-set{gap:4mm;margin:8px auto 14px}.id1-face{width:min(53.98mm,94vw);height:auto;aspect-ratio:53.98/85.6;flex-basis:auto}.id1-top{height:21%;flex-basis:21%;padding:1.2% 3%}.id1-crest{width:20%;height:58%;flex-basis:58%}.id1-school{font-size:clamp(8px,2.7vw,11px)}.id1-address{font-size:clamp(5px,1.7vw,7px)}.id1-motto{font-size:clamp(6px,1.9vw,8px)}.id1-front-title{height:8%;flex-basis:8%;font-size:clamp(9px,2.8vw,12px);margin:1.5% 5% 1%}.id1-front-body{padding:0 4%;gap:1.5%}.id1-photo-wrap{width:39%;height:23%;flex-basis:23%}.id1-details{padding:1% 2%}.id1-detail{padding:1% 0}.id1-detail b{font-size:clamp(5px,1.55vw,7px)}.id1-detail span{font-size:clamp(7px,2vw,9px)}.id1-code-row{height:12%;flex-basis:12%;padding:0 5%}.id1-qr-wrap{width:17%;height:90%;flex-basis:17%}.id1-barcode{height:65%}.id1-barcode-caption{font-size:clamp(6px,1.7vw,8px)}.id1-principal{height:8%;flex-basis:8%;font-size:clamp(5px,1.45vw,7px)}.id1-principal strong{font-size:clamp(6px,1.8vw,8px)}.id1-front-foot{height:6.5%;flex-basis:6.5%;font-size:clamp(7px,2vw,9px)}.id1-back-notice-title{height:8%;flex-basis:8%;font-size:clamp(9px,2.6vw,12px)}.id1-notices{height:45%;flex-basis:45%;padding:1.5% 2%}.id1-notice{font-size:clamp(5px,1.5vw,7px);gap:2%;padding:1.5% 0}.id1-notice-num{width:7%;height:auto;aspect-ratio:1;font-size:clamp(7px,2vw,9px)}.id1-stamp-area{height:25%;flex-basis:25%}.id1-school-stamp,.id1-stamp-placeholder{width:78%;height:auto;max-height:95%;aspect-ratio:1}.id1-contact-title{height:6%;flex-basis:6%;font-size:clamp(6px,1.8vw,8px)}.id1-contact-box{height:9%;flex-basis:9%;margin-bottom:2%}.id1-contact-item{font-size:clamp(5px,1.4vw,6.5px)}}'+
+    '@media print{@page{size:53.98mm 85.6mm;margin:0}.id-card-set{display:block;margin:0;gap:0}.id1-face{width:53.98mm!important;height:85.6mm!important;max-width:none!important;aspect-ratio:auto!important;border-radius:3mm;box-shadow:none;margin:0;break-after:page;page-break-after:always}.id1-face:last-child{break-after:auto;page-break-after:auto}}'+
     '</style>';
 }
 function idCardDisplayValue(value, fallback) {
@@ -3685,7 +3685,6 @@ function renderIdCardPreview(data, targetId) {
   var logo = school.logo || school.portalLogo || schoolIdCardSettings.logo || currentSchool && currentSchool.logo || '';
   var motto = school.motto || 'We Are The World Best';
   var isStudent = String(data.kind || '').toLowerCase() === 'student';
-  var name = idCardDisplayValue(data.name, 'Name not available');
   var photo = String(data.photo || '').trim();
   var sid = String(data.sid || data.identifier || '').trim();
   var codeId = 'idCardBarcode' + (++idCardRenderSequence);
@@ -3718,7 +3717,7 @@ function renderIdCardPreview(data, targetId) {
     '<div class="id1-front-title">'+(isStudent?'STUDENT ID CARD':'STAFF ID CARD')+'</div>'+
     '<section class="id1-front-body"><div class="id1-photo-wrap">'+(photo?'<img class="id1-photo" src="'+idCardEscape(photo)+'" alt="Cardholder photograph" onerror="this.style.display=\'none\'">':'<div class="id1-photo-empty">PASSPORT<br>PHOTOGRAPH</div>')+'</div>'+
     '<div class="id1-details">'+frontDetails.map(function(item){return '<div class="id1-detail"><span class="id1-detail-icon">'+idCardEscape(item[0])+'</span><div class="id1-detail-copy"><b>'+idCardEscape(item[1])+'</b><span>'+idCardDisplayValue(item[2])+'</span></div></div>';}).join('')+'</div></section>'+
-    '<section class="id1-code-row"><div class="id1-qr-wrap"><img id="'+qrId+'" class="id1-qr" alt="Student identity QR code"></div><div class="id1-barcode-area"><svg id="'+codeId+'" class="id1-barcode" role="img" aria-label="Identity barcode"></svg><div class="id1-barcode-caption">'+idCardEscape(sid || data.identifier || '')+'</div></div></section>'+
+    '<section class="id1-code-row"><div class="id1-qr-wrap"><img id="'+qrId+'" class="id1-qr" alt="Identity QR code"></div><div class="id1-barcode-area"><svg id="'+codeId+'" class="id1-barcode" role="img" aria-label="Identity barcode"></svg><div class="id1-barcode-caption">'+idCardEscape(sid || data.identifier || '')+'</div></div></section>'+
     '<div class="id1-principal">'+(principalSignature?'<img src="'+idCardEscape(principalSignature)+'" alt="Principal signature">':'')+'<div class="id1-principal-line"></div><strong>'+idCardEscape(principalName || 'Principal')+'</strong><small>Principal</small></div>'+
     '<footer class="id1-front-foot">'+validityHtml+'</footer></article>';
   var back = '<article class="id1-face id1-back" aria-label="ID card reverse">'+
@@ -3757,6 +3756,7 @@ function renderIdCardPreview(data, targetId) {
     setTimeout(function(){clearInterval(barcodeWait);},5000);
   }
 }
+
 function printIdCardSet(element) {
   if (!element) { showToast('The front and back ID card preview is not available.','error'); return; }
   var win = window.open('','_blank');
@@ -3781,7 +3781,7 @@ async function downloadIdCardSet(element, format, filename) {
   try {
     var faces = Array.prototype.slice.call(element.querySelectorAll('.id1-face'));
     if (faces.length !== 2) throw new Error('Both sides of the ID card must be present.');
-    var pdf = new window.jspdf.jsPDF({orientation:'landscape',unit:'mm',format:[85.6,53.98]});
+    var pdf = new window.jspdf.jsPDF({orientation:'portrait',unit:'mm',format:[53.98,85.6]});
     for (var i=0;i<faces.length;i++) {
       var canvas = await html2canvas(faces[i],{scale:4,useCORS:true,backgroundColor:'#ffffff',imageTimeout:15000});
       if (i) pdf.addPage([85.6,53.98],'landscape');
