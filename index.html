@@ -9262,9 +9262,9 @@ async function printArmScoreSheet(className, sessionOverride, termOverride) {
         '<footer class="sheet-footer"><div class="teacher-block"><div class="teacher-signature-line"></div>'+
         '<div class="teacher-title">SUBJECT TEACHER</div></div>'+
         '<div class="principal-block">'+principalSign+
-        '<div class="principal-name">'+safe(principalName||'Principal')+'</div><div class="principal-title">PRINCIPAL</div></div>'+
+        '<div class="principal-signature-line"></div><div class="principal-name">'+safe(principalName||'Principal')+'</div><div class="principal-title">PRINCIPAL</div></div>'+
         '<div class="stamp-block">'+stamp+
-        '<div class="stamp-caption">OFFICIAL SCHOOL STAMP'+(stampDateLabel?' · '+safe(stampDateLabel):' · DATE NOT CONFIGURED')+'</div></div></footer>'+
+        '<div class="stamp-caption">OFFICIAL SCHOOL STAMP</div></div></footer>'+
         '<div class="document-meta"><div>Document generated on '+safe(generatedDate)+'</div><div>Document ID: '+safe(documentId)+'</div></div>'+
         '<div class="page-number">Subject '+(index+1)+' of '+subjectRows.length+'</div></section>';
     }).join('');
