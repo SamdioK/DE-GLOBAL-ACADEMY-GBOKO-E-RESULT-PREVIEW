@@ -1141,6 +1141,23 @@ th { background: #f5f5f5; font-weight: 600; }
   #loginContainer .role-slide,#loginContainer .role-slide.is-active {grid-template-columns:minmax(0,1fr)!important;min-height:0!important}
 }
 
+
+/* Explicitly reveal the selected sign-in panel after role selection */
+#loginContainer #loginView #adminLoginFields:not(.hidden):not([hidden]),
+#loginContainer #loginView #principalLoginFields:not(.hidden):not([hidden]),
+#loginContainer #loginView #formmasterFields:not(.hidden):not([hidden]),
+#loginContainer #loginView #subjectTeacherFields:not(.hidden):not([hidden]),
+#loginContainer #loginView #subadminLoginFields:not(.hidden):not([hidden]),
+#loginContainer #loginView #studentLoginFields:not(.hidden):not([hidden]),
+#loginContainer #loginView #developerLoginFields:not(.hidden):not([hidden]) {
+  display:block!important;visibility:visible!important;opacity:1!important;
+  height:auto!important;max-height:none!important;overflow:visible!important;
+}
+#loginContainer #loginView #adminLoginFields:not(.hidden) .input-group,
+#loginContainer #loginView #principalLoginFields:not(.hidden) .input-group {
+  display:block!important;visibility:visible!important;opacity:1!important;
+}
+
 </style>
 </head>
 <body>
@@ -1875,7 +1892,7 @@ function setHeaderLogo(logoDataUrl) {
 function setupEventListeners() {
   var userTypeSelect = document.getElementById('userType');
   if (userTypeSelect) {
-    userTypeSelect.addEventListener('change', handleUserTypeChange);
+    userTypeSelect.onchange = handleUserTypeChange;
 
     var developerOption = document.getElementById('developerLoginOption');
     var params = new URLSearchParams(window.location.search);
@@ -1945,14 +1962,9 @@ function setupEventListeners() {
   });
 }
 
-async function handleUserTypeChange(e) {
-  var userType = e && e.target ? String(e.target.value || '') : '';
-  var genericEmailGroup = document.getElementById('genericAuthEmailGroup');
-  if (genericEmailGroup) {
-    genericEmailGroup.classList.toggle('hidden',
-      userType === 'student' || userType === 'developer' || userType === 'principal');
-  }
-
+function handleUserTypeChange(e) {
+  var select = e && e.target ? e.target : document.getElementById('userType');
+  var userType = select ? String(select.value || '') : '';
   var fieldMap = {
     principal: 'principalLoginFields',
     admin: 'adminLoginFields',
@@ -1962,31 +1974,39 @@ async function handleUserTypeChange(e) {
     student: 'studentLoginFields',
     developer: 'developerLoginFields'
   };
-  var fieldIds = Object.keys(fieldMap).map(function(key) { return fieldMap[key]; });
-  fieldIds.forEach(function(id) {
-    var field = document.getElementById(id);
-    if (!field) return;
-    field.hidden = true;
-    field.classList.add('hidden');
-    field.setAttribute('aria-hidden', 'true');
-    field.style.removeProperty('display');
-    field.style.removeProperty('visibility');
-  });
-
-  var selectedId = fieldMap[userType];
-  var selectedFields = selectedId ? document.getElementById(selectedId) : null;
-  if (selectedFields) {
-    selectedFields.hidden = false;
-    selectedFields.classList.remove('hidden');
-    selectedFields.setAttribute('aria-hidden', 'false');
-    selectedFields.style.removeProperty('display');
-    selectedFields.style.removeProperty('visibility');
+  var genericEmailGroup = document.getElementById('genericAuthEmailGroup');
+  if (genericEmailGroup) {
+    var hideGenericEmail = userType === 'student' || userType === 'developer' || userType === 'principal';
+    genericEmailGroup.classList.toggle('hidden', hideGenericEmail);
+    genericEmailGroup.hidden = hideGenericEmail;
+    genericEmailGroup.style.setProperty('display', hideGenericEmail ? 'none' : 'block', 'important');
   }
 
-  if (userType === 'formmaster') {
-    await loadArmDropdown();
-  } else if (userType === 'subjectteacher') {
-    await loadAssignmentDropdown();
+  Object.keys(fieldMap).forEach(function(role) {
+    var panel = document.getElementById(fieldMap[role]);
+    if (!panel) return;
+    var active = role === userType;
+    panel.classList.toggle('hidden', !active);
+    panel.hidden = !active;
+    panel.setAttribute('aria-hidden', active ? 'false' : 'true');
+    panel.style.setProperty('display', active ? 'block' : 'none', 'important');
+    panel.style.setProperty('visibility', active ? 'visible' : 'hidden', 'important');
+    panel.style.setProperty('opacity', active ? '1' : '0', 'important');
+    if (active) {
+      panel.querySelectorAll('.input-group').forEach(function(group) {
+        group.classList.remove('hidden');
+        group.hidden = false;
+        group.style.setProperty('display', 'block', 'important');
+        group.style.setProperty('visibility', 'visible', 'important');
+      });
+    }
+  });
+
+  if (userType === 'formmaster' && typeof loadArmDropdown === 'function') {
+    loadArmDropdown();
+  }
+  if (userType === 'subjectteacher' && typeof loadAssignmentDropdown === 'function') {
+    loadAssignmentDropdown();
   }
 }
 
