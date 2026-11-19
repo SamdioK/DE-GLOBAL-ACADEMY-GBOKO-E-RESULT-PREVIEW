@@ -1892,7 +1892,11 @@ function setHeaderLogo(logoDataUrl) {
 function setupEventListeners() {
   var userTypeSelect = document.getElementById('userType');
   if (userTypeSelect) {
-    userTypeSelect.onchange = handleUserTypeChange;
+    // Use native listeners rather than relying on a replaceable onchange property.
+    // Capture phase ensures role fields are updated even if another UI script
+    // attaches its own listener to the login selector.
+    userTypeSelect.addEventListener('change', handleUserTypeChange, true);
+    userTypeSelect.addEventListener('input', handleUserTypeChange, true);
 
     var developerOption = document.getElementById('developerLoginOption');
     var params = new URLSearchParams(window.location.search);
@@ -1910,6 +1914,9 @@ function setupEventListeners() {
       });
     }
   }
+
+  // Initialise role-dependent visibility on first render as well as on selection.
+  if (userTypeSelect) handleUserTypeChange({ target: userTypeSelect });
 
   var setupBtn = document.getElementById('setupBtn');
   if (setupBtn) setupBtn.addEventListener('click', handleSetup);
@@ -1963,8 +1970,12 @@ function setupEventListeners() {
 }
 
 function handleUserTypeChange(e) {
-  var select = e && e.target ? e.target : document.getElementById('userType');
-  var userType = select ? String(select.value || '') : '';
+  var select = e && e.target && e.target.id === 'userType'
+    ? e.target
+    : document.getElementById('userType');
+  if (!select) return;
+
+  var userType = String(select.value || '').trim();
   var fieldMap = {
     principal: 'principalLoginFields',
     admin: 'adminLoginFields',
@@ -1974,33 +1985,52 @@ function handleUserTypeChange(e) {
     student: 'studentLoginFields',
     developer: 'developerLoginFields'
   };
+
   var genericEmailGroup = document.getElementById('genericAuthEmailGroup');
   if (genericEmailGroup) {
     var hideGenericEmail = userType === 'student' || userType === 'developer' || userType === 'principal';
     genericEmailGroup.classList.toggle('hidden', hideGenericEmail);
     genericEmailGroup.hidden = hideGenericEmail;
+    genericEmailGroup.setAttribute('aria-hidden', hideGenericEmail ? 'true' : 'false');
     genericEmailGroup.style.setProperty('display', hideGenericEmail ? 'none' : 'block', 'important');
+    genericEmailGroup.style.setProperty('visibility', hideGenericEmail ? 'hidden' : 'visible', 'important');
   }
 
+  // Every login responsibility has one dedicated panel. Explicitly update
+  // class, hidden attribute, ARIA state and inline visibility together so
+  // responsive CSS or a stale hidden attribute cannot suppress the fields.
   Object.keys(fieldMap).forEach(function(role) {
     var panel = document.getElementById(fieldMap[role]);
     if (!panel) return;
     var active = role === userType;
+
     panel.classList.toggle('hidden', !active);
     panel.hidden = !active;
     panel.setAttribute('aria-hidden', active ? 'false' : 'true');
     panel.style.setProperty('display', active ? 'block' : 'none', 'important');
     panel.style.setProperty('visibility', active ? 'visible' : 'hidden', 'important');
     panel.style.setProperty('opacity', active ? '1' : '0', 'important');
-    if (active) {
-      panel.querySelectorAll('.input-group').forEach(function(group) {
-        group.classList.remove('hidden');
-        group.hidden = false;
-        group.style.setProperty('display', 'block', 'important');
-        group.style.setProperty('visibility', 'visible', 'important');
-      });
-    }
+
+    panel.querySelectorAll('.input-group').forEach(function(group) {
+      group.classList.toggle('hidden', !active);
+      group.hidden = !active;
+      group.setAttribute('aria-hidden', active ? 'false' : 'true');
+      group.style.setProperty('display', active ? 'block' : 'none', 'important');
+      group.style.setProperty('visibility', active ? 'visible' : 'hidden', 'important');
+      group.style.setProperty('opacity', active ? '1' : '0', 'important');
+    });
+
+    panel.querySelectorAll('input, select').forEach(function(input) {
+      input.disabled = !active;
+      input.setAttribute('aria-hidden', active ? 'false' : 'true');
+    });
   });
+
+  var loginError = document.getElementById('loginError');
+  if (loginError) {
+    loginError.classList.add('hidden');
+    loginError.textContent = '';
+  }
 
   if (userType === 'formmaster' && typeof loadArmDropdown === 'function') {
     loadArmDropdown();
