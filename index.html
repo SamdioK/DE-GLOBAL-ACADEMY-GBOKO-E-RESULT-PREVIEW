@@ -1791,7 +1791,7 @@ async function initApp() {
   if (loginView) loginView.classList.remove('hidden');
 
   // Render public identity before wiring optional login controls.
-  await loadLandingSchoolIdentity();
+  loadLandingSchoolIdentity();
   setupEventListeners();
 }
 
