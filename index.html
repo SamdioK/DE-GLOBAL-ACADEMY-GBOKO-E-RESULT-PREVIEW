@@ -1018,6 +1018,65 @@ th { background: #f5f5f5; font-weight: 600; }
   }
 }
 
+
+/* RESTORED ORIGINAL SCHOOL LANDING COMPONENTS */
+#loginContainer{
+  background-color:#321064!important;
+  background-image:linear-gradient(90deg,rgba(48,5,91,.62) 0%,rgba(48,5,91,.28) 44%,rgba(22,10,45,.10) 100%),url("assets/landing/school-background.webp")!important;
+  background-size:cover!important;background-position:center 42%!important;background-repeat:no-repeat!important;
+}
+#loginContainer .landing-features{
+  display:grid!important;grid-template-columns:repeat(4,minmax(0,1fr))!important;
+  width:100%!important;max-width:720px!important;margin:clamp(18px,2vw,28px) 0 0!important;
+  padding:clamp(12px,1.5vw,19px) 8px!important;
+  border:1px solid rgba(255,255,255,.44)!important;border-radius:22px!important;
+  background:linear-gradient(120deg,rgba(255,255,255,.17),rgba(255,255,255,.07))!important;
+  box-shadow:0 12px 32px rgba(12,0,35,.18)!important;
+  backdrop-filter:blur(9px)!important;
+}
+#loginContainer .landing-feature{
+  display:flex!important;flex-direction:column!important;align-items:center!important;justify-content:center!important;
+  min-width:0!important;text-align:center!important;color:#fff!important;
+  border-right:1px solid rgba(255,255,255,.25)!important;
+  font-size:clamp(10px,1.1vw,14px)!important;font-weight:800!important;line-height:1.25!important;
+}
+#loginContainer .landing-feature:last-child{border-right:0!important}
+#loginContainer .landing-feature-icon{
+  display:grid!important;place-items:center!important;
+  width:clamp(42px,5vw,68px)!important;height:clamp(42px,5vw,68px)!important;
+  margin:0 auto 8px!important;border-radius:50%!important;
+  background:linear-gradient(145deg,rgba(255,255,255,.25),rgba(255,255,255,.08))!important;
+  border:1px solid rgba(255,255,255,.62)!important;
+  box-shadow:0 5px 14px rgba(0,0,0,.18)!important;
+  font-size:clamp(21px,2.5vw,32px)!important;
+}
+#loginContainer .landing-graduation{
+  display:flex!important;align-items:center!important;justify-content:flex-start!important;
+  width:100%!important;min-height:0!important;height:auto!important;
+  margin:clamp(16px,2vw,26px) 0 0!important;
+}
+#loginContainer .landing-graduation-art{
+  display:block!important;width:min(100%,570px)!important;height:auto!important;
+  max-height:clamp(160px,23vw,300px)!important;object-fit:contain!important;
+  filter:drop-shadow(0 8px 13px rgba(0,0,0,.26))!important;
+}
+#loginContainer .landing-crest{flex:0 0 auto!important}
+#loginContainer .landing-crest img{display:block!important;width:100%!important;height:100%!important;object-fit:contain!important}
+@media(max-width:900px){
+  #loginContainer{background-image:linear-gradient(180deg,rgba(48,5,91,.34) 0%,rgba(48,5,91,.16) 36%,rgba(22,10,45,.48) 100%),url("assets/landing/school-background.webp")!important;background-position:center top!important;background-size:cover!important}
+  #loginContainer .landing-features{max-width:100%!important;margin:16px auto 0!important;padding:12px 5px!important}
+  #loginContainer .landing-feature{font-size:clamp(9px,2.2vw,12px)!important}
+  #loginContainer .landing-feature-icon{width:clamp(38px,8vw,54px)!important;height:clamp(38px,8vw,54px)!important;font-size:clamp(19px,4vw,26px)!important}
+  #loginContainer .landing-graduation{justify-content:center!important;margin:14px auto 0!important}
+  #loginContainer .landing-graduation-art{width:min(100%,500px)!important;max-height:220px!important}
+}
+@media(max-width:480px){
+  #loginContainer .landing-features{border-radius:16px!important;padding:9px 2px!important}
+  #loginContainer .landing-feature{font-size:9px!important;padding:4px 1px!important}
+  #loginContainer .landing-feature-icon{width:36px!important;height:36px!important;font-size:18px!important;margin-bottom:6px!important}
+  #loginContainer .landing-graduation-art{max-height:185px!important}
+}
+
 </style>
 </head>
 <body>
@@ -1041,6 +1100,15 @@ th { background: #f5f5f5; font-weight: 600; }
       </div>
       
       <p class="landing-intro" id="landingSchoolTagline">A Digital Platform for Result Processing, Management and Academic Reporting</p>
+      <div class="landing-features" aria-label="Platform features">
+        <div class="landing-feature"><div class="landing-feature-icon">📊</div>Result<br>Processing</div>
+        <div class="landing-feature"><div class="landing-feature-icon">👥</div>Student<br>Records</div>
+        <div class="landing-feature"><div class="landing-feature-icon">🧑‍🏫</div>Staff<br>Management</div>
+        <div class="landing-feature"><div class="landing-feature-icon">🛡️</div>Secure<br>&amp; Reliable</div>
+      </div>
+      <div class="landing-graduation" aria-label="Graduation cap on stacked academic books beside a rolled diploma tied with a red ribbon">
+        <img class="landing-graduation-art" src="assets/landing/graduation-reference.webp" alt="Black graduation cap resting on brown and green academic books with a white diploma tied in a red ribbon" loading="eager" decoding="async">
+      </div>
     </section>
     <section class="landing-role-gallery" aria-label="Preview of system workspaces by login role">
         <div class="role-gallery-heading">
@@ -6404,7 +6472,70 @@ function printOfficialStudentProfiles() {
     ' &nbsp; | &nbsp; Total Students: ' + rows.length + '</p>' +
     '<table>' + tableHead + tableBody + '</table>' +
     '<script>window.onload=function(){window.print();};<\/script>' +
-    '</body></html>';
+    '
+<script>
+/* Independent first-paint identity loader: keeps the crest, WAT clock and academic labels
+   available even if a later application module fails during initialisation. */
+(function(){
+  function bootLandingIdentity(){
+    var clock=document.getElementById('landingLiveTime');
+    var session=document.getElementById('landingAcademicSession');
+    var term=document.getElementById('landingCurrentTerm');
+    var logo=document.getElementById('landingSchoolLogo');
+    var fallback=document.getElementById('landingCrestFallback');
+    var logoUrl='https://rvmcqvfuioxmbtvgdptb.supabase.co/storage/v1/object/public/school-public-assets/b135a823-0a04-4b4b-86dd-2b20ea5e9fac/branding/logo-1794147672365-yyjd2x.png';
+    function tick(){
+      if(!clock)return;
+      var now=new Date();
+      var date=new Intl.DateTimeFormat('en-GB',{timeZone:'Africa/Lagos',weekday:'long',day:'2-digit',month:'long',year:'numeric'}).format(now);
+      var time=new Intl.DateTimeFormat('en-GB',{timeZone:'Africa/Lagos',hour:'2-digit',minute:'2-digit',second:'2-digit',hour12:true}).format(now);
+      clock.textContent=date+'  ·  '+time+' WAT';
+    }
+    tick();
+    if(window.__landingIdentityClock)window.clearInterval(window.__landingIdentityClock);
+    window.__landingIdentityClock=window.setInterval(tick,1000);
+    if(session&&(!session.textContent||/loading|unavailable|checking/i.test(session.textContent)))session.textContent='2026/2027';
+    if(term&&(!term.textContent||/loading|unavailable|checking/i.test(term.textContent)))term.textContent='First Term';
+    function setLogo(url){
+      if(!logo||!url)return;
+      logo.onload=function(){logo.hidden=false;if(fallback)fallback.hidden=true;};
+      logo.onerror=function(){logo.hidden=true;if(fallback)fallback.hidden=false;};
+      logo.src=url;
+    }
+    setLogo(logoUrl);
+    var client=window.supabaseClient;
+    if(client&&typeof client.rpc==='function'){
+      var settled=false;
+      var timeout=window.setTimeout(function(){settled=true;},9000);
+      client.rpc('get_public_school_portal_content').then(function(result){
+        if(settled||!result||result.error)return;
+        window.clearTimeout(timeout);
+        var data=result.data||{},school=data.school||{},academic=data.academicSession||{},currentTerm=data.currentTerm||{};
+        var name=document.getElementById('landingSchoolName');
+        var address=document.getElementById('landingSchoolAddress');
+        var addressWrap=document.getElementById('landingAddressWrap');
+        var phone=document.getElementById('landingSchoolPhone');
+        var phoneWrap=document.getElementById('landingPhoneWrap');
+        var email=document.getElementById('landingSchoolEmail');
+        var emailWrap=document.getElementById('landingEmailWrap');
+        var motto=document.getElementById('landingSchoolMotto');
+        if(name&&school.name)name.textContent=school.name;
+        if(address&&addressWrap&&school.address){address.textContent=school.address;addressWrap.hidden=false;}
+        if(phone&&phoneWrap&&school.phone){phone.textContent=school.phone;phone.href='tel:'+String(school.phone).replace(/[^+\\d]/g,'');phoneWrap.hidden=false;}
+        if(email&&emailWrap&&school.email){email.textContent=school.email;email.href='mailto:'+school.email;emailWrap.hidden=false;}
+        if(motto&&school.motto)motto.textContent=String(school.motto).toUpperCase();
+        if(session)session.textContent=academic.name||'Academic session not set';
+        if(term)term.textContent=currentTerm.name||'Term not set';
+        if(school.logo_url)setLogo(school.logo_url);
+      }).catch(function(){});
+    }
+  }
+  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',bootLandingIdentity,{once:true});
+  else bootLandingIdentity();
+})();
+</script>
+
+</body></html>';
 
   printWindow.document.open();
   printWindow.document.write(documentHtml);
