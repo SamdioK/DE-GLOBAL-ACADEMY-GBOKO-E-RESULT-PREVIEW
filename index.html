@@ -270,11 +270,129 @@ th { background: #f5f5f5; font-weight: 600; }
  #loginContainer .landing-graduation-art{width:100%;max-height:175px}
 }
 
+
+/* Final reference-led landing page layout */
+#loginContainer{min-height:100vh;min-height:100svh;align-items:stretch;justify-content:center;padding:clamp(22px,3.2vw,48px);background:linear-gradient(180deg,#361064 0%,#4a1287 62%,#24104c 100%)}
+#loginContainer:before{height:100%;background-image:linear-gradient(180deg,rgba(36,5,76,.10),rgba(41,6,75,.24));background-size:cover;opacity:1}
+#loginContainer:after{opacity:.95;background:radial-gradient(circle at 2% 5%,transparent 0 90px,rgba(255,255,255,.06) 92px 105px,transparent 108px),radial-gradient(circle at 98% 0%,transparent 0 170px,rgba(255,255,255,.06) 172px 190px,transparent 193px),linear-gradient(160deg,transparent 72%,rgba(255,193,7,.98) 72.2%,rgba(255,193,7,.98) 73%,transparent 73.2%),linear-gradient(165deg,transparent 75%,rgba(0,112,57,.9) 75.2%,rgba(0,112,57,.9) 78%,transparent 78.2%)}
+#loginContainer .landing-campus-scene{position:absolute;z-index:-1;inset:0 0 auto;height:min(72vh,760px);min-height:520px;overflow:hidden;pointer-events:none}
+#loginContainer .landing-campus-scene svg{display:block;width:100%;height:100%;object-fit:cover}
+#loginContainer .landing-shell{width:min(1420px,100%);margin:auto;display:grid!important;grid-template-columns:minmax(0,1.08fr) minmax(420px,.92fr)!important;grid-template-rows:auto auto minmax(0,1fr) auto;grid-template-areas:"hero academic" "hero clock" "hero login" "footer footer";column-gap:clamp(26px,4vw,64px);row-gap:10px;align-items:center}
+#loginContainer .landing-academic-strip{grid-area:academic;grid-column:auto;justify-self:end;width:min(100%,600px);min-width:0;margin-top:0;padding:13px 22px;border-radius:24px}
+#loginContainer .landing-live-time{grid-area:clock;grid-column:auto;justify-self:end;margin:0 4px 4px 0;text-align:right;font-size:12px}
+#loginContainer .landing-hero{grid-area:hero;grid-column:auto;grid-row:1/4;align-self:center;padding:12px 0;min-width:0}
+#loginContainer .landing-brand{align-items:flex-start;text-align:left;gap:8px;margin-bottom:16px}
+#loginContainer .landing-crest{width:clamp(138px,15vw,190px);height:clamp(138px,15vw,190px);margin:0 0 5px clamp(20px,5vw,78px);border-radius:0}
+#loginContainer .landing-school-name{font-size:clamp(38px,4.4vw,64px);max-width:720px;text-align:left;line-height:1.02;letter-spacing:-.8px}
+#loginContainer .landing-school-location{font-size:clamp(24px,2.7vw,37px);text-align:left;margin-top:2px}
+#loginContainer .landing-system-tag{margin-top:12px;padding:12px 24px;font-size:clamp(16px,1.7vw,22px)}
+#loginContainer .landing-school-building{display:none!important}
+#loginContainer .landing-intro{max-width:650px;margin:22px 0 25px;text-align:left;font-size:clamp(18px,1.8vw,24px)}
+#loginContainer .landing-intro:after{margin:20px 0 0;width:190px;height:6px}
+#loginContainer .landing-features{max-width:720px;padding:20px 12px;border-radius:22px}
+#loginContainer .landing-feature{font-size:clamp(12px,1.2vw,16px);padding:10px 8px}
+#loginContainer .landing-feature-icon{width:clamp(56px,5.2vw,76px);height:clamp(56px,5.2vw,76px);font-size:clamp(27px,2.4vw,36px)}
+#loginContainer .landing-graduation{justify-content:flex-start;margin:20px 0 0;min-height:0}
+#loginContainer .landing-graduation-art{width:min(100%,620px);max-height:none}
+#loginContainer .landing-quote{text-align:left;margin-top:18px}
+#loginContainer .login-box{grid-area:login;grid-column:auto;grid-row:auto;justify-self:end;align-self:center;max-width:650px;padding:clamp(30px,3vw,46px);border-radius:30px}
+#loginContainer .login-box:before{height:145px}
+#loginContainer .logo-section{margin-bottom:28px;padding-top:8px}
+#loginContainer .logo-icon{width:100px;height:100px;font-size:52px;margin-bottom:14px}
+#loginContainer .landing-footer{grid-area:footer;grid-column:1/-1;grid-row:auto;margin-top:8px;padding-top:18px}
+#loginContainer .landing-footer-item{font-size:clamp(11px,1vw,14px)}
+@media(max-width:1050px){
+ #loginContainer{padding:18px 16px 26px}
+ #loginContainer .landing-shell{max-width:760px;grid-template-columns:minmax(0,1fr)!important;grid-template-rows:auto auto auto auto auto!important;grid-template-areas:"academic" "clock" "hero" "login" "footer";gap:13px!important}
+ #loginContainer .landing-campus-scene{height:540px;min-height:420px}
+ #loginContainer .landing-academic-strip{grid-area:academic;justify-self:stretch;width:100%;padding:10px 13px;gap:12px}
+ #loginContainer .landing-live-time{grid-area:clock;justify-self:center;text-align:center;margin:0;width:100%;font-size:11px}
+ #loginContainer .landing-hero{grid-area:hero;grid-row:auto;align-self:stretch;padding:5px 0}
+ #loginContainer .landing-brand{align-items:center;text-align:center;margin-bottom:12px}
+ #loginContainer .landing-crest{width:clamp(100px,19vw,142px);height:clamp(100px,19vw,142px);margin:0 auto 4px}
+ #loginContainer .landing-school-name{font-size:clamp(29px,6.2vw,46px);text-align:center}
+ #loginContainer .landing-school-location{font-size:clamp(22px,4.5vw,32px);text-align:center}
+ #loginContainer .landing-system-tag{font-size:clamp(13px,3vw,18px);padding:10px 18px;margin-top:9px}
+ #loginContainer .landing-intro{text-align:center;margin:12px auto 16px;font-size:clamp(14px,2.6vw,18px)}
+ #loginContainer .landing-intro:after{margin:14px auto 0;width:145px}
+ #loginContainer .landing-features{max-width:none;padding:13px 5px;border-radius:18px}
+ #loginContainer .landing-feature{font-size:clamp(10px,2vw,13px);padding:6px 3px}
+ #loginContainer .landing-feature-icon{width:clamp(38px,8vw,54px);height:clamp(38px,8vw,54px);font-size:clamp(19px,4vw,26px);margin-bottom:8px}
+ #loginContainer .landing-graduation{justify-content:center;margin:12px auto 0}
+ #loginContainer .landing-graduation-art{width:min(100%,520px);max-height:230px}
+ #loginContainer .landing-quote{text-align:center;margin-top:12px;font-size:12px}
+ #loginContainer .login-box{grid-area:login;justify-self:stretch;max-width:none;width:100%;padding:28px 24px}
+ #loginContainer .landing-footer{grid-area:footer;flex-direction:column;align-items:center;gap:10px;text-align:center;padding:14px 4px 4px}
+ #loginContainer .landing-footer-item{border:0;padding:0;justify-content:center;text-align:center}
+}
+@media(max-width:480px){
+ #loginContainer{padding:13px 12px 22px}
+ #loginContainer .landing-shell{gap:10px!important}
+ #loginContainer .landing-academic-strip{border-radius:15px;padding:9px 8px;gap:7px;border-width:2px}
+ #loginContainer .landing-academic-item{gap:6px}
+ #loginContainer .landing-academic-icon{font-size:21px}
+ #loginContainer .landing-academic-label{font-size:9px}
+ #loginContainer .landing-academic-value{font-size:clamp(12px,3.5vw,16px)}
+ #loginContainer .landing-academic-divider{height:29px}
+ #loginContainer .landing-live-time{font-size:9px}
+ #loginContainer .landing-crest{width:92px;height:92px}
+ #loginContainer .landing-school-name{font-size:clamp(25px,7vw,32px)}
+ #loginContainer .landing-school-location{font-size:clamp(19px,5.2vw,24px)}
+ #loginContainer .landing-system-tag{font-size:11px;padding:9px 13px}
+ #loginContainer .landing-intro{font-size:13px;line-height:1.45}
+ #loginContainer .landing-features{padding:9px 3px}
+ #loginContainer .landing-feature{font-size:9px;padding:5px 1px}
+ #loginContainer .landing-feature-icon{width:34px;height:34px;font-size:17px;margin-bottom:6px}
+ #loginContainer .landing-graduation-art{width:100%;max-height:190px}
+ #loginContainer .landing-quote{font-size:10px}
+ #loginContainer .login-box{padding:25px 17px 20px;border-radius:21px}
+ #loginContainer .logo-icon{width:68px;height:68px;font-size:35px}
+ #loginContainer .login-box #loginBtn{min-height:50px}
+ #loginContainer .login-box #viewManagementBtn,#loginContainer .login-box #openPortalBtn{min-height:47px;font-size:14px}
+}
+
 </style>
 </head>
 <body>
 
 <div class="login-container" id="loginContainer">
+<div class="landing-campus-scene" aria-hidden="true">
+<svg viewBox="0 0 1600 820" preserveAspectRatio="xMidYMid slice" xmlns="http://www.w3.org/2000/svg">
+<defs>
+ <linearGradient id="campusSky" x2="0" y2="1"><stop stop-color="#2389e8"/><stop offset=".55" stop-color="#9ed5ff"/><stop offset="1" stop-color="#e7efff"/></linearGradient>
+ <linearGradient id="campusWall" x2="0" y2="1"><stop stop-color="#ffe39a"/><stop offset="1" stop-color="#d79b43"/></linearGradient>
+ <linearGradient id="campusRoof" x2="0" y2="1"><stop stop-color="#36c1c1"/><stop offset="1" stop-color="#08727c"/></linearGradient>
+ <linearGradient id="campusGlass" x2="0" y2="1"><stop stop-color="#244d68"/><stop offset=".5" stop-color="#6ba5ba"/><stop offset="1" stop-color="#1c3c59"/></linearGradient>
+ <linearGradient id="campusDrive" x2="0" y2="1"><stop stop-color="#d9d1c5"/><stop offset="1" stop-color="#8e887f"/></linearGradient>
+ <linearGradient id="campusPurple"><stop stop-color="#3b0870" stop-opacity=".88"/><stop offset=".54" stop-color="#4a1284" stop-opacity=".34"/><stop offset="1" stop-color="#32105f" stop-opacity=".12"/></linearGradient>
+ <g id="campusWindow"><rect width="76" height="104" rx="4" fill="#f8f0d7" stroke="#fff5d6" stroke-width="7"/><rect x="7" y="7" width="62" height="90" fill="url(#campusGlass)"/><path d="M38 7v90M7 52h62" stroke="#e8e5d7" stroke-width="5"/></g>
+ <g id="campusTree"><path d="M0 115Q-8 70 4 28h18q10 45 2 87Z" fill="#76502d"/><circle cx="12" cy="22" r="48" fill="#267a43"/><circle cx="-18" cy="40" r="29" fill="#39924b"/><circle cx="37" cy="42" r="31" fill="#17683b"/><circle cx="12" cy="0" r="28" fill="#4aa653"/></g>
+</defs>
+<rect width="1600" height="820" fill="url(#campusSky)"/>
+<g fill="#fff" opacity=".72"><ellipse cx="220" cy="105" rx="120" ry="34"/><ellipse cx="290" cy="91" rx="78" ry="46"/><ellipse cx="360" cy="111" rx="95" ry="30"/><ellipse cx="1130" cy="88" rx="110" ry="32"/><ellipse cx="1200" cy="74" rx="72" ry="43"/><ellipse cx="1270" cy="96" rx="96" ry="28"/></g>
+<g transform="translate(210 190)">
+ <path d="M-25 230L550 0 1390 180 1390 560 -25 560Z" fill="#65402c" opacity=".25"/>
+ <rect x="0" y="205" width="1370" height="345" fill="url(#campusWall)" stroke="#a96b31" stroke-width="12"/>
+ <rect x="0" y="370" width="1370" height="18" fill="#b76c3b"/>
+ <rect x="0" y="535" width="1370" height="15" fill="#8c542e"/>
+ <path d="M-60 214L610 -5 1430 185 1370 225 610 53 0 267Z" fill="url(#campusRoof)" stroke="#714b3b" stroke-width="12"/>
+ <path d="M-60 214L610 -5 1430 185" fill="none" stroke="#c7eeee" stroke-width="9" opacity=".65"/>
+ <g>
+  <use href="#campusWindow" x="60" y="260"/><use href="#campusWindow" x="180" y="260"/><use href="#campusWindow" x="300" y="260"/><use href="#campusWindow" x="420" y="260"/><use href="#campusWindow" x="540" y="260"/><use href="#campusWindow" x="660" y="260"/><use href="#campusWindow" x="780" y="260"/><use href="#campusWindow" x="900" y="260"/><use href="#campusWindow" x="1020" y="260"/><use href="#campusWindow" x="1140" y="260"/>
+  <use href="#campusWindow" x="60" y="414"/><use href="#campusWindow" x="180" y="414"/><use href="#campusWindow" x="300" y="414"/><use href="#campusWindow" x="420" y="414"/><use href="#campusWindow" x="540" y="414"/><use href="#campusWindow" x="660" y="414"/><use href="#campusWindow" x="780" y="414"/><use href="#campusWindow" x="900" y="414"/><use href="#campusWindow" x="1020" y="414"/><use href="#campusWindow" x="1140" y="414"/>
+ </g>
+ <g fill="#fff7dd"><rect x="20" y="242" width="1320" height="12"/><rect x="20" y="397" width="1320" height="12"/></g>
+ <g fill="#f6e8c7"><rect x="0" y="235" width="24" height="310"/><rect x="1350" y="235" width="24" height="310"/><rect x="150" y="225" width="18" height="320"/><rect x="390" y="160" width="22" height="385"/><rect x="630" y="110" width="22" height="435"/><rect x="870" y="145" width="22" height="400"/><rect x="1110" y="190" width="22" height="355"/></g>
+ <rect x="640" y="430" width="125" height="115" fill="#075d49" stroke="#f8e9c6" stroke-width="8"/><path d="M702 430v115" stroke="#e9d7ad" stroke-width="5"/>
+ <path d="M590 550h230l-25 38H615Z" fill="#e7d8c3"/><path d="M560 588h290l-25 25H585Z" fill="#c4b7a5"/>
+</g>
+<path d="M0 640Q280 575 510 635T1050 620T1600 610V820H0Z" fill="#328d45"/>
+<path d="M0 720Q420 645 810 715T1600 680V820H0Z" fill="url(#campusDrive)"/>
+<path d="M0 692Q350 632 760 687T1600 657" fill="none" stroke="#fff" stroke-width="14" opacity=".75"/>
+<g transform="translate(90 565) scale(1.15)"><use href="#campusTree"/></g><g transform="translate(1430 560) scale(1.2)"><use href="#campusTree"/></g><g transform="translate(1240 585) scale(.8)"><use href="#campusTree"/></g>
+<g fill="#1c703a"><ellipse cx="350" cy="650" rx="110" ry="34"/><ellipse cx="540" cy="655" rx="120" ry="32"/><ellipse cx="1030" cy="652" rx="125" ry="35"/></g>
+<rect width="1600" height="820" fill="url(#campusPurple)"/>
+</svg></div>
   <div class="landing-shell">
     <div class="landing-academic-strip" aria-label="Current academic session and term">
       <div class="landing-academic-item"><span class="landing-academic-icon">▦</span><div><div class="landing-academic-label">Academic Session</div><div class="landing-academic-value" id="landingAcademicSession">Loading session…</div></div></div>
@@ -289,7 +407,7 @@ th { background: #f5f5f5; font-weight: 600; }
         <div class="landing-school-location" id="landingSchoolLocation">Benue State, Nigeria</div>
         <div class="landing-system-tag">E-RESULT MANAGEMENT SYSTEM</div>
       </div>
-      <div class="landing-school-building" role="img" aria-label="De-Global Academy school building"></div>
+      
       <p class="landing-intro" id="landingSchoolTagline">A Digital Platform for Result Processing, Management and Academic Reporting</p>
       <div class="landing-features" aria-label="Platform features">
         <div class="landing-feature"><div class="landing-feature-icon">📊</div>Result<br>Processing</div>
