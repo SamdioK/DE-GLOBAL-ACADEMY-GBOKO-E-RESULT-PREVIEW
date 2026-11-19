@@ -482,338 +482,183 @@ th { background: #f5f5f5; font-weight: 600; }
 }
 
 
-/* FINAL APPROVED LANDING COMPOSITION — purple editorial background, upper-right campus photo, two-column desktop */
+/* FINAL APPROVED LANDING COMPOSITION — refined against the latest phone screenshot */
 #loginContainer{
-  display:block!important;
-  position:relative!important;
-  isolation:isolate!important;
-  overflow:hidden!important;
-  min-height:100vh!important;
-  min-height:100svh!important;
-  padding:clamp(24px,3.2vw,48px)!important;
+  display:block!important;position:relative!important;isolation:isolate!important;
+  overflow:hidden!important;min-height:100vh!important;min-height:100svh!important;
+  padding:clamp(18px,2.2vw,34px) clamp(22px,3.2vw,48px)!important;
   background:#3b0868!important;
 }
 #loginContainer:before{
-  content:""!important;
-  position:absolute!important;
-  z-index:0!important;
-  inset:0!important;
-  pointer-events:none!important;
-  opacity:1!important;
+  content:""!important;position:absolute!important;z-index:0!important;inset:0!important;
+  pointer-events:none!important;opacity:1!important;
   background:
-    radial-gradient(circle,rgba(255,255,255,.25) 1.15px,transparent 1.8px) left top/17px 17px,
-    radial-gradient(circle,rgba(255,255,255,.15) 1px,transparent 1.7px) right 16%/15px 15px,
-    radial-gradient(ellipse at 18% 42%,rgba(143,28,204,.62),transparent 52%),
+    radial-gradient(circle,rgba(255,255,255,.24) 1.15px,transparent 1.8px) left top/17px 17px,
+    radial-gradient(circle,rgba(255,255,255,.14) 1px,transparent 1.7px) right 16%/15px 15px,
+    radial-gradient(ellipse at 17% 43%,rgba(143,28,204,.58),transparent 53%),
     linear-gradient(130deg,#35005f 0%,#65109b 48%,#42066f 78%,#280044 100%)!important;
 }
 #loginContainer:after{
-  content:""!important;
-  position:absolute!important;
-  z-index:1!important;
-  inset:auto 0 0!important;
-  height:23%!important;
-  pointer-events:none!important;
-  opacity:1!important;
+  content:""!important;position:absolute!important;z-index:1!important;inset:auto 0 0!important;
+  height:27%!important;pointer-events:none!important;opacity:1!important;
   background:
-    linear-gradient(169deg,transparent 0 34%,#ffc51b 34.5% 39%,transparent 39.5%),
-    linear-gradient(174deg,transparent 0 44%,#08763d 44.5% 66%,transparent 66.5%),
-    linear-gradient(180deg,transparent 0 61%,#5c0a8c 61.5% 79%,transparent 79.5%),
-    linear-gradient(to bottom,transparent 0 77%,#310052 77.5% 100%)!important;
+    linear-gradient(169deg,transparent 0 35%,#ffc51b 35.5% 39.5%,transparent 40%),
+    linear-gradient(174deg,transparent 0 45%,#08763d 45.5% 65%,transparent 65.5%),
+    linear-gradient(180deg,transparent 0 63%,#5c0a8c 63.5% 80%,transparent 80.5%),
+    linear-gradient(to bottom,transparent 0 78%,#310052 78.5% 100%)!important;
 }
 #loginContainer .landing-campus-scene{
-  position:absolute!important;
-  z-index:0!important;
-  top:0!important;
-  right:0!important;
-  bottom:auto!important;
-  left:auto!important;
-  width:65%!important;
-  height:66%!important;
-  min-height:0!important;
-  max-height:none!important;
-  pointer-events:none!important;
+  position:absolute!important;z-index:0!important;top:0!important;right:0!important;
+  left:22%!important;width:78%!important;height:66%!important;min-height:0!important;
+  max-height:none!important;pointer-events:none!important;
   background-image:
-    linear-gradient(90deg,#3b0868 0%,rgba(59,8,104,.88) 12%,rgba(59,8,104,.36) 38%,rgba(59,8,104,.03) 76%),
-    linear-gradient(0deg,#3b0868 0%,rgba(59,8,104,.12) 22%,transparent 54%),
+    linear-gradient(90deg,#3b0868 0%,rgba(59,8,104,.96) 9%,rgba(59,8,104,.76) 23%,rgba(59,8,104,.30) 46%,rgba(59,8,104,.04) 76%),
+    linear-gradient(0deg,#3b0868 0%,rgba(59,8,104,.12) 23%,transparent 55%),
     url("assets/landing/school-building.webp")!important;
-  background-size:cover!important;
-  background-position:center 37%!important;
-  background-repeat:no-repeat!important;
-  -webkit-mask-image:none!important;
-  mask-image:none!important;
+  background-size:cover!important;background-position:center 37%!important;background-repeat:no-repeat!important;
+  -webkit-mask-image:linear-gradient(90deg,transparent 0%,#000 17%,#000 100%)!important;
+  mask-image:linear-gradient(90deg,transparent 0%,#000 17%,#000 100%)!important;
 }
 #loginContainer .landing-shell{
-  position:relative!important;
-  z-index:2!important;
-  width:min(1420px,100%)!important;
-  min-height:calc(100vh - 96px)!important;
-  min-height:calc(100svh - 96px)!important;
-  margin:0 auto!important;
-  display:grid!important;
+  position:relative!important;z-index:2!important;width:min(1420px,100%)!important;
+  min-height:calc(100vh - 64px)!important;min-height:calc(100svh - 64px)!important;
+  margin:0 auto!important;display:grid!important;
   grid-template-columns:minmax(0,1.04fr) minmax(390px,.96fr)!important;
   grid-template-rows:auto auto minmax(0,1fr) auto!important;
   grid-template-areas:"hero academic" "hero clock" "hero login" "footer footer"!important;
-  column-gap:clamp(24px,3.6vw,58px)!important;
-  row-gap:10px!important;
-  align-items:center!important;
+  column-gap:clamp(24px,3.6vw,58px)!important;row-gap:8px!important;
+  align-items:start!important;
 }
 #loginContainer .landing-academic-strip{
-  grid-area:academic!important;
-  justify-self:end!important;
-  width:min(100%,600px)!important;
-  min-width:0!important;
-  margin:0!important;
-  padding:14px 22px!important;
-  border:3px solid #f5c323!important;
-  border-radius:24px!important;
+  grid-area:academic!important;justify-self:end!important;width:min(100%,600px)!important;
+  min-width:0!important;margin:0!important;padding:14px 22px!important;
+  border:3px solid #f5c323!important;border-radius:24px!important;
   background:linear-gradient(105deg,#075c30,#003f27)!important;
   box-shadow:0 8px 24px rgba(0,0,0,.25)!important;
 }
 #loginContainer .landing-live-time{
-  grid-area:clock!important;
-  justify-self:end!important;
-  margin:0 4px 4px 0!important;
-  text-align:right!important;
-  color:#fff!important;
-  font-size:12px!important;
+  grid-area:clock!important;justify-self:end!important;margin:0 4px 3px 0!important;
+  text-align:right!important;color:#fff!important;font-size:12px!important;
 }
 #loginContainer .landing-hero{
-  grid-area:hero!important;
-  grid-row:1/4!important;
-  align-self:center!important;
-  min-width:0!important;
-  padding:10px 0!important;
-  color:#fff!important;
+  grid-area:hero!important;grid-row:1/4!important;align-self:start!important;
+  min-width:0!important;padding:clamp(12px,2vw,28px) 0 10px!important;color:#fff!important;
 }
 #loginContainer .landing-brand{
-  display:flex!important;
-  flex-direction:column!important;
-  align-items:flex-start!important;
-  text-align:left!important;
-  gap:8px!important;
-  margin-bottom:15px!important;
+  display:flex!important;flex-direction:column!important;align-items:flex-start!important;
+  text-align:left!important;gap:8px!important;margin-bottom:15px!important;
 }
 #loginContainer .landing-crest{
-  width:clamp(132px,13vw,184px)!important;
-  height:clamp(132px,13vw,184px)!important;
-  margin:0 0 5px clamp(18px,4vw,60px)!important;
-  border-radius:0!important;
+  width:clamp(132px,13vw,184px)!important;height:clamp(132px,13vw,184px)!important;
+  margin:0 0 5px clamp(18px,4vw,60px)!important;border-radius:0!important;
   filter:drop-shadow(0 8px 12px rgba(0,0,0,.25))!important;
 }
 #loginContainer .landing-school-name{
-  max-width:690px!important;
-  text-align:left!important;
-  font-size:clamp(36px,4vw,60px)!important;
-  line-height:1.02!important;
-  letter-spacing:-.7px!important;
+  max-width:690px!important;text-align:left!important;
+  font-size:clamp(36px,4vw,60px)!important;line-height:1.02!important;letter-spacing:-.7px!important;
 }
-#loginContainer .landing-school-location{
-  text-align:left!important;
-  font-size:clamp(22px,2.4vw,34px)!important;
-}
+#loginContainer .landing-school-location{text-align:left!important;font-size:clamp(22px,2.4vw,34px)!important}
 #loginContainer .landing-system-tag{
-  margin-top:10px!important;
-  padding:12px 24px!important;
-  font-size:clamp(15px,1.55vw,22px)!important;
+  margin-top:10px!important;padding:12px 24px!important;font-size:clamp(15px,1.55vw,22px)!important;
 }
 #loginContainer .landing-intro{
-  max-width:630px!important;
-  margin:18px 0 23px!important;
-  text-align:left!important;
-  font-size:clamp(17px,1.65vw,23px)!important;
-  line-height:1.48!important;
+  max-width:630px!important;margin:18px 0 23px!important;text-align:left!important;
+  font-size:clamp(17px,1.65vw,23px)!important;line-height:1.48!important;
 }
-#loginContainer .landing-intro:after{
-  width:155px!important;
-  height:5px!important;
-  margin:18px 0 0!important;
-}
+#loginContainer .landing-intro:after{width:155px!important;height:5px!important;margin:18px 0 0!important}
 #loginContainer .landing-features{
-  width:100%!important;
-  max-width:700px!important;
-  padding:19px 11px!important;
-  border:2px solid rgba(255,255,255,.44)!important;
-  border-radius:23px!important;
+  width:100%!important;max-width:700px!important;padding:19px 11px!important;
+  border:2px solid rgba(255,255,255,.44)!important;border-radius:23px!important;
   background:rgba(255,255,255,.12)!important;
 }
-#loginContainer .landing-feature{
-  font-size:clamp(12px,1.15vw,16px)!important;
-  padding:10px 7px!important;
-}
+#loginContainer .landing-feature{font-size:clamp(12px,1.15vw,16px)!important;padding:10px 7px!important}
 #loginContainer .landing-feature-icon{
-  width:clamp(52px,4.9vw,72px)!important;
-  height:clamp(52px,4.9vw,72px)!important;
-  font-size:clamp(26px,2.4vw,36px)!important;
-  margin-bottom:11px!important;
+  width:clamp(52px,4.9vw,72px)!important;height:clamp(52px,4.9vw,72px)!important;
+  font-size:clamp(26px,2.4vw,36px)!important;margin-bottom:11px!important;
 }
-#loginContainer .landing-graduation{
-  justify-content:flex-start!important;
-  margin:20px 0 0!important;
-  min-height:0!important;
-}
+#loginContainer .landing-graduation{justify-content:flex-start!important;margin:20px 0 0!important;min-height:0!important}
 #loginContainer .landing-graduation-art{
-  display:block!important;
-  width:min(94%,490px)!important;
-  max-height:300px!important;
-  object-fit:contain!important;
+  display:block!important;width:min(94%,490px)!important;max-height:300px!important;object-fit:contain!important;
 }
 #loginContainer .landing-quote{
-  margin-top:10px!important;
-  text-align:left!important;
-  color:#ffe28a!important;
+  margin-top:10px!important;text-align:left!important;color:#ffe28a!important;
   font-size:clamp(11px,1vw,14px)!important;
 }
 #loginContainer .login-box{
-  grid-area:login!important;
-  justify-self:end!important;
-  align-self:center!important;
-  width:100%!important;
-  max-width:660px!important;
-  padding:clamp(34px,3.5vw,52px)!important;
-  border-radius:30px!important;
-  background:#fff!important;
-  box-shadow:0 24px 70px rgba(9,3,24,.38)!important;
+  grid-area:login!important;justify-self:end!important;align-self:start!important;
+  width:100%!important;max-width:660px!important;padding:clamp(34px,3.5vw,52px)!important;
+  border-radius:30px!important;background:#fff!important;box-shadow:0 24px 70px rgba(9,3,24,.38)!important;
 }
 #loginContainer .login-box:before{height:145px!important}
 #loginContainer .logo-section{margin-bottom:28px!important;padding-top:7px!important}
 #loginContainer .logo-icon{
-  width:104px!important;height:104px!important;
-  font-size:54px!important;margin-bottom:15px!important;
+  width:104px!important;height:104px!important;font-size:54px!important;margin-bottom:15px!important;
 }
 #loginContainer .login-box .logo-section h1{
-  color:#35105f!important;
-  font-size:clamp(32px,3.3vw,42px)!important;
-  font-weight:950!important;
+  color:#35105f!important;font-size:clamp(32px,3.3vw,42px)!important;font-weight:950!important;
 }
-#loginContainer .login-box .logo-section p{
-  color:#51435f!important;
-  font-size:clamp(15px,1.5vw,19px)!important;
-}
+#loginContainer .login-box .logo-section p{color:#51435f!important;font-size:clamp(15px,1.5vw,19px)!important}
 #loginContainer .login-box .input-group{margin-bottom:21px!important}
 #loginContainer .login-box .input-group label{
   color:#241536!important;font-size:16px!important;font-weight:850!important;margin-bottom:9px!important;
 }
-#loginContainer .login-box .input-group input,
-#loginContainer .login-box .input-group select{
-  min-height:60px!important;
-  border:2px solid #ded8e8!important;
-  border-radius:13px!important;
-  padding:13px 16px!important;
-  font-size:17px!important;
+#loginContainer .login-box .input-group input,#loginContainer .login-box .input-group select{
+  min-height:60px!important;border:2px solid #ded8e8!important;border-radius:13px!important;
+  padding:13px 16px!important;font-size:17px!important;
 }
 #loginContainer .login-box #loginBtn{
-  min-height:66px!important;border-radius:15px!important;
-  font-size:23px!important;font-weight:900!important;
+  min-height:66px!important;border-radius:15px!important;font-size:23px!important;font-weight:900!important;
 }
-#loginContainer .login-box #viewManagementBtn,
-#loginContainer .login-box #openPortalBtn{
-  min-height:62px!important;border-radius:14px!important;
-  font-size:18px!important;font-weight:850!important;
+#loginContainer .login-box #viewManagementBtn,#loginContainer .login-box #openPortalBtn{
+  min-height:62px!important;border-radius:14px!important;font-size:18px!important;font-weight:850!important;
 }
 #loginContainer .landing-footer{
-  position:relative!important;
-  z-index:2!important;
-  grid-area:footer!important;
-  grid-column:1/-1!important;
-  display:flex!important;
-  flex-direction:row!important;
-  flex-wrap:wrap!important;
-  justify-content:center!important;
-  align-items:center!important;
-  gap:0!important;
-  width:100%!important;
-  margin:8px 0 0!important;
-  padding:19px 10px 8px!important;
-  border-top:2px solid rgba(255,255,255,.35)!important;
-  color:#fff!important;
-  text-shadow:0 1px 5px rgba(0,0,0,.4)!important;
+  position:relative!important;z-index:2!important;grid-area:footer!important;grid-column:1/-1!important;
+  display:flex!important;flex-direction:row!important;flex-wrap:wrap!important;justify-content:center!important;
+  align-items:center!important;gap:0!important;width:100%!important;margin:8px 0 0!important;
+  padding:19px 10px 8px!important;border-top:2px solid rgba(255,255,255,.35)!important;
+  color:#fff!important;text-shadow:0 1px 5px rgba(0,0,0,.4)!important;
 }
 #loginContainer .landing-footer-item{
-  color:#fff!important;
-  font-size:clamp(11px,1vw,14px)!important;
-  border-right:1px solid rgba(255,205,60,.75)!important;
-  padding:0 clamp(12px,1.8vw,25px)!important;
+  color:#fff!important;font-size:clamp(11px,1vw,14px)!important;
+  border-right:1px solid rgba(255,205,60,.75)!important;padding:0 clamp(12px,1.8vw,25px)!important;
 }
 #loginContainer .landing-footer-item:last-child{border-right:0!important}
-
-/* Narrow phones retain the existing readable single-column experience */
 @media(max-width:760px){
-  #loginContainer{
-    display:block!important;
-    min-height:100vh!important;
-    min-height:100svh!important;
-    padding:16px 13px 24px!important;
-  }
+  #loginContainer{display:block!important;min-height:100vh!important;min-height:100svh!important;padding:16px 13px 24px!important}
   #loginContainer .landing-campus-scene{
-    width:100%!important;height:390px!important;
-    min-height:0!important;max-height:none!important;
+    left:0!important;width:100%!important;height:390px!important;min-height:0!important;max-height:none!important;
     background-position:58% 35%!important;
-    background-image:
-      linear-gradient(90deg,rgba(59,8,104,.56),rgba(59,8,104,.08)),
-      linear-gradient(0deg,#3b0868,transparent 52%),
-      url("assets/landing/school-building.webp")!important;
+    background-image:linear-gradient(90deg,rgba(59,8,104,.56),rgba(59,8,104,.08)),
+      linear-gradient(0deg,#3b0868,transparent 52%),url("assets/landing/school-building.webp")!important;
+    -webkit-mask-image:none!important;mask-image:none!important;
   }
   #loginContainer:after{height:18%!important}
   #loginContainer .landing-shell{
-    width:min(640px,100%)!important;
-    min-height:0!important;
-    margin:0 auto!important;
-    grid-template-columns:minmax(0,1fr)!important;
-    grid-template-rows:auto auto auto auto auto!important;
-    grid-template-areas:"academic" "clock" "hero" "login" "footer"!important;
-    gap:13px!important;
+    width:min(640px,100%)!important;min-height:0!important;margin:0 auto!important;
+    grid-template-columns:minmax(0,1fr)!important;grid-template-rows:auto auto auto auto auto!important;
+    grid-template-areas:"academic" "clock" "hero" "login" "footer"!important;gap:13px!important;
   }
-  #loginContainer .landing-academic-strip{
-    grid-area:academic!important;justify-self:stretch!important;width:100%!important;
-    padding:10px 13px!important;
-  }
-  #loginContainer .landing-live-time{
-    grid-area:clock!important;justify-self:center!important;
-    width:100%!important;text-align:center!important;
-  }
-  #loginContainer .landing-hero{
-    grid-area:hero!important;grid-row:auto!important;padding:5px 0!important;
-  }
-  #loginContainer .landing-brand{
-    align-items:center!important;text-align:center!important;
-  }
-  #loginContainer .landing-crest{
-    width:clamp(100px,19vw,142px)!important;
-    height:clamp(100px,19vw,142px)!important;
-    margin:0 auto 5px!important;
-  }
-  #loginContainer .landing-school-name{
-    text-align:center!important;font-size:clamp(27px,6.5vw,42px)!important;
-  }
+  #loginContainer .landing-academic-strip{grid-area:academic!important;justify-self:stretch!important;width:100%!important;padding:10px 13px!important}
+  #loginContainer .landing-live-time{grid-area:clock!important;justify-self:center!important;width:100%!important;text-align:center!important}
+  #loginContainer .landing-hero{grid-area:hero!important;grid-row:auto!important;align-self:auto!important;padding:5px 0!important}
+  #loginContainer .landing-brand{align-items:center!important;text-align:center!important}
+  #loginContainer .landing-crest{width:clamp(100px,19vw,142px)!important;height:clamp(100px,19vw,142px)!important;margin:0 auto 5px!important}
+  #loginContainer .landing-school-name{text-align:center!important;font-size:clamp(27px,6.5vw,42px)!important}
   #loginContainer .landing-school-location{text-align:center!important}
   #loginContainer .landing-system-tag{font-size:clamp(12px,3vw,17px)!important}
-  #loginContainer .landing-intro{
-    text-align:center!important;margin:12px auto 16px!important;
-  }
+  #loginContainer .landing-intro{text-align:center!important;margin:12px auto 16px!important}
   #loginContainer .landing-intro:after{margin:14px auto 0!important}
   #loginContainer .landing-features{grid-template-columns:repeat(4,minmax(0,1fr))!important}
-  #loginContainer .landing-graduation{
-    justify-content:center!important;margin:12px auto 0!important;
-  }
-  #loginContainer .landing-graduation-art{
-    width:min(100%,520px)!important;max-height:220px!important;
-  }
+  #loginContainer .landing-graduation{justify-content:center!important;margin:12px auto 0!important}
+  #loginContainer .landing-graduation-art{width:min(100%,520px)!important;max-height:220px!important}
   #loginContainer .landing-quote{text-align:center!important}
-  #loginContainer .login-box{
-    grid-area:login!important;justify-self:stretch!important;
-    width:100%!important;max-width:none!important;
-    padding:28px 22px!important;
-  }
+  #loginContainer .login-box{grid-area:login!important;justify-self:stretch!important;align-self:auto!important;width:100%!important;max-width:none!important;padding:28px 22px!important}
   #loginContainer .landing-footer{
-    grid-area:footer!important;
-    flex-direction:column!important;align-items:center!important;
-    gap:10px!important;text-align:center!important;
-    padding:14px 4px 4px!important;
+    grid-area:footer!important;flex-direction:column!important;align-items:center!important;gap:10px!important;
+    text-align:center!important;padding:14px 4px 4px!important;
   }
-  #loginContainer .landing-footer-item{
-    border:0!important;padding:0!important;
-    justify-content:center!important;text-align:center!important;
-  }
+  #loginContainer .landing-footer-item{border:0!important;padding:0!important;justify-content:center!important;text-align:center!important}
 }
 @media(max-width:480px){
   #loginContainer .landing-academic-strip{border-radius:16px!important;padding:9px 9px!important;gap:8px!important}
@@ -833,11 +678,9 @@ th { background: #f5f5f5; font-weight: 600; }
   #loginContainer .login-box .logo-section h1{font-size:27px!important}
   #loginContainer .login-box .input-group{margin-bottom:14px!important}
   #loginContainer .login-box .input-group label{font-size:12px!important}
-  #loginContainer .login-box .input-group input,
-  #loginContainer .login-box .input-group select{min-height:47px!important;font-size:14px!important}
+  #loginContainer .login-box .input-group input,#loginContainer .login-box .input-group select{min-height:47px!important;font-size:14px!important}
   #loginContainer .login-box #loginBtn{min-height:51px!important;font-size:18px!important}
-  #loginContainer .login-box #viewManagementBtn,
-  #loginContainer .login-box #openPortalBtn{min-height:47px!important;font-size:14px!important}
+  #loginContainer .login-box #viewManagementBtn,#loginContainer .login-box #openPortalBtn{min-height:47px!important;font-size:14px!important}
 }
 </style>
 </head>
