@@ -1903,11 +1903,14 @@ function setupEventListeners() {
 
     if (developerAccess) {
       userTypeSelect.value = 'developer';
-
-      handleUserTypeChange({
-        target: userTypeSelect
-      });
     }
+
+    // Browsers may restore the previously selected role after a page refresh.
+    // Initialise its matching credential panel immediately, not only after a
+    // new change event, so a restored Administrator selection shows its password.
+    handleUserTypeChange({
+      target: userTypeSelect
+    });
   }
 
   var setupBtn = document.getElementById('setupBtn');
