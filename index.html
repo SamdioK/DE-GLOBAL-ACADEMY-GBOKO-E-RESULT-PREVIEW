@@ -6253,41 +6253,7 @@ function printOfficialStudentProfiles() {
     ' &nbsp; | &nbsp; Total Students: ' + rows.length + '</p>' +
     '<table>' + tableHead + tableBody + '</table>' +
     '<script>window.onload=function(){window.print();};<\/script>' +
-    '
-<script>
-(function(){
-  var stage=document.getElementById('roleGalleryStage');
-  if(!stage)return;
-  var slides=Array.from(stage.querySelectorAll('[data-role-slide]'));
-  var dots=Array.from(document.querySelectorAll('[data-role-dot]'));
-  var current=document.getElementById('roleGalleryCurrent');
-  var prev=document.getElementById('roleGalleryPrev');
-  var next=document.getElementById('roleGalleryNext');
-  if(!slides.length||!dots.length)return;
-  var index=0,timer=null,paused=false,delay=6000;
-  var reduced=window.matchMedia&&window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-  function show(nextIndex){
-    index=(nextIndex+slides.length)%slides.length;
-    slides.forEach(function(slide,i){var active=i===index;slide.classList.toggle('is-active',active);slide.setAttribute('aria-hidden',active?'false':'true');});
-    dots.forEach(function(dot,i){var active=i===index;dot.classList.toggle('active',active);if(active)dot.setAttribute('aria-current','true');else dot.removeAttribute('aria-current');});
-    if(current)current.textContent=String(index+1).padStart(2,'0');
-  }
-  function stop(){if(timer){window.clearInterval(timer);timer=null;}}
-  function start(){stop();if(reduced||paused||document.hidden)return;timer=window.setInterval(function(){show(index+1);},delay);}
-  function userNavigate(nextIndex){show(nextIndex);start();}
-  if(prev)prev.addEventListener('click',function(){userNavigate(index-1);});
-  if(next)next.addEventListener('click',function(){userNavigate(index+1);});
-  dots.forEach(function(dot){dot.addEventListener('click',function(){userNavigate(Number(dot.getAttribute('data-role-dot')));});});
-  stage.addEventListener('mouseenter',function(){paused=true;stop();});
-  stage.addEventListener('mouseleave',function(){paused=false;start();});
-  stage.addEventListener('focusin',function(){paused=true;stop();});
-  stage.addEventListener('focusout',function(event){if(!stage.contains(event.relatedTarget)){paused=false;start();}});
-  document.addEventListener('visibilitychange',start);
-  show(0);start();
-})();
-</script>
-
-</body></html>';
+    '</body></html>';
 
   printWindow.document.open();
   printWindow.document.write(documentHtml);
@@ -14308,6 +14274,19 @@ async function renderSubjectTeacherInput() {
 #loginContainer .role-screen{box-shadow:0 12px 30px rgba(0,0,0,.30)!important;transform:perspective(1100px) rotateY(-2deg)!important}
 @media(max-width:760px){#loginContainer .role-gallery-stage,#loginContainer .role-slide{min-height:0!important}#loginContainer .role-screen{transform:none!important}#loginContainer:after{background:radial-gradient(ellipse at 5% 100%,rgba(255,197,39,.12),transparent 30%),linear-gradient(170deg,transparent 0 86%,rgba(255,195,35,.96) 86.2% 86.8%,transparent 87%),linear-gradient(170deg,transparent 0 87%,rgba(0,115,56,.94) 87.2% 100%)!important}}
 
+/* Mobile landing layout and login panel correction */
+@media(max-width:900px){
+ #loginContainer{display:flex!important;align-items:flex-start!important;justify-content:center!important;width:100%!important;min-height:100svh!important;padding:16px 13px 24px!important;overflow-x:hidden!important}
+ #loginContainer .landing-shell{display:grid!important;grid-template-columns:minmax(0,1fr)!important;grid-template-rows:auto auto auto auto auto!important;grid-template-areas:"academic" "clock" "hero" "login" "footer"!important;align-items:stretch!important;justify-items:stretch!important;width:min(640px,100%)!important;max-width:640px!important;min-width:0!important;gap:14px!important;margin:0 auto!important}
+ #loginContainer .landing-academic-strip{grid-area:academic!important;grid-column:1!important;width:100%!important;min-width:0!important;justify-self:stretch!important}
+ #loginContainer .landing-live-time{grid-area:clock!important;grid-column:1!important;width:100%!important;text-align:center!important;justify-self:center!important}
+ #loginContainer .landing-hero{grid-area:hero!important;grid-column:1!important;grid-row:auto!important;width:100%!important;min-width:0!important;padding:4px 0!important}
+ #loginContainer .landing-role-gallery{width:100%!important;max-width:none!important;margin:18px auto 0!important}
+ #loginContainer .login-box{grid-area:login!important;grid-column:1!important;grid-row:auto!important;display:block!important;visibility:visible!important;justify-self:stretch!important;width:100%!important;max-width:none!important;margin:0!important}
+ #loginContainer .landing-footer{grid-area:footer!important;grid-column:1!important;grid-row:auto!important;width:100%!important;display:flex!important;justify-content:center!important;flex-wrap:wrap!important}
+}
+@media(max-width:480px){#loginContainer .landing-role-gallery{padding:12px!important}#loginContainer .role-slide{grid-template-columns:minmax(0,1fr)!important}#loginContainer .role-screen{transform:none!important}}
+
 </style></div>';
     root.innerHTML = html;
 
@@ -14753,5 +14732,37 @@ async function renderSubjectTeacherInput() {
 </script>
 <script src="passport-registration.js"></script>
 <script src="principal-dashboard.js?v=20261118&principal-workspace=20261118-score-sheet"></script>
+<script>
+(function(){
+ function initRoleGallery(){
+  var stage=document.getElementById('roleGalleryStage');
+  if(!stage||stage.dataset.initialised==='true')return;
+  var slides=Array.from(stage.querySelectorAll('[data-role-slide]'));
+  var dots=Array.from(document.querySelectorAll('[data-role-dot]'));
+  var current=document.getElementById('roleGalleryCurrent');
+  var prev=document.getElementById('roleGalleryPrev');
+  var next=document.getElementById('roleGalleryNext');
+  if(!slides.length)return;
+  stage.dataset.initialised='true';
+  var index=0,timer=null,paused=false,delay=6000;
+  var reduced=window.matchMedia&&window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  function show(n){index=(n+slides.length)%slides.length;slides.forEach(function(slide,i){var active=i===index;slide.classList.toggle('is-active',active);slide.setAttribute('aria-hidden',active?'false':'true');});dots.forEach(function(dot,i){var active=i===index;dot.classList.toggle('active',active);if(active)dot.setAttribute('aria-current','true');else dot.removeAttribute('aria-current');});if(current)current.textContent=String(index+1).padStart(2,'0');}
+  function stop(){if(timer){window.clearInterval(timer);timer=null;}}
+  function start(){stop();if(reduced||paused||document.hidden)return;timer=window.setInterval(function(){show(index+1);},delay);}
+  function navigate(n){show(n);start();}
+  if(prev)prev.addEventListener('click',function(){navigate(index-1);});
+  if(next)next.addEventListener('click',function(){navigate(index+1);});
+  dots.forEach(function(dot){dot.addEventListener('click',function(){navigate(Number(dot.getAttribute('data-role-dot')));});});
+  stage.addEventListener('mouseenter',function(){paused=true;stop();});
+  stage.addEventListener('mouseleave',function(){paused=false;start();});
+  stage.addEventListener('focusin',function(){paused=true;stop();});
+  stage.addEventListener('focusout',function(event){if(!stage.contains(event.relatedTarget)){paused=false;start();}});
+  document.addEventListener('visibilitychange',start);
+  show(0);start();
+ }
+ if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',initRoleGallery);else initRoleGallery();
+})();
+</script>
+
 </body>
 </html>
