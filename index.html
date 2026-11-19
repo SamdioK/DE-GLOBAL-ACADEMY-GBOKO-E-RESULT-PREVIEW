@@ -9186,6 +9186,40 @@ async function printArmScoreSheet(className, sessionOverride, termOverride) {
     });
     if(!roster.length)throw new Error('There are no active enrolled students in '+className+'.');
 
+    var classPhase = /^(BASIC|JSS)/i.test(String(cls.data.level||'')+' '+String(cls.data.class_name||className)) ? 'BASIC' : 'SS';
+    var subjectTeacherById = {};
+    for (var ti = 0; ti < subjectRows.length; ti++) {
+      var subjectRow = subjectRows[ti];
+      var assignmentLookup = await supabaseClient.from('teacher_assignments')
+        .select('id,teacher_id')
+        .eq('school_id', schoolId).eq('class_id', cls.data.id)
+        .eq('subject_id', subjectRow.id).eq('academic_session_id', sheetSession.id)
+        .eq('term_id', sheetTerm.id).eq('is_active', true).maybeSingle();
+      if (assignmentLookup.error) throw assignmentLookup.error;
+      if (!assignmentLookup.data) throw new Error('No active subject teacher is assigned to '+subjectRow.name+' for '+className+', '+sheetSession.name+', '+sheetTerm.name+'. Assign the teacher before printing.');
+      var teacherProfile = await supabaseClient.from('profiles').select('id,full_name')
+        .eq('school_id', schoolId).eq('id', assignmentLookup.data.teacher_id).eq('is_active', true).maybeSingle();
+      if (teacherProfile.error) throw teacherProfile.error;
+      if (!teacherProfile.data || !String(teacherProfile.data.full_name||'').trim()) throw new Error('The assigned teacher profile for '+subjectRow.name+' is unavailable or inactive.');
+      var teacherSignature = await supabaseClient.from('school_teacher_signatures')
+        .select('storage_path').eq('school_id', schoolId).eq('teacher_id', teacherProfile.data.id)
+        .eq('subject_name', subjectRow.name).eq('phase', classPhase).maybeSingle();
+      if (teacherSignature.error) throw teacherSignature.error;
+      if (!teacherSignature.data) {
+        teacherSignature = await supabaseClient.from('school_teacher_signatures')
+          .select('storage_path').eq('school_id', schoolId).eq('teacher_id', teacherProfile.data.id)
+          .eq('subject_name', subjectRow.name).eq('phase', 'BOTH').maybeSingle();
+        if (teacherSignature.error) throw teacherSignature.error;
+      }
+      var teacherSignatureUrl = '';
+      if (teacherSignature.data && teacherSignature.data.storage_path) {
+        var teacherSigned = await supabaseClient.storage.from('school-private-assets').createSignedUrl(teacherSignature.data.storage_path, 3600);
+        if (teacherSigned.error) throw teacherSigned.error;
+        teacherSignatureUrl = teacherSigned.data.signedUrl;
+      }
+      subjectTeacherById[String(subjectRow.id)] = { name: String(teacherProfile.data.full_name).trim(), signature: teacherSignatureUrl };
+    }
+
     var principalName=String(schoolInfo.principalName||'').trim();
     if(!principalName){
       var principalResult=await supabaseClient.from('profiles').select('id,full_name')
@@ -9259,7 +9293,9 @@ async function printArmScoreSheet(className, sessionOverride, termOverride) {
         '<th class="score-heading"><span class="vertical-heading">Class<br>Average</span></th><th class="score-heading"><span class="vertical-heading">Position<br>in Class</span></th><th class="score-heading"><span class="vertical-heading">Highest<br>in Class</span></th><th class="score-heading"><span class="vertical-heading">Lowest<br>in Class</span></th>'+
         '<th class="score-heading"><span class="vertical-heading">Grade</span></th><th class="score-heading"><span class="vertical-heading">Remark</span></th><th class="score-heading"><span class="vertical-heading">Teacher’s<br>Signature</span></th>'+
         '</tr></thead><tbody>'+rows+'</tbody></table>'+
-        '<footer class="sheet-footer"><div class="teacher-block"><div class="teacher-signature-line"></div>'+
+        '<footer class="sheet-footer"><div class="teacher-block">'+
+        (subjectTeacherById[String(subject.id)] && subjectTeacherById[String(subject.id)].signature ? '<img class="teacher-signature-image" src="'+safe(subjectTeacherById[String(subject.id)].signature)+'" alt="Subject teacher signature">' : '<div class="teacher-signature-line"></div>')+
+        '<div class="teacher-signature-line"></div><div class="teacher-name">'+safe(subjectTeacherById[String(subject.id)] && subjectTeacherById[String(subject.id)].name || 'Assigned Subject Teacher')+'</div>'+
         '<div class="teacher-title">SUBJECT TEACHER</div></div>'+
         '<div class="principal-block">'+principalSign+
         '<div class="principal-signature-line"></div><div class="principal-name">'+safe(principalName||'Principal')+'</div><div class="principal-title">PRINCIPAL</div></div>'+
@@ -9288,7 +9324,7 @@ async function printArmScoreSheet(className, sessionOverride, termOverride) {
       '.score-table th.score-heading .vertical-heading small{display:block;font-size:7pt;line-height:1.02;font-weight:600;white-space:nowrap;margin-top:.35mm}'+
       '.score-table th.sid-heading,.score-table th.student-heading{overflow:hidden;overflow-wrap:anywhere;word-break:normal}'+
       '.score-table th.score-heading{vertical-align:middle!important;text-align:center!important;position:relative!important;padding:0!important}.score-table th.score-heading .vertical-heading{position:absolute!important;left:50%!important;top:50%!important;right:auto!important;bottom:auto!important;width:30mm!important;max-width:30mm!important;height:auto!important;margin:0!important;padding:0!important;display:block!important;box-sizing:border-box!important;text-align:center!important;white-space:normal!important;line-height:1.04!important;transform:translate(-50%,-50%) rotate(-90deg)!important;transform-origin:center center!important}'+
-      '.sheet-footer{display:grid;grid-template-columns:1fr 1fr 1fr;align-items:end;gap:5mm;border-top:.3mm solid #333;margin-top:5mm;padding-top:3mm;min-height:30mm;break-inside:avoid;page-break-inside:avoid}.teacher-block{width:100%;min-height:25mm;display:flex;flex-direction:column;align-items:flex-start;justify-content:flex-end}.teacher-signature-line{width:48mm;max-width:100%;height:14mm;border-bottom:.3mm solid #222;margin-bottom:2mm}.teacher-title{font-size:9pt;font-weight:bold;letter-spacing:.3px}.principal-block{width:100%;min-height:25mm;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;text-align:center}.principal-signature{max-width:55mm;width:auto;height:15mm;object-fit:contain;object-position:center bottom;margin-bottom:1mm}.principal-signature-line{width:55mm;max-width:100%;height:0;border-bottom:.3mm solid #222;margin:0 0 2mm}.principal-name{font-size:11pt;font-weight:bold}.principal-title{font-size:10pt;font-weight:bold;letter-spacing:.5px;margin-top:.5mm}.stamp-block{width:100%;display:flex;flex-direction:column;align-items:flex-end;justify-content:flex-end}.document-meta{width:100%;margin-top:2mm;text-align:right;font-size:8pt;line-height:1.35;font-weight:600;break-inside:avoid;page-break-inside:avoid}.stamp-composite{position:relative;width:43mm;height:33mm;overflow:hidden}.stamp-artwork{position:absolute;inset:0;width:100%;height:100%;object-fit:contain}.stamp-signature{position:absolute;left:12%;top:24.56%;width:76%;height:28.51%;object-fit:contain;mix-blend-mode:multiply}.stamp-date{position:absolute;left:2%;right:2%;top:56.58%;transform:translateY(-50%);text-align:center;color:#2928b8;font-size:9pt;font-weight:bold;white-space:nowrap}.stamp-placeholder{width:43mm;height:33mm;border:1px dashed #999;border-radius:50%;display:flex;align-items:center;justify-content:center;text-align:center;font-size:10pt;color:#777}.stamp-caption{font-size:9pt;font-weight:bold;text-align:right;margin-top:1mm}.page-number{position:static;text-align:right;margin-top:2mm;font-size:8pt;color:#555}'+
+      '.sheet-footer{display:grid;grid-template-columns:1fr 1fr 1fr;align-items:end;gap:5mm;border-top:.3mm solid #333;margin-top:5mm;padding-top:3mm;min-height:30mm;break-inside:avoid;page-break-inside:avoid}.teacher-signature-image{max-width:48mm;width:auto;height:13mm;object-fit:contain;object-position:left bottom;margin-bottom:1mm}.teacher-name{font-size:10pt;font-weight:bold;margin-bottom:.5mm}.teacher-block{width:100%;min-height:25mm;display:flex;flex-direction:column;align-items:flex-start;justify-content:flex-end}.teacher-signature-line{width:48mm;max-width:100%;height:14mm;border-bottom:.3mm solid #222;margin-bottom:2mm}.teacher-title{font-size:9pt;font-weight:bold;letter-spacing:.3px}.principal-block{width:100%;min-height:25mm;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;text-align:center}.principal-signature{max-width:55mm;width:auto;height:15mm;object-fit:contain;object-position:center bottom;margin-bottom:1mm}.principal-signature-line{width:55mm;max-width:100%;height:0;border-bottom:.3mm solid #222;margin:0 0 2mm}.principal-name{font-size:11pt;font-weight:bold}.principal-title{font-size:10pt;font-weight:bold;letter-spacing:.5px;margin-top:.5mm}.stamp-block{width:100%;display:flex;flex-direction:column;align-items:flex-end;justify-content:flex-end}.document-meta{width:100%;margin-top:2mm;text-align:right;font-size:8pt;line-height:1.35;font-weight:600;break-inside:avoid;page-break-inside:avoid}.stamp-composite{position:relative;width:43mm;height:33mm;overflow:hidden}.stamp-artwork{position:absolute;inset:0;width:100%;height:100%;object-fit:contain}.stamp-signature{position:absolute;left:12%;top:24.56%;width:76%;height:28.51%;object-fit:contain;mix-blend-mode:multiply}.stamp-date{position:absolute;left:2%;right:2%;top:56.58%;transform:translateY(-50%);text-align:center;color:#2928b8;font-size:9pt;font-weight:bold;white-space:nowrap}.stamp-placeholder{width:43mm;height:33mm;border:1px dashed #999;border-radius:50%;display:flex;align-items:center;justify-content:center;text-align:center;font-size:10pt;color:#777}.stamp-caption{font-size:9pt;font-weight:bold;text-align:right;margin-top:1mm}.page-number{position:static;text-align:right;margin-top:2mm;font-size:8pt;color:#555}'+
       '@media print{html,body{width:100%;margin:0;padding:0}.subject-sheet{width:100%;max-width:100%;break-after:page;page-break-after:always}.subject-sheet:last-child{break-after:auto;page-break-after:auto}.score-table{width:100%;table-layout:fixed}.score-table th{print-color-adjust:exact;-webkit-print-color-adjust:exact}}'+
       '@media screen{body{padding:8mm}.subject-sheet{margin:0 auto 10mm;max-width:100%}}'+
       '</style></head><body>'+pageSections+'<script>window.onload=function(){window.print();};<\/script></body></html>';
