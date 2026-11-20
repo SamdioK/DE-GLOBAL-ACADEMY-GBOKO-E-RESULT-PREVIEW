@@ -14701,14 +14701,14 @@ async function renderSubjectTeacherInput() {
           var isReturned=record && (record.status==='returned_to_teacher'||record.status==='returned_by_admin');
           var isAvailable=previousApproved && (!record || record.status==='draft' || isReturned);
           var isSelected=!!nextUnapproved && item.stage===nextUnapproved.stage && isAvailable;
-          var detail=isAvailable?(isReturned?'Returned for correction':status):(!previousApproved?'Waiting for '+stageOptions.find(function(x){return x.stage===item.stage-1;}).label+' approval':status);
+          var previousStage=stageOptions.find(function(x){return x.stage===item.stage-1;});
+          var detail=isAvailable?(isReturned?'Returned for correction':status):(!previousApproved?'Waiting for '+(previousStage?previousStage.label:'preceding assessment')+' approval':status);
           return '<label style="display:flex;align-items:center;gap:10px;padding:12px;border:1px solid #d9deea;border-radius:10px;margin:8px 0;'+(isAvailable?'background:#fff;':'background:#f1f3f7;opacity:.65;')+'"><input type="radio" name="stAssessmentStageChoice" value="'+item.stage+'" '+(isAvailable?'':'disabled')+' '+(isSelected?'checked':'')+'><span style="flex:1"><strong>'+item.label+'</strong><br><small>'+detail+'</small></span><span style="font-size:12px;color:#526078">Max '+item.maximum+'</span></label>';
         }).join('');
         modal.innerHTML='<div style="width:min(100%,460px);max-height:90vh;overflow:auto;background:#fff;border-radius:16px;padding:20px;box-shadow:0 18px 55px rgba(0,0,0,.3);color:#182033"><h3 id="stAssessmentSubmitTitle" style="font-size:19px;margin-bottom:8px">Which scores do you want to submit?</h3><p style="font-size:13px;color:#566176;margin-bottom:14px">Choose one assessment component for '+escapeManagementText(className)+' — '+escapeManagementText(subjectName)+'. Each component follows its own approval process.</p>'+optionsHtml+'<p style="font-size:12px;line-height:1.5;color:#6b7280;margin:12px 0">CA2 follows final CA1 approval; CA3 follows final CA2 approval. Examination is submitted separately and only after CA3 receives final approval.</p><div style="display:flex;gap:8px;justify-content:flex-end;margin-top:16px"><button type="button" class="btn btn-secondary" data-stage-cancel>Cancel</button><button type="button" class="btn btn-primary" data-stage-confirm '+(nextUnapproved?'':'disabled')+'>Continue</button></div></div>';
         document.body.appendChild(modal);
         var closeDialog=function(){if(modal.isConnected)modal.remove();};
         modal.querySelector('[data-stage-cancel]').addEventListener('click',closeDialog);
-        modal.addEventListener('click',function(event){if(event.target===modal)closeDialog();});
         var chosen=await new Promise(function(resolve){
           modal.querySelector('[data-stage-confirm]').addEventListener('click',function(){
             var selected=modal.querySelector('input[name="stAssessmentStageChoice"]:checked');
