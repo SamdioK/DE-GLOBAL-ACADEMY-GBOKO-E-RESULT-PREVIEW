@@ -1,4 +1,0 @@
--- Allow Subject Teachers to enter each subsequent stage after prior final approval.
--- The score-entry RPC updates only the selected stage; earlier approved stages remain protected by the stage lock trigger.
--- This migration is applied to the linked production Supabase project.
--- See the function definitions in this migration's commit for the full implementation.
