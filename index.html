@@ -4804,42 +4804,174 @@ async function renderStudentResults() {
     container.innerHTML = '<div class="card"><h2>Result unavailable</h2><p>Sign in with your official student account to view released results.</p></div>';
     return;
   }
-  container.innerHTML = '<div class="card"><h2>Student Results</h2><p>Retrieving your released results securely from Supabase…</p></div>';
-  try {
-    var response = await supabaseClient.functions.invoke('student-results-portal', { body: {} });
+
+  container.innerHTML = '<div class="card"><h2>Student Results</h2><p>Loading your released sessions, terms and token balances securely…</p></div>';
+
+  async function loadAvailable() {
+    var response = await supabaseClient.functions.invoke('student-results-portal', { body: { mode: 'list' } });
     if (response.error) throw response.error;
-    if (!response.data || response.data.success !== true) throw new Error(response.data && response.data.error || 'Your result could not be retrieved.');
-    var student = response.data.student || {};
-    var released = Array.isArray(response.data.results) ? response.data.results : [];
-    if (!released.length) {
-      container.innerHTML = '<div class="card"><h2>Result unavailable</h2><p>No result stage has been released for this account yet. Contact the School Administrator.</p></div>';
+    if (!response.data || response.data.success !== true) throw new Error(response.data && response.data.error || 'Your available results could not be retrieved.');
+    return response.data;
+  }
+
+  function renderResultGroup(student, group) {
+    var stage = Math.max(0, Math.min(4, Number(group.release_stage || 0)));
+    var labels = ['Not released','1st CA','2nd CA','3rd CA','Final'];
+    var headers = '<th>Subject</th><th>1st CA</th>' +
+      (stage >= 2 ? '<th>2nd CA</th>' : '') +
+      (stage >= 3 ? '<th>3rd CA</th>' : '') +
+      (stage >= 4 ? '<th>Examination</th><th>Total</th><th>Grade</th><th>Remark</th>' : '');
+    var rows = (group.subjects || []).map(function(item) {
+      return '<tr><td>' + escapeManagementText(item.subject || '') + '</td>' +
+        '<td>' + escapeManagementText(item.ca1 == null ? '-' : item.ca1) + '</td>' +
+        (stage >= 2 ? '<td>' + escapeManagementText(item.ca2 == null ? '-' : item.ca2) + '</td>' : '') +
+        (stage >= 3 ? '<td>' + escapeManagementText(item.ca3 == null ? '-' : item.ca3) + '</td>' : '') +
+        (stage >= 4 ? '<td>' + escapeManagementText(item.examination == null ? '-' : item.examination) + '</td><td>' + escapeManagementText(item.total == null ? '-' : item.total) + '</td><td>' + escapeManagementText(item.grade || '') + '</td><td>' + escapeManagementText(item.remark || '') + '</td>' : '') +
+        '</tr>';
+    }).join('');
+    return '<div class="card"><h2>' + escapeManagementText(schoolInfo.name || currentSchool && currentSchool.schoolName || 'School') + ' — Student Result</h2>' +
+      '<p style="margin:12px 0;"><strong>Student:</strong> ' + escapeManagementText(student.full_name || '') +
+      ' &nbsp; <strong>Admission No:</strong> ' + escapeManagementText(student.admission_number || '') +
+      ' &nbsp; <strong>Class:</strong> ' + escapeManagementText(group.class_name || '') +
+      ' &nbsp; <strong>Term:</strong> ' + escapeManagementText(group.term || '') +
+      ' &nbsp; <strong>Session:</strong> ' + escapeManagementText(group.session || '') + '</p>' +
+      '<p style="margin-bottom:10px;color:#5568d3;"><strong>Released through:</strong> ' + labels[stage] + '</p>' +
+      '<div style="overflow-x:auto;"><table><thead><tr>' + headers + '</tr></thead><tbody>' + rows + '</tbody></table></div>' +
+      '<p style="margin-top:12px;color:#087443;font-weight:700;">Remaining checks for this term: ' + Number(group.remaining_uses || 0) + ' · This term token does not expire.</p></div>';
+  }
+
+  async function refreshBalance(sessionId, termId) {
+    var match = available.find(function(x) { return x.academic_session_id === sessionId && x.term_id === termId; });
+    var balance = document.getElementById('studentResultTokenBalance');
+    if (balance) balance.textContent = match ? (Number(match.remaining_uses || 0) + ' of 5 checks available · No expiry') : '';
+  }
+
+  async function checkResult(sessionId, termId) {
+    var output = document.getElementById('studentResultOutput');
+    var button = document.getElementById('studentCheckResultButton');
+    if (!sessionId || !termId) { showToast('Select an academic session and term first.', 'error'); return; }
+    if (button) { button.disabled = true; button.textContent = 'Checking securely…'; }
+    if (output) output.innerHTML = '<div class="alert alert-info">Checking the term-specific token and retrieving your result…</div>';
+    try {
+      var requestKey = (window.crypto && window.crypto.randomUUID) ? window.crypto.randomUUID() : '';
+      if (!requestKey) throw new Error('This browser cannot create a secure result-check request. Update your browser and try again.');
+      var response = await supabaseClient.functions.invoke('student-results-portal', {
+        body: { mode: 'check', academic_session_id: sessionId, term_id: termId, request_key: requestKey }
+      });
+      if (response.error) throw response.error;
+      var data = response.data || {};
+      if (data.payment_required) {
+        if (output) output.innerHTML =
+          '<div class="card" style="border:1px solid #e5c66b;background:#fffaf0;">' +
+          '<h3 style="color:#754b00;">Result token required</h3>' +
+          '<p>No checks remain for the selected academic session and term.</p>' +
+          '<p><strong>Token price:</strong> ₦651.99</p>' +
+          '<p><strong>Token allocation:</strong> Five result checks for this term only.</p>' +
+          '<p><strong>Validity:</strong> No expiry. Unused checks remain available indefinitely for this exact session and term.</p>' +
+          '<button type="button" id="studentBuyResultTokenButton" class="btn btn-primary" style="width:100%;margin-top:8px;">Pay ₦651.99 with Paystack</button></div>';
+        var payButton = document.getElementById('studentBuyResultTokenButton');
+        if (payButton) payButton.addEventListener('click', async function() {
+          payButton.disabled = true; payButton.textContent = 'Connecting to Paystack…';
+          try {
+            var callback = window.location.origin + window.location.pathname +
+              '?token_session=' + encodeURIComponent(sessionId) + '&token_term=' + encodeURIComponent(termId);
+            var init = await supabaseClient.functions.invoke('student-result-token-initialize', {
+              body: { academic_session_id: sessionId, term_id: termId, callback_url: callback }
+            });
+            if (init.error) throw init.error;
+            if (!init.data || init.data.success !== true || !init.data.authorization_url) throw new Error(init.data && init.data.error || 'Paystack could not initialize payment.');
+            window.location.assign(init.data.authorization_url);
+          } catch (error) {
+            showToast(error && error.message || 'Unable to start payment.', 'error');
+            payButton.disabled = false; payButton.textContent = 'Pay ₦651.99 with Paystack';
+          }
+        });
+        return;
+      }
+      if (!data.success || !Array.isArray(data.results) || !data.results.length) throw new Error(data.error || 'No result was returned for this session and term.');
+      available = available.map(function(x) {
+        if (x.academic_session_id === sessionId && x.term_id === termId) x.remaining_uses = Number(data.token && data.token.remaining_uses || 0);
+        return x;
+      });
+      await refreshBalance(sessionId, termId);
+      if (output) output.innerHTML = data.results.map(function(group) { return renderResultGroup(data.student || {}, group); }).join('');
+    } catch (error) {
+      if (output) output.innerHTML = '<div class="alert alert-danger">' + escapeManagementText(error && error.message || 'The result could not be retrieved.') + '</div>';
+      showToast(error && error.message || 'Result checking failed.', 'error');
+    } finally {
+      if (button) { button.disabled = false; button.textContent = 'CHECK RESULT'; }
+    }
+  }
+
+  var available = [];
+  try {
+    // Paystack returns to this page with its transaction reference. Verify it
+    // before showing a success message or allowing a token to be used.
+    var query = new URLSearchParams(window.location.search);
+    var paymentReference = query.get('reference') || query.get('trxref') || '';
+    var callbackSession = query.get('token_session') || '';
+    var callbackTerm = query.get('token_term') || '';
+    var callbackVerified = false;
+    if (paymentReference) {
+      container.innerHTML = '<div class="card"><h2>Verifying payment</h2><p>Confirming your Paystack transaction securely. Please wait…</p></div>';
+      var verified = await supabaseClient.functions.invoke('student-result-token-verify', { body: { reference: paymentReference } });
+      if (verified.error) throw verified.error;
+      if (!verified.data || verified.data.success !== true) throw new Error(verified.data && verified.data.error || 'Payment is not yet confirmed. No token has been issued.');
+      callbackVerified = true;
+      window.history.replaceState({}, document.title, window.location.pathname + window.location.hash);
+    }
+
+    var list = await loadAvailable();
+    available = Array.isArray(list.available) ? list.available : [];
+    if (!available.length) {
+      container.innerHTML = '<div class="card"><h2>Student Results</h2><p>No result has been released for online checking on this account yet. Contact the School Administrator.</p></div>';
       return;
     }
-    var labels = ['Not released','1st CA','2nd CA','3rd CA','Final'];
-    container.innerHTML = released.map(function(group) {
-      var stage = Math.max(0, Math.min(4, Number(group.release_stage || 0)));
-      var subjects = Array.isArray(group.subjects) ? group.subjects : [];
-      var headers = '<th>Subject</th><th>1st CA</th>' +
-        (stage >= 2 ? '<th>2nd CA</th>' : '') +
-        (stage >= 3 ? '<th>3rd CA</th>' : '') +
-        (stage >= 4 ? '<th>Examination</th><th>Total</th><th>Grade</th><th>Remark</th>' : '');
-      var rows = subjects.map(function(item) {
-        return '<tr><td>' + escapeManagementText(item.subject || '') + '</td>' +
-          '<td>' + escapeManagementText(item.ca1 == null ? '-' : item.ca1) + '</td>' +
-          (stage >= 2 ? '<td>' + escapeManagementText(item.ca2 == null ? '-' : item.ca2) + '</td>' : '') +
-          (stage >= 3 ? '<td>' + escapeManagementText(item.ca3 == null ? '-' : item.ca3) + '</td>' : '') +
-          (stage >= 4 ? '<td>' + escapeManagementText(item.examination == null ? '-' : item.examination) + '</td><td>' + escapeManagementText(item.total == null ? '-' : item.total) + '</td><td>' + escapeManagementText(item.grade || '') + '</td><td>' + escapeManagementText(item.remark || '') + '</td>' : '') +
-          '</tr>';
+
+    var sessionOptions = [];
+    available.forEach(function(item) {
+      if (!sessionOptions.some(function(x) { return x.id === item.academic_session_id; }))
+        sessionOptions.push({ id: item.academic_session_id, name: item.session });
+    });
+    var selectedSession = callbackSession && sessionOptions.some(function(x) { return x.id === callbackSession; })
+      ? callbackSession : sessionOptions[0].id;
+    var termChoices = available.filter(function(x) { return x.academic_session_id === selectedSession; });
+    var selectedTerm = callbackTerm && termChoices.some(function(x) { return x.term_id === callbackTerm; })
+      ? callbackTerm : termChoices[0].term_id;
+
+    container.innerHTML = '<div class="card"><h2>Check Student Result</h2>' +
+      '<p>Select the academic session and term whose result you want to check. Each term has its own separate five-use token.</p>' +
+      (callbackVerified ? '<div class="alert alert-success"><strong>Payment verified.</strong> Five checks have been credited to the selected term.</div>' : '') +
+      '<div class="grid grid-2" style="margin-top:14px;">' +
+      '<div class="input-group"><label for="studentResultSessionSelect">Academic Session</label><select id="studentResultSessionSelect">' +
+      sessionOptions.map(function(x) { return '<option value="' + escapeManagementText(x.id) + '"' + (x.id === selectedSession ? ' selected' : '') + '>' + escapeManagementText(x.name) + '</option>'; }).join('') +
+      '</select></div><div class="input-group"><label for="studentResultTermSelect">Term</label><select id="studentResultTermSelect"></select></div></div>' +
+      '<div style="display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:10px;margin:12px 0;padding:12px;border:1px solid #d6e5dc;border-radius:10px;background:#f5fbf7;">' +
+      '<div><strong>Term token balance</strong><div id="studentResultTokenBalance" style="font-size:13px;color:#087443;margin-top:3px;"></div></div>' +
+      '<div style="font-weight:800;color:#075b43;">₦651.99 · 5 checks</div></div>' +
+      '<button type="button" class="btn btn-primary" id="studentCheckResultButton" style="width:100%;">CHECK RESULT</button>' +
+      '<div id="studentResultOutput" style="margin-top:16px;"></div></div>';
+
+    var sessionSelect = document.getElementById('studentResultSessionSelect');
+    var termSelect = document.getElementById('studentResultTermSelect');
+    var checkButton = document.getElementById('studentCheckResultButton');
+    function populateTerms(preferredTerm) {
+      var sid = sessionSelect.value;
+      var choices = available.filter(function(x) { return x.academic_session_id === sid; });
+      termSelect.innerHTML = choices.map(function(x) {
+        return '<option value="' + escapeManagementText(x.term_id) + '"' + (x.term_id === preferredTerm ? ' selected' : '') + '>' + escapeManagementText(x.term) + '</option>';
       }).join('');
-      return '<div class="card"><h2>' + escapeManagementText(schoolInfo.name || currentSchool.schoolName || 'School') + ' — Student Result</h2>' +
-        '<p style="margin:12px 0;"><strong>Student:</strong> ' + escapeManagementText(student.full_name || '') +
-        ' &nbsp; <strong>Admission No:</strong> ' + escapeManagementText(student.admission_number || '') +
-        ' &nbsp; <strong>Class:</strong> ' + escapeManagementText(group.class_name || '') +
-        ' &nbsp; <strong>Term:</strong> ' + escapeManagementText(group.term || '') +
-        ' &nbsp; <strong>Session:</strong> ' + escapeManagementText(group.session || '') + '</p>' +
-        '<p style="margin-bottom:10px;color:#5568d3;"><strong>Released through:</strong> ' + labels[stage] + '</p>' +
-        '<div style="overflow-x:auto;"><table><thead><tr>' + headers + '</tr></thead><tbody>' + rows + '</tbody></table></div></div>';
-    }).join('');
+      if (!choices.some(function(x) { return x.term_id === termSelect.value; }) && choices.length) termSelect.value = choices[0].term_id;
+      refreshBalance(sid, termSelect.value);
+    }
+    populateTerms(selectedTerm);
+    sessionSelect.addEventListener('change', function() { populateTerms(''); document.getElementById('studentResultOutput').innerHTML = ''; });
+    termSelect.addEventListener('change', function() { refreshBalance(sessionSelect.value, termSelect.value); document.getElementById('studentResultOutput').innerHTML = ''; });
+    checkButton.addEventListener('click', function() { checkResult(sessionSelect.value, termSelect.value); });
+
+    // A successful payment returns to the same session and term. Complete the
+    // result check the student originally requested.
+    if (callbackVerified && callbackSession && callbackTerm) await checkResult(callbackSession, callbackTerm);
   } catch (error) {
     console.error('Secure student result load failed:', error);
     container.innerHTML = '<div class="card"><h2>Result unavailable</h2><p>' + escapeManagementText(error && error.message ? error.message : 'The result service could not be reached. Please try again later.') + '</p></div>';
