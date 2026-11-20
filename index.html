@@ -4816,18 +4816,31 @@ async function renderStudentResults() {
 
   function renderResultGroup(student, group) {
     var stage = Math.max(0, Math.min(4, Number(group.release_stage || 0)));
-    var labels = ['Not released','1st CA','2nd CA','3rd CA','Final'];
-    var headers = '<th>Subject</th><th>1st CA</th>' +
-      (stage >= 2 ? '<th>2nd CA</th>' : '') +
-      (stage >= 3 ? '<th>3rd CA</th>' : '') +
-      (stage >= 4 ? '<th>Examination</th><th>Total</th><th>Grade</th><th>Remark</th>' : '');
-    var rows = (group.subjects || []).map(function(item) {
-      return '<tr><td>' + escapeManagementText(item.subject || '') + '</td>' +
-        '<td>' + escapeManagementText(item.ca1 == null ? '-' : item.ca1) + '</td>' +
-        (stage >= 2 ? '<td>' + escapeManagementText(item.ca2 == null ? '-' : item.ca2) + '</td>' : '') +
-        (stage >= 3 ? '<td>' + escapeManagementText(item.ca3 == null ? '-' : item.ca3) + '</td>' : '') +
-        (stage >= 4 ? '<td>' + escapeManagementText(item.examination == null ? '-' : item.examination) + '</td><td>' + escapeManagementText(item.total == null ? '-' : item.total) + '</td><td>' + escapeManagementText(item.grade || '') + '</td><td>' + escapeManagementText(item.remark || '') + '</td>' : '') +
-        '</tr>';
+    var labels = ['Not released','CA1','CA2','CA3','Examination'];
+    var subjects = group.subjects || [];
+    function componentTable(field, heading) {
+      var rows = subjects.map(function(item) {
+        return '<tr><td>' + escapeManagementText(item.subject || '') + '</td><td style="text-align:center;font-weight:700;">' +
+          escapeManagementText(item[field] == null ? '-' : item[field]) + '</td></tr>';
+      }).join('');
+      return '<section class="student-result-component" data-result-panel="' + field + '"' + (field === 'ca1' ? '' : ' hidden') +
+        '><div style="overflow-x:auto;"><table><thead><tr><th>Subject</th><th>' + heading + '</th></tr></thead><tbody>' + rows + '</tbody></table></div></section>';
+    }
+    var componentButtons = '<div class="student-result-tabs" role="tablist" aria-label="Result components" style="display:flex;flex-wrap:wrap;gap:8px;margin:14px 0;">' +
+      '<button type="button" class="btn btn-primary" data-result-tab="ca1" aria-selected="true">CA1</button>' +
+      (stage >= 2 ? '<button type="button" class="btn" data-result-tab="ca2" aria-selected="false">CA2</button>' : '') +
+      (stage >= 3 ? '<button type="button" class="btn" data-result-tab="ca3" aria-selected="false">CA3</button>' : '') +
+      (stage >= 4 ? '<button type="button" class="btn" data-result-tab="examination" aria-selected="false">Exams</button>' : '') +
+      '</div>';
+    var fullRows = subjects.map(function(item) {
+      return '<tr><td>' + escapeManagementText(item.subject || '') + '</td><td>' +
+        escapeManagementText(item.ca1 == null ? '-' : item.ca1) + '</td><td>' +
+        escapeManagementText(item.ca2 == null ? '-' : item.ca2) + '</td><td>' +
+        escapeManagementText(item.ca3 == null ? '-' : item.ca3) + '</td><td>' +
+        escapeManagementText(item.examination == null ? '-' : item.examination) + '</td><td>' +
+        escapeManagementText(item.total == null ? '-' : item.total) + '</td><td>' +
+        escapeManagementText(item.grade || '') + '</td><td>' +
+        escapeManagementText(item.remark || '') + '</td></tr>';
     }).join('');
     return '<div class="card"><h2>' + escapeManagementText(schoolInfo.name || currentSchool && currentSchool.schoolName || 'School') + ' — Student Result</h2>' +
       '<p style="margin:12px 0;"><strong>Student:</strong> ' + escapeManagementText(student.full_name || '') +
@@ -4836,7 +4849,12 @@ async function renderStudentResults() {
       ' &nbsp; <strong>Term:</strong> ' + escapeManagementText(group.term || '') +
       ' &nbsp; <strong>Session:</strong> ' + escapeManagementText(group.session || '') + '</p>' +
       '<p style="margin-bottom:10px;color:#5568d3;"><strong>Released through:</strong> ' + labels[stage] + '</p>' +
-      '<div style="overflow-x:auto;"><table><thead><tr>' + headers + '</tr></thead><tbody>' + rows + '</tbody></table></div>' +
+      '<h3 style="margin-top:12px;">View Result</h3>' + componentButtons +
+      componentTable('ca1','CA1 Score') +
+      (stage >= 2 ? componentTable('ca2','CA2 Score') : '') +
+      (stage >= 3 ? componentTable('ca3','CA3 Score') : '') +
+      (stage >= 4 ? componentTable('examination','Examination Score') : '') +
+      (stage >= 4 ? '<button type="button" class="btn btn-primary" data-result-full-toggle="true" aria-expanded="false" style="width:100%;margin-top:14px;">Check full Results</button><section data-result-full-panel hidden style="margin-top:14px;"><h3>Full Results</h3><div style="overflow-x:auto;"><table><thead><tr><th>Subject</th><th>CA1</th><th>CA2</th><th>CA3</th><th>Exams</th><th>Total</th><th>Grade</th><th>Remark</th></tr></thead><tbody>' + fullRows + '</tbody></table></div></section>' : '<p class="alert alert-info">The full result will become available after the Examination stage is officially released.</p>') +
       '<p style="margin-top:12px;color:#087443;font-weight:700;">Remaining checks for this term: ' + Number(group.remaining_uses || 0) + ' · This term token does not expire.</p></div>';
   }
 
@@ -4894,12 +4912,35 @@ async function renderStudentResults() {
         return x;
       });
       await refreshBalance(sessionId, termId);
-      if (output) output.innerHTML = data.results.map(function(group) { return renderResultGroup(data.student || {}, group); }).join('');
+      if (output) {
+        output.innerHTML = data.results.map(function(group) { return renderResultGroup(data.student || {}, group); }).join('');
+        output.querySelectorAll('[data-result-tab]').forEach(function(tab) {
+          tab.addEventListener('click', function() {
+            var key = tab.getAttribute('data-result-tab');
+            output.querySelectorAll('[data-result-tab]').forEach(function(button) {
+              var active = button === tab;
+              button.classList.toggle('btn-primary', active);
+              button.setAttribute('aria-selected', active ? 'true' : 'false');
+            });
+            output.querySelectorAll('[data-result-panel]').forEach(function(panel) {
+              panel.hidden = panel.getAttribute('data-result-panel') !== key;
+            });
+          });
+        });
+        var fullToggle = output.querySelector('[data-result-full-toggle]');
+        if (fullToggle) fullToggle.addEventListener('click', function() {
+          var panel = output.querySelector('[data-result-full-panel]');
+          var opening = panel.hidden;
+          panel.hidden = !opening;
+          fullToggle.setAttribute('aria-expanded', opening ? 'true' : 'false');
+          fullToggle.textContent = opening ? 'Hide full Results' : 'Check full Results';
+        });
+      }
     } catch (error) {
       if (output) output.innerHTML = '<div class="alert alert-danger">' + escapeManagementText(error && error.message || 'The result could not be retrieved.') + '</div>';
       showToast(error && error.message || 'Result checking failed.', 'error');
     } finally {
-      if (button) { button.disabled = false; button.textContent = 'CHECK RESULT'; }
+      if (button) { button.disabled = false; button.textContent = 'VIEW RESULT'; }
     }
   }
 
@@ -4949,7 +4990,7 @@ async function renderStudentResults() {
       '<div style="display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:10px;margin:12px 0;padding:12px;border:1px solid #d6e5dc;border-radius:10px;background:#f5fbf7;">' +
       '<div><strong>Term token balance</strong><div id="studentResultTokenBalance" style="font-size:13px;color:#087443;margin-top:3px;"></div></div>' +
       '<div style="font-weight:800;color:#075b43;">₦651.99 · 5 checks</div></div>' +
-      '<button type="button" class="btn btn-primary" id="studentCheckResultButton" style="width:100%;">CHECK RESULT</button>' +
+      '<button type="button" class="btn btn-primary" id="studentCheckResultButton" style="width:100%;">VIEW RESULT</button>' +
       '<div id="studentResultOutput" style="margin-top:16px;"></div></div>';
 
     var sessionSelect = document.getElementById('studentResultSessionSelect');
