@@ -13179,7 +13179,7 @@ async function loadFormMasterSubjectResultsView() {
     if (result.error) throw result.error;
     var scoreRows = result.data || [];
     var assessmentQueue = await supabaseClient.rpc('list_result_assessment_submissions',{
-      p_class_id:classId,p_academic_session_id:activeAcademicSession.id,p_term_id:selectedTermId,p_stage:null
+      p_class_id:classId,p_academic_session_id:activeAcademicSession.id,p_term_id:null,p_stage:null
     });
     if(assessmentQueue.error) throw assessmentQueue.error;
     var caQueueRows=(Array.isArray(assessmentQueue.data)?assessmentQueue.data:[]).filter(function(item){
@@ -13234,7 +13234,7 @@ async function loadFormMasterSubjectResultsView() {
         html += '<td>'+esc(row && row.ca1 != null ? row.ca1 : '—')+'</td><td>'+esc(row && row.ca2 != null ? row.ca2 : '—')+'</td><td>'+esc(row && row.ca3 != null ? row.ca3 : '—')+'</td><td>'+esc(row && row.examination != null ? row.examination : '—')+'</td><td><strong>'+esc(row && row.total != null ? row.total : '—')+'</strong></td><td>'+esc(row && row.grade || '—')+'</td><td><span style="display:inline-block;padding:4px 8px;border-radius:20px;font-size:11px;font-weight:700;'+badgeStyle+'">'+esc(status === 'pending' ? 'NOT ENTERED' : status.toUpperCase())+'</span></td><td>'+esc(row && row.updated_at ? new Date(row.updated_at).toLocaleString() : '—')+'</td></tr>';
       });
       html += '</tbody></table></div>';
-      var pendingCa=caQueueRows.filter(function(item){return item.status==='submitted_to_form_master' && String(item.subject_id)===String(selectedSubjectId);});
+      var pendingCa=caQueueRows.filter(function(item){return item.status==='submitted_to_form_master' && String(item.subject_id)===String(selectedSubjectId) && String(item.term_id)===String(selectedTermId);});
       html += '<div style="margin-top:18px;padding:14px;border:1px solid #dbe4f0;border-radius:12px;background:#f8fafc"><div style="display:flex;justify-content:space-between;gap:10px;align-items:center;flex-wrap:wrap"><div><h4 style="margin:0;color:#293968">CA Approval Queue</h4><p style="margin:4px 0;color:#64748b;font-size:12px">Select one CA to forward individually, or select all submitted CAs and forward them together.</p></div><button type="button" class="btn btn-primary" id="fmForwardSelectedCa" ${pendingCa.length?'':'disabled'}>Forward selected CA submissions</button></div>';
       if(pendingCa.length){
         html += '<div style="overflow-x:auto;margin-top:10px"><table style="min-width:560px;width:100%"><thead><tr><th>Select</th><th>Component</th><th>Submitted</th><th>Status</th></tr></thead><tbody>';
