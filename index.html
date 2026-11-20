@@ -14697,7 +14697,8 @@ async function renderSubjectTeacherInput() {
         var optionsHtml=stageOptions.map(function(item){
           var record=stageByNumber[item.stage];
           var status=record?String(record.status):'Not submitted';
-          var previousApproved=item.stage===1 || (stageByNumber[item.stage-1] && stageByNumber[item.stage-1].status==='approved');
+          var previousRecord=stageByNumber[item.stage-1];
+          var previousApproved=item.stage===1 || (previousRecord && ['submitted_to_form_master','submitted_to_admin','approved'].indexOf(previousRecord.status)>=0);
           var isReturned=record && (record.status==='returned_to_teacher'||record.status==='returned_by_admin');
           var isAvailable=previousApproved && (!record || record.status==='draft' || isReturned);
           var isSelected=!!nextUnapproved && item.stage===nextUnapproved.stage && isAvailable;
@@ -14705,7 +14706,9 @@ async function renderSubjectTeacherInput() {
           var detail=isAvailable?(isReturned?'Returned for correction':status):(!previousApproved?'Waiting for '+(previousStage?previousStage.label:'preceding assessment')+' approval':status);
           return '<label style="display:flex;align-items:center;gap:10px;padding:12px;border:1px solid #d9deea;border-radius:10px;margin:8px 0;'+(isAvailable?'background:#fff;':'background:#f1f3f7;opacity:.65;')+'"><input type="radio" name="stAssessmentStageChoice" value="'+item.stage+'" '+(isAvailable?'':'disabled')+' '+(isSelected?'checked':'')+'><span style="flex:1"><strong>'+item.label+'</strong><br><small>'+detail+'</small></span><span style="font-size:12px;color:#526078">Max '+item.maximum+'</span></label>';
         }).join('');
-        modal.innerHTML='<div style="width:min(100%,460px);max-height:90vh;overflow:auto;background:#fff;border-radius:16px;padding:20px;box-shadow:0 18px 55px rgba(0,0,0,.3);color:#182033"><h3 id="stAssessmentSubmitTitle" style="font-size:19px;margin-bottom:8px">Which scores do you want to submit?</h3><p style="font-size:13px;color:#566176;margin-bottom:14px">Choose one assessment component for '+escapeManagementText(className)+' — '+escapeManagementText(subjectName)+'. Each component follows its own approval process.</p>'+optionsHtml+'<p style="font-size:12px;line-height:1.5;color:#6b7280;margin:12px 0">CA2 follows final CA1 approval; CA3 follows final CA2 approval. Examination is submitted separately and only after CA3 receives final approval.</p><div style="display:flex;gap:8px;justify-content:flex-end;margin-top:16px"><button type="button" class="btn btn-secondary" data-stage-cancel>Cancel</button><button type="button" class="btn btn-primary" data-stage-confirm '+(nextUnapproved?'':'disabled')+'>Continue</button></div></div>';
+        var combinedAvailable=!stageByNumber[1]&&!stageByNumber[2]&&!stageByNumber[3];
+        var combinedHtml=combinedAvailable && maxima.ca1>0 && maxima.ca2>0 && maxima.ca3>0 ? '<label style="display:flex;align-items:center;gap:10px;padding:12px;border:1px solid #536bd8;border-radius:10px;margin:8px 0;background:#f3f5ff"><input type="radio" name="stAssessmentStageChoice" value="123"><span style="flex:1"><strong>CA1 + CA2 + CA3 together</strong><br><small>Submit all three CA components in one combined submission</small></span></label>' : '';
+        modal.innerHTML='<div style="width:min(100%,460px);max-height:90vh;overflow:auto;background:#fff;border-radius:16px;padding:20px;box-shadow:0 18px 55px rgba(0,0,0,.3);color:#182033"><h3 id="stAssessmentSubmitTitle" style="font-size:19px;margin-bottom:8px">Which scores do you want to submit?</h3><p style="font-size:13px;color:#566176;margin-bottom:14px">Choose one CA component or submit all three together for '+escapeManagementText(className)+' — '+escapeManagementText(subjectName)+'. CA components must follow CA1, CA2, CA3 order.</p>'+combinedHtml+optionsHtml+'<p style="font-size:12px;line-height:1.5;color:#6b7280;margin:12px 0">Later CA components may be submitted after the preceding CA has been submitted; approval can be individual or combined. Examination remains separate and requires final approval of all three CAs.</p><div style="display:flex;gap:8px;justify-content:flex-end;margin-top:16px"><button type="button" class="btn btn-secondary" data-stage-cancel>Cancel</button><button type="button" class="btn btn-primary" data-stage-confirm '+(nextUnapproved?'':'disabled')+'>Continue</button></div></div>';
         document.body.appendChild(modal);
         var closeDialog=function(){if(modal.isConnected)modal.remove();};
         modal.querySelector('[data-stage-cancel]').addEventListener('click',closeDialog);
@@ -14721,6 +14724,13 @@ async function renderSubjectTeacherInput() {
         closeDialog();
         if(!chosen){button.disabled=false;button.textContent='Submit Scores for Approval';return;}
 
+        if(chosen===123){
+          var studentRows=Array.from(root.querySelectorAll('tbody tr[data-student-id]'));
+          var collectCa=function(field,maximum){return studentRows.map(function(row){var input=row.querySelector('[data-field="'+field+'"]');if(!input)throw new Error(field.toUpperCase()+' is unavailable.');var raw=String(input.value||'').trim();if(raw==='')throw new Error('Complete '+field.toUpperCase()+' for every student. Use 0 for zero or - for confirmed non-participation.');if(raw==='-')return {student_id:row.getAttribute('data-student-id'),score:'-'};var score=Number(raw);if(!Number.isFinite(score)||score<0||score>maximum)throw new Error('Invalid '+field.toUpperCase()+' score for '+row.cells[1].textContent+'.');return {student_id:row.getAttribute('data-student-id'),score:String(score)};});};
+          var bundle=await supabaseClient.rpc('submit_result_assessment_ca_bundle',{p_class_id:classId,p_subject_id:subjectId,p_academic_session_id:sessionId,p_term_id:selectedTerm.id,p_ca1_entries:collectCa('ca1',maxima.ca1),p_ca2_entries:collectCa('ca2',maxima.ca2),p_ca3_entries:collectCa('ca3',maxima.ca3)});
+          if(bundle.error)throw bundle.error;var bundleData=Array.isArray(bundle.data)?bundle.data[0]:bundle.data;if(!bundleData||bundleData.success!==true)throw new Error('Supabase did not confirm the combined CA submission.');
+          showToast('CA1, CA2 and CA3 submitted together to the Form Master.','success');await renderSubjectTeacherInput();return;
+        }
         var selectedStage=stageOptions.find(function(item){return item.stage===chosen;});
         var scoreRows=Array.from(root.querySelectorAll('tbody tr[data-student-id]'));
         if(!scoreRows.length) throw new Error('There are no enrolled students to submit.');
