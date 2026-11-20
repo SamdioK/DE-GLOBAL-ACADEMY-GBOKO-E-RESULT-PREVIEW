@@ -85,6 +85,17 @@ export default {
       const visibleRows = (rows || []).filter((row: {status:string}) => stageNumber !== 4 || row.status === "published");
       if (!visibleRows.length) return Response.json({ success: false, error: "No approved result records are available for this session and term yet." }, { status: 404 });
 
+
+
+      const classIds = [...new Set(visibleRows.map((x: {class_id:string}) => x.class_id))];
+      const subjectIds = [...new Set(visibleRows.map((x: {subject_id:string}) => x.subject_id))];
+      const [classesResult, subjectsResult] = await Promise.all([
+        classIds.length ? ctx.supabaseAdmin.from("classes").select("id,class_name").in("id", classIds) : Promise.resolve({data:[],error:null}),
+        subjectIds.length ? ctx.supabaseAdmin.from("subjects").select("id,name").in("id", subjectIds) : Promise.resolve({data:[],error:null})
+      ]);
+      if (classesResult.error) throw classesResult.error;
+      if (subjectsResult.error) throw subjectsResult.error;
+
       const { data: debit, error: debitError } = await ctx.supabaseAdmin.rpc("consume_student_result_token", {
         p_school_id: profile.school_id, p_student_id: student.id,
         p_academic_session_id: sessionId, p_term_id: termId, p_request_key: requestKey
@@ -97,18 +108,8 @@ export default {
           token_price_kobo: 65199, token_uses: 5,
           academic_session_id: sessionId, term_id: termId,
           error: "No result checks remain for this academic session and term. Purchase its five-use token to continue."
-        }, { status: 402 });
-      }
-
-      const classIds = [...new Set(visibleRows.map((x: {class_id:string}) => x.class_id))];
-      const subjectIds = [...new Set(visibleRows.map((x: {subject_id:string}) => x.subject_id))];
-      const [classesResult, subjectsResult] = await Promise.all([
-        classIds.length ? ctx.supabaseAdmin.from("classes").select("id,class_name").in("id", classIds) : Promise.resolve({data:[],error:null}),
-        subjectIds.length ? ctx.supabaseAdmin.from("subjects").select("id,name").in("id", subjectIds) : Promise.resolve({data:[],error:null})
-      ]);
-      if (classesResult.error) throw classesResult.error;
-      if (subjectsResult.error) throw subjectsResult.error;
-      const classMap = new Map((classesResult.data || []).map((x: {id:string;class_name:string}) => [x.id,x.class_name]));
+        }, { status: 200 });
+      }      const classMap = new Map((classesResult.data || []).map((x: {id:string;class_name:string}) => [x.id,x.class_name]));
       const subjectMap = new Map((subjectsResult.data || []).map((x: {id:string;name:string}) => [x.id,x.name]));
       const term = termMap.get(termId);
       const group = {
