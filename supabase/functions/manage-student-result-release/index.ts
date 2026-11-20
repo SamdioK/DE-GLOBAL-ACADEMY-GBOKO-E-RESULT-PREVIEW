@@ -125,11 +125,12 @@ export default {
             .eq("academic_session_id", sessionId).eq("term_id", termId);
           if (workflowError) throw workflowError;
           if ((workflowCount || 0) > 0) {
-            const { count: requiredSubjects, error: assignmentError } = await ctx.supabaseAdmin.from("teacher_assignments")
-              .select("subject_id", { count: "exact", head: true })
+            const { data: assignedRows, error: assignmentError } = await ctx.supabaseAdmin.from("teacher_assignments")
+              .select("subject_id")
               .eq("school_id", actor.school_id).eq("class_id", enrolment.class_id)
               .eq("academic_session_id", sessionId).eq("term_id", termId).eq("is_active", true);
             if (assignmentError) throw assignmentError;
+            const requiredSubjects = new Set((assignedRows || []).map((row: { subject_id: string }) => row.subject_id)).size;
             const { count: approvedSubjects, error: approvedError } = await ctx.supabaseAdmin.from("result_assessment_submissions")
               .select("id", { count: "exact", head: true })
               .eq("school_id", actor.school_id).eq("class_id", enrolment.class_id)
