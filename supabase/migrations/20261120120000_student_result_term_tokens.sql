@@ -83,7 +83,7 @@ grant all on public.student_result_token_events to service_role;
 create or replace function public.credit_student_result_token_purchase(p_reference text)
 returns table (remaining_uses integer, credited boolean)
 language plpgsql
-security definer
+security invoker
 set search_path = public, pg_temp
 as $$
 declare
