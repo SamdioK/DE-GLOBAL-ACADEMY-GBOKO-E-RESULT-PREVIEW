@@ -14633,7 +14633,7 @@ async function renderSubjectTeacherInput() {
         var field=stage===1?'ca1':stage===2?'ca2':stage===3?'ca3':'examination';
         for(var i=0;i<studentRows.length;i++){
           var row=studentRows[i],sid=row.getAttribute('data-student-id'),existing=resultsByStudent[String(sid)];
-          if(!existing||String(existing.status||'').toLowerCase()!=='draft'||existing[field]===null||existing[field]===undefined){
+          if(!existing||['draft','approved'].indexOf(String(existing.status||'').toLowerCase())===-1||existing[field]===null||existing[field]===undefined){
             throw new Error('A saved '+stageNames[stage]+' score is missing for '+(row.cells[1]?row.cells[1].textContent:'one student')+'. Save the complete '+stageNames[stage]+' class-arm draft before submitting.');
           }
         }
