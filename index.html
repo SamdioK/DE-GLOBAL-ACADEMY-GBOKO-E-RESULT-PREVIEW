@@ -13086,10 +13086,7 @@ async function loadAdminCa1ResultsView() {
       .order('created_at', { ascending: false });
     if (resultsQuery.error) throw resultsQuery.error;
     var rows = resultsQuery.data || [];
-    if (!rows.length) {
-      panel.innerHTML = '<p style="color:#64748b">No saved CA1 scores were found in this school yet. Students will appear here automatically as soon as a teacher saves a CA1 score.</p>';
-      return;
-    }
+    if (!rows.length) rows = [];
     var ids = function(key) { return Array.from(new Set(rows.map(function(row) { return row[key]; }).filter(Boolean))); };
     var studentIds = ids('student_id'), classIds = ids('class_id'), subjectIds = ids('subject_id'),
         sessionIds = ids('academic_session_id'), termIds = ids('term_id');
