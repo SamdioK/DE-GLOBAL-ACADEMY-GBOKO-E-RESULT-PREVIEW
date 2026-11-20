@@ -13178,6 +13178,13 @@ async function loadFormMasterSubjectResultsView() {
       .in('subject_id', subjectIds);
     if (result.error) throw result.error;
     var scoreRows = result.data || [];
+    var assessmentQueue = await supabaseClient.rpc('list_result_assessment_submissions',{
+      p_class_id:classId,p_academic_session_id:activeAcademicSession.id,p_term_id:selectedTermId,p_stage:null
+    });
+    if(assessmentQueue.error) throw assessmentQueue.error;
+    var caQueueRows=(Array.isArray(assessmentQueue.data)?assessmentQueue.data:[]).filter(function(item){
+      return [1,2,3].indexOf(Number(item.assessment_stage))>=0;
+    });
     var termSubjects = {};
     (registrationItems.data || []).forEach(function(item) {
       var registration = registrationRows.find(function(r) { return String(r.id) === String(item.registration_id); });
@@ -13227,11 +13234,40 @@ async function loadFormMasterSubjectResultsView() {
         html += '<td>'+esc(row && row.ca1 != null ? row.ca1 : '—')+'</td><td>'+esc(row && row.ca2 != null ? row.ca2 : '—')+'</td><td>'+esc(row && row.ca3 != null ? row.ca3 : '—')+'</td><td>'+esc(row && row.examination != null ? row.examination : '—')+'</td><td><strong>'+esc(row && row.total != null ? row.total : '—')+'</strong></td><td>'+esc(row && row.grade || '—')+'</td><td><span style="display:inline-block;padding:4px 8px;border-radius:20px;font-size:11px;font-weight:700;'+badgeStyle+'">'+esc(status === 'pending' ? 'NOT ENTERED' : status.toUpperCase())+'</span></td><td>'+esc(row && row.updated_at ? new Date(row.updated_at).toLocaleString() : '—')+'</td></tr>';
       });
       html += '</tbody></table></div>';
+      var pendingCa=caQueueRows.filter(function(item){return item.status==='submitted_to_form_master' && String(item.subject_id)===String(selectedSubjectId);});
+      html += '<div style="margin-top:18px;padding:14px;border:1px solid #dbe4f0;border-radius:12px;background:#f8fafc"><div style="display:flex;justify-content:space-between;gap:10px;align-items:center;flex-wrap:wrap"><div><h4 style="margin:0;color:#293968">CA Approval Queue</h4><p style="margin:4px 0;color:#64748b;font-size:12px">Select one CA to forward individually, or select all submitted CAs and forward them together.</p></div><button type="button" class="btn btn-primary" id="fmForwardSelectedCa" ${pendingCa.length?'':'disabled'}>Forward selected CA submissions</button></div>';
+      if(pendingCa.length){
+        html += '<div style="overflow-x:auto;margin-top:10px"><table style="min-width:560px;width:100%"><thead><tr><th>Select</th><th>Component</th><th>Submitted</th><th>Status</th></tr></thead><tbody>';
+        pendingCa.forEach(function(item){
+          html += '<tr><td><input type="checkbox" class="fm-ca-queue-check" value="'+esc(item.id)+'" aria-label="Select CA'+Number(item.assessment_stage)+'"></td><td><strong>CA'+Number(item.assessment_stage)+'</strong></td><td>'+esc(item.submitted_at?new Date(item.submitted_at).toLocaleString():'—')+'</td><td>Awaiting Form Master</td></tr>';
+        });
+        html += '</tbody></table></div>';
+      } else {
+        html += '<p style="margin:12px 0 0;color:#64748b;font-size:13px">No CA components are currently awaiting your review for this subject.</p>';
+      }
+      html += '</div>';
       if (!students.length) html += '<p class="alert alert-info">There are no active students enrolled in this class for the current session.</p>';
     }
     panel.innerHTML = html;
     panel.setAttribute('data-selected-term', selectedTermId);
     panel.setAttribute('data-selected-subject', selectedSubjectId);
+    var forwardButton=panel.querySelector('#fmForwardSelectedCa');
+    if(forwardButton) forwardButton.addEventListener('click',async function(){
+      var ids=Array.from(panel.querySelectorAll('.fm-ca-queue-check:checked')).map(function(input){return input.value;});
+      if(!ids.length){showToast('Select at least one submitted CA component.','error');return;}
+      forwardButton.disabled=true;forwardButton.textContent='Forwarding…';
+      try{
+        var reviewed=await supabaseClient.rpc('review_result_assessment_submissions',{p_submission_ids:ids,p_decision:'approve',p_comment:null});
+        if(reviewed.error)throw reviewed.error;
+        var data=Array.isArray(reviewed.data)?reviewed.data[0]:reviewed.data;
+        if(!data||data.success!==true||Number(data.reviewed_count)!==ids.length)throw new Error('Supabase did not confirm every selected CA review.');
+        showToast(ids.length+' CA submission(s) forwarded to the Administrator.','success');
+        await loadFormMasterSubjectResultsView();
+      }catch(error){
+        showToast('CA review failed: '+(error.message||'Unknown error'),'error');
+        forwardButton.disabled=false;forwardButton.textContent='Forward selected CA submissions';
+      }
+    });
     var refresh = panel.querySelector('#refreshFormMasterSubjectResults');
     if (refresh) refresh.addEventListener('click', loadFormMasterSubjectResultsView);
     var termSelect = panel.querySelector('#fmViewTerm');
