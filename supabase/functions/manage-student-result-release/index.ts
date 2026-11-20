@@ -114,6 +114,10 @@ export default {
           .eq("academic_session_id", sessionId).eq("term_id", termId).maybeSingle();
         if (existingError) throw existingError;
         const oldStage = existing?.release_stage || 0;
+        // Examination is the terminal release. Once stage 4 is published,
+        // neither a reset nor any later edit/re-release is permitted.
+        if (oldStage === 4 && nextStage !== 4)
+          return Response.json({ error: "The Examination and final result have already been released. This release is locked and cannot be reset or edited." }, { status: 409 });
         if (nextStage !== 0 && nextStage !== oldStage + 1)
           return Response.json({ error: "Stages must be released in order, one at a time. You may also revoke all stages to 0." }, { status: 409 });
         if (nextStage > 0) {
