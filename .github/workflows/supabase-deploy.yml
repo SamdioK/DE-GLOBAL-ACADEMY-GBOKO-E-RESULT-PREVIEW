@@ -140,10 +140,10 @@ jobs:
         run: supabase link --project-ref "$SUPABASE_PROJECT_REF"
 
       - name: Preview pending migrations
-        run: supabase db push --dry-run --linked
+        run: supabase db push --dry-run --remote --yes
 
       - name: Apply pending migrations
-        run: supabase db push --linked
+        run: supabase db push --remote --yes
 
   edge-functions:
     if: ${{ inputs.deploy_edge_functions == 'yes' }}
@@ -180,5 +180,5 @@ jobs:
           for function_dir in "${functions[@]}"; do
             function_name="$(basename "$function_dir")"
             echo "Deploying $function_name"
-            supabase functions deploy "$function_name" --project-ref "$SUPABASE_PROJECT_REF" --use-api
+            supabase functions deploy "$function_name" --project-ref "$SUPABASE_PROJECT_REF" --use-api --yes
           done
