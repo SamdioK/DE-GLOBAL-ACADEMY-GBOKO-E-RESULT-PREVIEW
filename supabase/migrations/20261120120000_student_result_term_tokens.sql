@@ -118,10 +118,10 @@ begin
      v_purchase.token_uses, v_purchase.token_uses)
   on conflict (school_id, student_id, academic_session_id, term_id)
   do update set
-    purchased_uses = public.student_result_token_balances.purchased_uses + excluded.purchased_uses,
-    remaining_uses = public.student_result_token_balances.remaining_uses + excluded.remaining_uses,
+    purchased_uses = student_result_token_balances.purchased_uses + excluded.purchased_uses,
+    remaining_uses = student_result_token_balances.remaining_uses + excluded.remaining_uses,
     updated_at = now()
-  returning public.student_result_token_balances.remaining_uses into v_remaining;
+  returning remaining_uses into v_remaining;
 
   insert into public.student_result_token_events
     (school_id, student_id, academic_session_id, term_id, event_type, uses_delta, balance_after, payment_reference)
