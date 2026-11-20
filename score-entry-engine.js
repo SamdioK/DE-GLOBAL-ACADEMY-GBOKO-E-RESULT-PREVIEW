@@ -3,7 +3,7 @@
 
   function canAdvance(value, max) {
     var text = String(value);
-    return text === '0' || text.length >= String(max).length || Number(text) * 10 > max;
+    return text !== '-' && (text === '0' || text.length >= String(max).length || Number(text) * 10 > max);
   }
 
   function nextPos(row, column, rowCount, lastColumn, direction) {
@@ -20,9 +20,12 @@
     return column > 0 ? [row, column - 1] : row > 0 ? [row - 1, lastColumn] : null;
   }
 
+  // A single hyphen is a deliberate non-participation marker.
+  // Empty string remains a genuinely missing entry; zero remains a numeric score.
   function normalize(value) {
-    var text = String(value).replace(/\D/g, '').replace(/^0+(?=\d)/, '');
-    return text;
+    var raw = String(value == null ? '' : value).trim();
+    if (raw === '-') return '-';
+    return raw.replace(/\D/g, '').replace(/^0+(?=\d)/, '');
   }
 
   function create(options) {
@@ -35,13 +38,16 @@
         return prevPos(row, column, options.rowCount, options.lastColumn, options.direction());
       },
       append: function(current, digit, max) {
+        if (String(current || '') === '-') return { accepted: false, value: '-' };
         var candidate = normalize(String(current || '') + String(digit));
-        if (candidate !== '' && Number(candidate) > max) {
+        if (candidate !== '' && candidate !== '-' && Number(candidate) > max) {
           return { accepted: false, value: normalize(current || '') };
         }
         return { accepted: true, value: candidate };
       },
-      normalize: normalize
+      normalize: normalize,
+      isNonParticipation: function(value) { return String(value == null ? '' : value).trim() === '-'; },
+      isMissing: function(value) { return String(value == null ? '' : value).trim() === ''; }
     };
   }
 

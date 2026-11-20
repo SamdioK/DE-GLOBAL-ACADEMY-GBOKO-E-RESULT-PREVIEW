@@ -4814,19 +4814,19 @@ async function renderStudentResults() {
     return response.data;
   }
 
-  function renderResultGroup(student, group) {
+  function renderResultGroup(student, group, fullReport) {
     var stage = Math.max(0, Math.min(4, Number(group.release_stage || 0)));
     var labels = ['Not released','1st CA','2nd CA','3rd CA','Final'];
     var headers = '<th>Subject</th><th>1st CA</th>' +
       (stage >= 2 ? '<th>2nd CA</th>' : '') +
       (stage >= 3 ? '<th>3rd CA</th>' : '') +
-      (stage >= 4 ? '<th>Examination</th><th>Total</th><th>Grade</th><th>Remark</th>' : '');
+      (stage >= 4 ? '<th>Examination</th>' + (fullReport ? '<th>Total</th><th>Grade</th><th>Remark</th>' : '') : '');
     var rows = (group.subjects || []).map(function(item) {
       return '<tr><td>' + escapeManagementText(item.subject || '') + '</td>' +
         '<td>' + escapeManagementText(item.ca1 == null ? '-' : item.ca1) + '</td>' +
         (stage >= 2 ? '<td>' + escapeManagementText(item.ca2 == null ? '-' : item.ca2) + '</td>' : '') +
         (stage >= 3 ? '<td>' + escapeManagementText(item.ca3 == null ? '-' : item.ca3) + '</td>' : '') +
-        (stage >= 4 ? '<td>' + escapeManagementText(item.examination == null ? '-' : item.examination) + '</td><td>' + escapeManagementText(item.total == null ? '-' : item.total) + '</td><td>' + escapeManagementText(item.grade || '') + '</td><td>' + escapeManagementText(item.remark || '') + '</td>' : '') +
+        (stage >= 4 ? '<td>' + escapeManagementText(item.examination == null ? '-' : item.examination) + '</td>' + (fullReport ? '<td>' + escapeManagementText(item.total == null ? '-' : item.total) + '</td><td>' + escapeManagementText(item.grade || '') + '</td><td>' + escapeManagementText(item.remark || '') + '</td>' : '') : '') +
         '</tr>';
     }).join('');
     return '<div class="card"><h2>' + escapeManagementText(schoolInfo.name || currentSchool && currentSchool.schoolName || 'School') + ' — Student Result</h2>' +
@@ -4846,17 +4846,17 @@ async function renderStudentResults() {
     if (balance) balance.textContent = match ? (Number(match.remaining_uses || 0) + ' of 5 checks available · No expiry') : '';
   }
 
-  async function checkResult(sessionId, termId) {
+  async function checkResult(sessionId, termId, fullReport) {
     var output = document.getElementById('studentResultOutput');
-    var button = document.getElementById('studentCheckResultButton');
+    var button = document.getElementById(fullReport ? 'studentFullReportButton' : 'studentViewMarksButton');
     if (!sessionId || !termId) { showToast('Select an academic session and term first.', 'error'); return; }
-    if (button) { button.disabled = true; button.textContent = 'Checking securely…'; }
+    if (button) { button.disabled = true; button.textContent = fullReport ? 'Unlocking report…' : 'Loading released marks…'; }
     if (output) output.innerHTML = '<div class="alert alert-info">Checking the term-specific token and retrieving your result…</div>';
     try {
-      var requestKey = (window.crypto && window.crypto.randomUUID) ? window.crypto.randomUUID() : '';
-      if (!requestKey) throw new Error('This browser cannot create a secure result-check request. Update your browser and try again.');
+      var requestKey = fullReport && window.crypto && window.crypto.randomUUID ? window.crypto.randomUUID() : '';
+      if (fullReport && !requestKey) throw new Error('This browser cannot create a secure report request. Update your browser and try again.');
       var response = await supabaseClient.functions.invoke('student-results-portal', {
-        body: { mode: 'check', academic_session_id: sessionId, term_id: termId, request_key: requestKey }
+        body: { mode: fullReport ? 'full_report' : 'view', academic_session_id: sessionId, term_id: termId, request_key: requestKey || undefined }
       });
       if (response.error) throw response.error;
       var data = response.data || {};
@@ -4894,12 +4894,12 @@ async function renderStudentResults() {
         return x;
       });
       await refreshBalance(sessionId, termId);
-      if (output) output.innerHTML = data.results.map(function(group) { return renderResultGroup(data.student || {}, group); }).join('');
+      if (output) output.innerHTML = data.results.map(function(group) { return renderResultGroup(data.student || {}, group, Boolean(fullReport)); }).join('');
     } catch (error) {
       if (output) output.innerHTML = '<div class="alert alert-danger">' + escapeManagementText(error && error.message || 'The result could not be retrieved.') + '</div>';
       showToast(error && error.message || 'Result checking failed.', 'error');
     } finally {
-      if (button) { button.disabled = false; button.textContent = 'CHECK RESULT'; }
+      if (button) { button.disabled = false; button.textContent = fullReport ? 'VIEW FULL REPORT' : 'VIEW RELEASED MARKS'; }
     }
   }
 
@@ -4949,12 +4949,14 @@ async function renderStudentResults() {
       '<div style="display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:10px;margin:12px 0;padding:12px;border:1px solid #d6e5dc;border-radius:10px;background:#f5fbf7;">' +
       '<div><strong>Term token balance</strong><div id="studentResultTokenBalance" style="font-size:13px;color:#087443;margin-top:3px;"></div></div>' +
       '<div style="font-weight:800;color:#075b43;">₦651.99 · 5 checks</div></div>' +
-      '<button type="button" class="btn btn-primary" id="studentCheckResultButton" style="width:100%;">CHECK RESULT</button>' +
+      '<div class="grid grid-2" style="gap:10px;"><button type="button" class="btn btn-secondary" id="studentViewMarksButton" style="width:100%;">VIEW RELEASED MARKS</button>' +
+      '<button type="button" class="btn btn-primary" id="studentFullReportButton" style="width:100%;">VIEW FULL REPORT · 1 CHECK</button></div>' +
       '<div id="studentResultOutput" style="margin-top:16px;"></div></div>';
 
     var sessionSelect = document.getElementById('studentResultSessionSelect');
     var termSelect = document.getElementById('studentResultTermSelect');
-    var checkButton = document.getElementById('studentCheckResultButton');
+    var viewButton = document.getElementById('studentViewMarksButton');
+    var fullReportButton = document.getElementById('studentFullReportButton');
     function populateTerms(preferredTerm) {
       var sid = sessionSelect.value;
       var choices = available.filter(function(x) { return x.academic_session_id === sid; });
@@ -4967,11 +4969,12 @@ async function renderStudentResults() {
     populateTerms(selectedTerm);
     sessionSelect.addEventListener('change', function() { populateTerms(''); document.getElementById('studentResultOutput').innerHTML = ''; });
     termSelect.addEventListener('change', function() { refreshBalance(sessionSelect.value, termSelect.value); document.getElementById('studentResultOutput').innerHTML = ''; });
-    checkButton.addEventListener('click', function() { checkResult(sessionSelect.value, termSelect.value); });
+    viewButton.addEventListener('click', function() { checkResult(sessionSelect.value, termSelect.value, false); });
+    fullReportButton.addEventListener('click', function() { checkResult(sessionSelect.value, termSelect.value, true); });
 
     // A successful payment returns to the same session and term. Complete the
     // result check the student originally requested.
-    if (callbackVerified && callbackSession && callbackTerm) await checkResult(callbackSession, callbackTerm);
+    if (callbackVerified && callbackSession && callbackTerm) await checkResult(callbackSession, callbackTerm, true);
   } catch (error) {
     console.error('Secure student result load failed:', error);
     container.innerHTML = '<div class="card"><h2>Result unavailable</h2><p>' + escapeManagementText(error && error.message ? error.message : 'The result service could not be reached. Please try again later.') + '</p></div>';
@@ -14219,7 +14222,7 @@ async function renderSubjectTeacherInput() {
         '<td class="st-status">' + escapeManagementText(existing && existing.status || 'new') + '</td></tr>';
     });
     html += '</tbody></table></div><p>' + officialStudents.length + ' officially enrolled student(s).</p>' +
-      '<div style="display:flex;gap:8px;flex-wrap:wrap"><button type="button" class="btn btn-success" id="saveAllScoresBtn">Save scores as draft</button><button type="button" class="btn btn-primary" id="submitScoresForApprovalBtn">Submit All Saved Scores for Approval</button></div></div><div id="stScoreValidation" role="alert" aria-live="assertive" style="display:none;margin-top:10px;padding:10px 12px;border:1px solid #dc2626;border-radius:8px;background:#fef2f2;color:#b91c1c;font-weight:700;font-size:13px"></div><div id="stKeypad" class="st-keypad" aria-label="Score keypad"><div class="st-keypad-inner"><div class="st-keypad-head"><strong id="stKeypadStudent">Score entry</strong><span id="stActiveScoreLabel">Select a score cell</span></div><div class="st-keypad-display" id="stKeypadDisplay" aria-live="polite">—</div><div class="st-keypad-grid" id="stNumericKeys">' + ['1','2','3','4','5','6','7','8','9','0','.','⌫','Clear','Next'].map(function(key) { return '<button type="button" class="st-key" data-key="' + key + '">' + key + '</button>'; }).join('') + '</div><div id="stTouchTilePanel" hidden><div class="st-touch-tiles" id="stTouchTiles"></div><div class="st-touch-adjust">' + [-5,-1,1,5].map(function(amount){return '<button type="button" class="st-key st-adjust" data-adjust="' + amount + '">' + (amount>0?'+':'') + amount + '</button>';}).join('') + '</div><div class="st-touch-actions"><button type="button" class="st-key" data-key="Back">Back</button><button type="button" class="st-key" data-key="Skip">Skip</button><button type="button" class="st-key st-touch-confirm" data-key="Save and next">Save and next</button></div></div><div id="stKeypadMessage" class="st-keypad-message" aria-live="polite">Choose a score to continue</div></div></div><style>.st-entry-controls label{display:block;font-size:12px;font-weight:700;margin-bottom:5px}.st-entry-controls select{min-width:145px;padding:8px;border:1px solid #ccd5e5;border-radius:8px;background:#fff}.st-score{width:64px;min-width:58px;max-width:68px;padding:7px 3px;text-align:center;font-weight:700;border:1px solid #d5deeb;border-radius:7px}.st-score:focus{outline:2px solid #536bd8;border-color:#536bd8;background:#f2f5ff}.st-score-invalid{border:2px solid #dc2626!important;background:#fff1f2!important}.st-keypad{position:fixed;left:0;right:0;bottom:0;z-index:10500;padding:10px 14px calc(12px + env(safe-area-inset-bottom));border-top:2px solid #536bd8;background:#fff;box-shadow:0 -5px 24px rgba(0,0,0,.22);max-height:48vh;overflow-y:auto;color:#202124}.st-keypad-inner{max-width:620px;margin:0 auto}.st-keypad-head{display:flex;justify-content:space-between;gap:8px;align-items:center;margin-bottom:5px;font-size:12px}.st-keypad-display{min-height:38px;text-align:center;font-size:30px;font-weight:900;line-height:1.2;margin:3px 0 8px;color:#263f91}.st-keypad-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:7px}.st-key{min-height:42px;border:1px solid #cbd5ea;border-radius:8px;background:#fff;color:#26386f;font-weight:800;font-size:16px;touch-action:manipulation}.st-touch-tiles{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:7px}.st-touch-tiles .st-key{min-height:48px;font-size:18px}.st-touch-tiles .selected{background:#263f91;color:#fff;border-color:#263f91}.st-touch-adjust,.st-touch-actions{display:flex;gap:7px;margin-top:7px}.st-touch-adjust .st-key,.st-touch-actions .st-key{flex:1;min-height:44px}.st-touch-confirm{background:#263f91;color:#fff}.st-keypad-message{min-height:18px;text-align:center;font-size:11px;font-weight:700;margin-top:6px;color:#536184}.st-key:active{background:#e6ebff}.st-key[data-key="Next"]{background:#263f91;color:#fff}.st-key[data-key="Clear"]{font-size:12px}.st-keypad[data-style="smart"]{background:#eef3ff;border-color:#aab9ed}.st-keypad[data-style="touch"] .st-key{min-height:58px;font-size:20px;border-radius:12px}.st-keypad[data-style="touch"]{padding:16px}#inputTab[data-score-keyboard-style="touch"] .st-score{width:82px;min-width:78px;min-height:54px;font-size:18px;border-radius:11px}#inputTab[data-score-keyboard-style="touch"] .st-keypad{padding:16px}.st-score[readonly]{background:#f4f7ff;cursor:pointer}.st-keypad[hidden]{display:none!important}@media(max-width:600px){.st-score{width:54px;min-width:50px}.st-keypad{padding:9px}.st-key{min-height:46px}}/* Final approved landing-page image composition — use committed image assets */#loginContainer{  background:#321064 url("assets/landing/school-background.webp") center center / cover no-repeat;  min-height:100vh;min-height:100svh;}#loginContainer:before{  content:"";position:absolute;z-index:-2;inset:0;height:100%;  background-image:linear-gradient(90deg,rgba(50,5,91,.76) 0%,rgba(50,5,91,.42) 36%,rgba(30,10,62,.08) 76%),url("assets/landing/school-background.webp");  background-size:cover;background-position:center;background-repeat:no-repeat;opacity:1;}#loginContainer:after{  opacity:.88;  background:linear-gradient(160deg,transparent 72%,rgba(255,193,7,.92) 72.2%,rgba(255,193,7,.92) 73%,transparent 73.2%),linear-gradient(165deg,transparent 75%,rgba(0,112,57,.84) 75.2%,rgba(0,112,57,.84) 78%,transparent 78.2%);}#loginContainer .landing-campus-scene{  position:absolute;z-index:-1;inset:0 0 auto;height:min(74vh,900px);min-height:540px;  overflow:hidden;pointer-events:none;  background-image:linear-gradient(90deg,rgba(48,5,91,.70) 0%,rgba(48,5,91,.28) 39%,rgba(22,14,45,.02) 78%),linear-gradient(0deg,rgba(38,5,72,.30),transparent 32%),url("assets/landing/school-building.webp");  background-size:cover;background-position:center 48%;background-repeat:no-repeat;  -webkit-mask-image:linear-gradient(to bottom,#000 0%,#000 76%,transparent 100%);  mask-image:linear-gradient(to bottom,#000 0%,#000 76%,transparent 100%);}#loginContainer .landing-graduation{display:flex;align-items:center;justify-content:center;width:100%;min-height:0;height:auto;margin:18px auto 5px}#loginContainer .landing-graduation-art{display:block;width:min(100%,640px);height:auto;max-height:280px;object-fit:contain;filter:drop-shadow(0 8px 12px rgba(0,0,0,.24))}@media(max-width:1050px){  #loginContainer .landing-campus-scene{height:52vh;min-height:360px;background-position:center 44%;-webkit-mask-image:linear-gradient(to bottom,#000 0%,#000 72%,transparent 100%);mask-image:linear-gradient(to bottom,#000 0%,#000 72%,transparent 100%)}  #loginContainer .landing-graduation{margin:12px auto 5px!important}  #loginContainer .landing-graduation-art{width:min(100%,540px);max-height:245px}}@media(max-width:600px){  #loginContainer{background-position:center top}  #loginContainer .landing-campus-scene{height:390px;min-height:0;background-position:58% center;-webkit-mask-image:linear-gradient(to bottom,#000 0%,#000 65%,transparent 100%);mask-image:linear-gradient(to bottom,#000 0%,#000 65%,transparent 100%)}  #loginContainer .landing-graduation-art{width:100%;max-height:210px}}</style></div>';
+      '<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:end"><button type="button" class="btn btn-success" id="saveAllScoresBtn">Save scores as draft</button><div><label for="stSubmissionStage" style="display:block;font-size:12px;font-weight:700;margin-bottom:5px">Assessment stage to submit</label><select id="stSubmissionStage" style="min-width:190px;padding:10px;border:1px solid #cbd5e1;border-radius:8px;background:#fff">' + activeAssessmentFields.map(function(item){var stage=item.key==='ca1'?1:item.key==='ca2'?2:item.key==='ca3'?3:4;return '<option value="' + stage + '">' + escapeManagementText(item.label) + (stage===4?' — submit last':'') + '</option>';}).join('') + '</select></div><button type="button" class="btn btn-primary" id="submitScoresForApprovalBtn">Submit Selected Stage for Approval</button></div><p class="small" style="margin-top:8px">Submit CA1, CA2 and CA3 in sequence. Examination is submitted separately, after CA3 receives final approval.</p></div><div id="stScoreValidation" role="alert" aria-live="assertive" style="display:none;margin-top:10px;padding:10px 12px;border:1px solid #dc2626;border-radius:8px;background:#fef2f2;color:#b91c1c;font-weight:700;font-size:13px"></div><div id="stKeypad" class="st-keypad" aria-label="Score keypad"><div class="st-keypad-inner"><div class="st-keypad-head"><strong id="stKeypadStudent">Score entry</strong><span id="stActiveScoreLabel">Select a score cell</span></div><div class="st-keypad-display" id="stKeypadDisplay" aria-live="polite">—</div><div class="st-keypad-grid" id="stNumericKeys">' + ['1','2','3','4','5','6','7','8','9','0','.','⌫','Clear','Next'].map(function(key) { return '<button type="button" class="st-key" data-key="' + key + '">' + key + '</button>'; }).join('') + '</div><div id="stTouchTilePanel" hidden><div class="st-touch-tiles" id="stTouchTiles"></div><div class="st-touch-adjust">' + [-5,-1,1,5].map(function(amount){return '<button type="button" class="st-key st-adjust" data-adjust="' + amount + '">' + (amount>0?'+':'') + amount + '</button>';}).join('') + '</div><div class="st-touch-actions"><button type="button" class="st-key" data-key="Back">Back</button><button type="button" class="st-key" data-key="Skip">Skip</button><button type="button" class="st-key st-touch-confirm" data-key="Save and next">Save and next</button></div></div><div id="stKeypadMessage" class="st-keypad-message" aria-live="polite">Choose a score to continue</div></div></div><style>.st-entry-controls label{display:block;font-size:12px;font-weight:700;margin-bottom:5px}.st-entry-controls select{min-width:145px;padding:8px;border:1px solid #ccd5e5;border-radius:8px;background:#fff}.st-score{width:64px;min-width:58px;max-width:68px;padding:7px 3px;text-align:center;font-weight:700;border:1px solid #d5deeb;border-radius:7px}.st-score:focus{outline:2px solid #536bd8;border-color:#536bd8;background:#f2f5ff}.st-score-invalid{border:2px solid #dc2626!important;background:#fff1f2!important}.st-keypad{position:fixed;left:0;right:0;bottom:0;z-index:10500;padding:10px 14px calc(12px + env(safe-area-inset-bottom));border-top:2px solid #536bd8;background:#fff;box-shadow:0 -5px 24px rgba(0,0,0,.22);max-height:48vh;overflow-y:auto;color:#202124}.st-keypad-inner{max-width:620px;margin:0 auto}.st-keypad-head{display:flex;justify-content:space-between;gap:8px;align-items:center;margin-bottom:5px;font-size:12px}.st-keypad-display{min-height:38px;text-align:center;font-size:30px;font-weight:900;line-height:1.2;margin:3px 0 8px;color:#263f91}.st-keypad-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:7px}.st-key{min-height:42px;border:1px solid #cbd5ea;border-radius:8px;background:#fff;color:#26386f;font-weight:800;font-size:16px;touch-action:manipulation}.st-touch-tiles{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:7px}.st-touch-tiles .st-key{min-height:48px;font-size:18px}.st-touch-tiles .selected{background:#263f91;color:#fff;border-color:#263f91}.st-touch-adjust,.st-touch-actions{display:flex;gap:7px;margin-top:7px}.st-touch-adjust .st-key,.st-touch-actions .st-key{flex:1;min-height:44px}.st-touch-confirm{background:#263f91;color:#fff}.st-keypad-message{min-height:18px;text-align:center;font-size:11px;font-weight:700;margin-top:6px;color:#536184}.st-key:active{background:#e6ebff}.st-key[data-key="Next"]{background:#263f91;color:#fff}.st-key[data-key="Clear"]{font-size:12px}.st-keypad[data-style="smart"]{background:#eef3ff;border-color:#aab9ed}.st-keypad[data-style="touch"] .st-key{min-height:58px;font-size:20px;border-radius:12px}.st-keypad[data-style="touch"]{padding:16px}#inputTab[data-score-keyboard-style="touch"] .st-score{width:82px;min-width:78px;min-height:54px;font-size:18px;border-radius:11px}#inputTab[data-score-keyboard-style="touch"] .st-keypad{padding:16px}.st-score[readonly]{background:#f4f7ff;cursor:pointer}.st-keypad[hidden]{display:none!important}@media(max-width:600px){.st-score{width:54px;min-width:50px}.st-keypad{padding:9px}.st-key{min-height:46px}}/* Final approved landing-page image composition — use committed image assets */#loginContainer{  background:#321064 url("assets/landing/school-background.webp") center center / cover no-repeat;  min-height:100vh;min-height:100svh;}#loginContainer:before{  content:"";position:absolute;z-index:-2;inset:0;height:100%;  background-image:linear-gradient(90deg,rgba(50,5,91,.76) 0%,rgba(50,5,91,.42) 36%,rgba(30,10,62,.08) 76%),url("assets/landing/school-background.webp");  background-size:cover;background-position:center;background-repeat:no-repeat;opacity:1;}#loginContainer:after{  opacity:.88;  background:linear-gradient(160deg,transparent 72%,rgba(255,193,7,.92) 72.2%,rgba(255,193,7,.92) 73%,transparent 73.2%),linear-gradient(165deg,transparent 75%,rgba(0,112,57,.84) 75.2%,rgba(0,112,57,.84) 78%,transparent 78.2%);}#loginContainer .landing-campus-scene{  position:absolute;z-index:-1;inset:0 0 auto;height:min(74vh,900px);min-height:540px;  overflow:hidden;pointer-events:none;  background-image:linear-gradient(90deg,rgba(48,5,91,.70) 0%,rgba(48,5,91,.28) 39%,rgba(22,14,45,.02) 78%),linear-gradient(0deg,rgba(38,5,72,.30),transparent 32%),url("assets/landing/school-building.webp");  background-size:cover;background-position:center 48%;background-repeat:no-repeat;  -webkit-mask-image:linear-gradient(to bottom,#000 0%,#000 76%,transparent 100%);  mask-image:linear-gradient(to bottom,#000 0%,#000 76%,transparent 100%);}#loginContainer .landing-graduation{display:flex;align-items:center;justify-content:center;width:100%;min-height:0;height:auto;margin:18px auto 5px}#loginContainer .landing-graduation-art{display:block;width:min(100%,640px);height:auto;max-height:280px;object-fit:contain;filter:drop-shadow(0 8px 12px rgba(0,0,0,.24))}@media(max-width:1050px){  #loginContainer .landing-campus-scene{height:52vh;min-height:360px;background-position:center 44%;-webkit-mask-image:linear-gradient(to bottom,#000 0%,#000 72%,transparent 100%);mask-image:linear-gradient(to bottom,#000 0%,#000 72%,transparent 100%)}  #loginContainer .landing-graduation{margin:12px auto 5px!important}  #loginContainer .landing-graduation-art{width:min(100%,540px);max-height:245px}}@media(max-width:600px){  #loginContainer{background-position:center top}  #loginContainer .landing-campus-scene{height:390px;min-height:0;background-position:58% center;-webkit-mask-image:linear-gradient(to bottom,#000 0%,#000 65%,transparent 100%);mask-image:linear-gradient(to bottom,#000 0%,#000 65%,transparent 100%)}  #loginContainer .landing-graduation-art{width:100%;max-height:210px}}</style></div>';
     root.innerHTML = html;
 
     var activeScoreInput = null;
@@ -14617,44 +14620,47 @@ async function renderSubjectTeacherInput() {
     var submitScoresButton=root.querySelector('#submitScoresForApprovalBtn');
     if(submitScoresButton)submitScoresButton.addEventListener('click',async function(){
       var button=this;
+      var stageSelect=root.querySelector('#stSubmissionStage');
+      var stage=Number(stageSelect && stageSelect.value);
+      var stageNames={1:'CA1',2:'CA2',3:'CA3',4:'Examination'};
       var studentRows=Array.from(root.querySelectorAll('tbody tr[data-student-id]'));
       if(!studentRows.length){showToast('There are no enrolled students to submit.','error');return;}
-      if(!window.confirm('Submit all saved scores for '+escapeManagementText(className)+' — '+escapeManagementText(subjectName)+' ('+studentRows.length+' students) to the School Administrator for approval?'))return;
-      button.disabled=true;button.textContent='Preparing submission…';
+      if(![1,2,3,4].includes(stage)){showToast('Select a valid assessment stage.','error');return;}
+      var promptText='Submit the saved '+stageNames[stage]+' scores for '+className+' — '+subjectName+' ('+studentRows.length+' students) to the assigned Form Master?';
+      if(stage===4)promptText='Examination is the final assessment submission and will be locked after submission. '+promptText;
+      if(!window.confirm(promptText))return;
+      button.disabled=true;button.textContent='Submitting '+stageNames[stage]+'…';
       try{
-        var assignment=await supabaseClient.from('teacher_assignments').select('id')
-          .eq('school_id',schoolId).eq('teacher_id',teacherId).eq('class_id',classId)
-          .eq('subject_id',subjectId).eq('academic_session_id',sessionId).eq('is_active',true).maybeSingle();
-        if(assignment.error)throw assignment.error;
-        if(!assignment.data)throw new Error('Your subject assignment is no longer active.');
+        var pendingSaves=Object.keys(draftSaveChains).map(function(id){return draftSaveChains[id];});
+        if(pendingSaves.length)await Promise.all(pendingSaves);
+        var field=stage===1?'ca1':stage===2?'ca2':stage===3?'ca3':'examination';
         for(var i=0;i<studentRows.length;i++){
-          var row=studentRows[i];
-          var sid=row.getAttribute('data-student-id');
-          var existing=resultsByStudent[String(sid)];
-          if(!existing||String(existing.status||'').toLowerCase()!=='draft'){
-            throw new Error('Every enrolled student must have a saved draft before submission. Missing or non-draft record: '+(row.cells[1]?row.cells[1].textContent:'Student '+sid)+'. Save the complete class first.');
-          }
-          if(['ca1','ca2','ca3','examination'].some(function(k){return existing[k]===null||existing[k]===undefined;})){
-            throw new Error('A score field is blank for '+(row.cells[1]?row.cells[1].textContent:'one student')+'. Complete or explicitly record the required assessment entries before submission.');
+          var row=studentRows[i],sid=row.getAttribute('data-student-id'),existing=resultsByStudent[String(sid)];
+          if(!existing||['draft','approved'].indexOf(String(existing.status||'').toLowerCase())===-1||existing[field]===null||existing[field]===undefined){
+            throw new Error('A saved '+stageNames[stage]+' score is missing for '+(row.cells[1]?row.cells[1].textContent:'one student')+'. Save the complete '+stageNames[stage]+' class-arm draft before submitting.');
           }
         }
-        var ids=studentRows.map(function(row){return resultsByStudent[String(row.getAttribute('data-student-id'))].id;});
-        button.textContent='Submitting…';
-        var changed=await supabaseClient.from('results').update({status:'submitted',updated_at:new Date().toISOString()})
-          .eq('school_id',schoolId).eq('class_id',classId).eq('subject_id',subjectId)
-          .eq('academic_session_id',sessionId).eq('term_id',selectedTerm.id).eq('status','draft').in('id',ids)
-          .select('id,status');
-        if(changed.error)throw changed.error;
-        if(!Array.isArray(changed.data)||changed.data.length!==ids.length)throw new Error('Supabase did not confirm submission of every class score. Reload and inspect the records before retrying.');
-        var check=await supabaseClient.from('results').select('id,status,submitted_at').eq('school_id',schoolId)
-          .eq('class_id',classId).eq('subject_id',subjectId).eq('academic_session_id',sessionId)
-          .eq('term_id',selectedTerm.id).in('id',ids);
-        if(check.error)throw check.error;
-        if(!Array.isArray(check.data)||check.data.length!==ids.length||check.data.some(function(x){return x.status!=='submitted'||!x.submitted_at;}))
-          throw new Error('Submission was written but Supabase read-back did not confirm every submitted status and timestamp.');
-        showToast(ids.length+' scores submitted to the Administrator for approval.','success');
+        var assignment=await supabaseClient.from('teacher_assignments').select('id')
+          .eq('school_id',schoolId).eq('teacher_id',teacherId).eq('class_id',classId)
+          .eq('subject_id',subjectId).eq('academic_session_id',sessionId).eq('term_id',selectedTerm.id)
+          .eq('is_active',true).maybeSingle();
+        if(assignment.error)throw assignment.error;
+        if(!assignment.data)throw new Error('Your subject assignment is no longer active.');
+        var response=await supabaseClient.functions.invoke('manage-result-assessment-submissions',{
+          body:{action:'submit',class_id:classId,subject_id:subjectId,
+            academic_session_id:sessionId,term_id:selectedTerm.id,assessment_stage:stage}
+        });
+        if(response.error)throw response.error;
+        if(!response.data||response.data.success!==true)throw new Error(response.data&&response.data.error||'Supabase did not confirm the assessment submission.');
+        var submitted=response.data.data||{};
+        if(submitted.success!==true||submitted.status!=='submitted_to_form_master')throw new Error(submitted.error||'The submission was not confirmed by the approval workflow.');
+        showToast(stageNames[stage]+' submitted to the assigned Form Master for review.','success');
         await renderSubjectTeacherInput();
-      }catch(error){showToast('Score submission failed: '+(error.message||'Unknown error'),'error');button.disabled=false;button.textContent='Submit All Saved Scores for Approval';}
+      }catch(error){
+        console.error('Assessment stage submission failed:',error);
+        showToast('Submission failed: '+(error.message||'Unknown error'),'error');
+        button.disabled=false;button.textContent='Submit Selected Stage for Approval';
+      }
     });
   } catch (error) {
     console.error('Subject teacher score sheet failed:', error);

@@ -101,7 +101,7 @@ export default {
         if (studentError) throw studentError;
         if (!student) return Response.json({ error: "Student not found in this school." }, { status: 404 });
         const { data: enrolment, error: enrolmentError } = await ctx.supabaseAdmin.from("student_enrolments")
-          .select("id").eq("school_id", actor.school_id).eq("student_id", studentId)
+          .select("id,class_id").eq("school_id", actor.school_id).eq("student_id", studentId)
           .eq("academic_session_id", sessionId).is("archived_at", null).maybeSingle();
         if (enrolmentError) throw enrolmentError;
         if (!enrolment) return Response.json({ error: "Student is not actively enrolled in this session." }, { status: 409 });
@@ -117,6 +117,30 @@ export default {
         if (nextStage !== 0 && nextStage !== oldStage + 1)
           return Response.json({ error: "Stages must be released in order, one at a time. You may also revoke all stages to 0." }, { status: 409 });
         if (nextStage > 0) {
+          // When the staged workflow is in use for this class/term, manual release
+          // cannot bypass final approval of every assigned subject.
+          const { count: workflowCount, error: workflowError } = await ctx.supabaseAdmin.from("result_assessment_submissions")
+            .select("id", { count: "exact", head: true })
+            .eq("school_id", actor.school_id).eq("class_id", enrolment.class_id)
+            .eq("academic_session_id", sessionId).eq("term_id", termId);
+          if (workflowError) throw workflowError;
+          if ((workflowCount || 0) > 0) {
+            const { data: assignedRows, error: assignmentError } = await ctx.supabaseAdmin.from("teacher_assignments")
+              .select("subject_id")
+              .eq("school_id", actor.school_id).eq("class_id", enrolment.class_id)
+              .eq("academic_session_id", sessionId).eq("term_id", termId).eq("is_active", true);
+            if (assignmentError) throw assignmentError;
+            const requiredSubjects = new Set((assignedRows || []).map((row: { subject_id: string }) => row.subject_id)).size;
+            const { count: approvedSubjects, error: approvedError } = await ctx.supabaseAdmin.from("result_assessment_submissions")
+              .select("id", { count: "exact", head: true })
+              .eq("school_id", actor.school_id).eq("class_id", enrolment.class_id)
+              .eq("academic_session_id", sessionId).eq("term_id", termId)
+              .eq("assessment_stage", nextStage).eq("status", "approved");
+            if (approvedError) throw approvedError;
+            if (!requiredSubjects || (approvedSubjects || 0) < requiredSubjects) {
+              return Response.json({ error: "This release stage is not ready. Every assigned subject in the class arm must receive final Administrator approval first." }, { status: 409 });
+            }
+          }
           const { count, error: resultError } = await ctx.supabaseAdmin.from("results").select("id", { count: "exact", head: true })
             .eq("school_id", actor.school_id).eq("student_id", studentId)
             .eq("academic_session_id", sessionId).eq("term_id", termId)
