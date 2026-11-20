@@ -4814,19 +4814,19 @@ async function renderStudentResults() {
     return response.data;
   }
 
-  function renderResultGroup(student, group) {
+  function renderResultGroup(student, group, fullReport) {
     var stage = Math.max(0, Math.min(4, Number(group.release_stage || 0)));
     var labels = ['Not released','1st CA','2nd CA','3rd CA','Final'];
     var headers = '<th>Subject</th><th>1st CA</th>' +
       (stage >= 2 ? '<th>2nd CA</th>' : '') +
       (stage >= 3 ? '<th>3rd CA</th>' : '') +
-      (stage >= 4 ? '<th>Examination</th><th>Total</th><th>Grade</th><th>Remark</th>' : '');
+      (stage >= 4 ? '<th>Examination</th>' + (fullReport ? '<th>Total</th><th>Grade</th><th>Remark</th>' : '') : '');
     var rows = (group.subjects || []).map(function(item) {
       return '<tr><td>' + escapeManagementText(item.subject || '') + '</td>' +
         '<td>' + escapeManagementText(item.ca1 == null ? '-' : item.ca1) + '</td>' +
         (stage >= 2 ? '<td>' + escapeManagementText(item.ca2 == null ? '-' : item.ca2) + '</td>' : '') +
         (stage >= 3 ? '<td>' + escapeManagementText(item.ca3 == null ? '-' : item.ca3) + '</td>' : '') +
-        (stage >= 4 ? '<td>' + escapeManagementText(item.examination == null ? '-' : item.examination) + '</td><td>' + escapeManagementText(item.total == null ? '-' : item.total) + '</td><td>' + escapeManagementText(item.grade || '') + '</td><td>' + escapeManagementText(item.remark || '') + '</td>' : '') +
+        (stage >= 4 ? '<td>' + escapeManagementText(item.examination == null ? '-' : item.examination) + '</td>' + (fullReport ? '<td>' + escapeManagementText(item.total == null ? '-' : item.total) + '</td><td>' + escapeManagementText(item.grade || '') + '</td><td>' + escapeManagementText(item.remark || '') + '</td>' : '') : '') +
         '</tr>';
     }).join('');
     return '<div class="card"><h2>' + escapeManagementText(schoolInfo.name || currentSchool && currentSchool.schoolName || 'School') + ' — Student Result</h2>' +
@@ -4846,17 +4846,17 @@ async function renderStudentResults() {
     if (balance) balance.textContent = match ? (Number(match.remaining_uses || 0) + ' of 5 checks available · No expiry') : '';
   }
 
-  async function checkResult(sessionId, termId) {
+  async function checkResult(sessionId, termId, fullReport) {
     var output = document.getElementById('studentResultOutput');
-    var button = document.getElementById('studentCheckResultButton');
+    var button = document.getElementById(fullReport ? 'studentFullReportButton' : 'studentViewMarksButton');
     if (!sessionId || !termId) { showToast('Select an academic session and term first.', 'error'); return; }
-    if (button) { button.disabled = true; button.textContent = 'Checking securely…'; }
+    if (button) { button.disabled = true; button.textContent = fullReport ? 'Unlocking report…' : 'Loading released marks…'; }
     if (output) output.innerHTML = '<div class="alert alert-info">Checking the term-specific token and retrieving your result…</div>';
     try {
-      var requestKey = (window.crypto && window.crypto.randomUUID) ? window.crypto.randomUUID() : '';
-      if (!requestKey) throw new Error('This browser cannot create a secure result-check request. Update your browser and try again.');
+      var requestKey = fullReport && window.crypto && window.crypto.randomUUID ? window.crypto.randomUUID() : '';
+      if (fullReport && !requestKey) throw new Error('This browser cannot create a secure report request. Update your browser and try again.');
       var response = await supabaseClient.functions.invoke('student-results-portal', {
-        body: { mode: 'check', academic_session_id: sessionId, term_id: termId, request_key: requestKey }
+        body: { mode: fullReport ? 'full_report' : 'view', academic_session_id: sessionId, term_id: termId, request_key: requestKey || undefined }
       });
       if (response.error) throw response.error;
       var data = response.data || {};
@@ -4894,12 +4894,12 @@ async function renderStudentResults() {
         return x;
       });
       await refreshBalance(sessionId, termId);
-      if (output) output.innerHTML = data.results.map(function(group) { return renderResultGroup(data.student || {}, group); }).join('');
+      if (output) output.innerHTML = data.results.map(function(group) { return renderResultGroup(data.student || {}, group, Boolean(fullReport)); }).join('');
     } catch (error) {
       if (output) output.innerHTML = '<div class="alert alert-danger">' + escapeManagementText(error && error.message || 'The result could not be retrieved.') + '</div>';
       showToast(error && error.message || 'Result checking failed.', 'error');
     } finally {
-      if (button) { button.disabled = false; button.textContent = 'CHECK RESULT'; }
+      if (button) { button.disabled = false; button.textContent = fullReport ? 'VIEW FULL REPORT' : 'VIEW RELEASED MARKS'; }
     }
   }
 
@@ -4949,12 +4949,14 @@ async function renderStudentResults() {
       '<div style="display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:10px;margin:12px 0;padding:12px;border:1px solid #d6e5dc;border-radius:10px;background:#f5fbf7;">' +
       '<div><strong>Term token balance</strong><div id="studentResultTokenBalance" style="font-size:13px;color:#087443;margin-top:3px;"></div></div>' +
       '<div style="font-weight:800;color:#075b43;">₦651.99 · 5 checks</div></div>' +
-      '<button type="button" class="btn btn-primary" id="studentCheckResultButton" style="width:100%;">CHECK RESULT</button>' +
+      '<div class="grid grid-2" style="gap:10px;"><button type="button" class="btn btn-secondary" id="studentViewMarksButton" style="width:100%;">VIEW RELEASED MARKS</button>' +
+      '<button type="button" class="btn btn-primary" id="studentFullReportButton" style="width:100%;">VIEW FULL REPORT · 1 CHECK</button></div>' +
       '<div id="studentResultOutput" style="margin-top:16px;"></div></div>';
 
     var sessionSelect = document.getElementById('studentResultSessionSelect');
     var termSelect = document.getElementById('studentResultTermSelect');
-    var checkButton = document.getElementById('studentCheckResultButton');
+    var viewButton = document.getElementById('studentViewMarksButton');
+    var fullReportButton = document.getElementById('studentFullReportButton');
     function populateTerms(preferredTerm) {
       var sid = sessionSelect.value;
       var choices = available.filter(function(x) { return x.academic_session_id === sid; });
@@ -4967,11 +4969,12 @@ async function renderStudentResults() {
     populateTerms(selectedTerm);
     sessionSelect.addEventListener('change', function() { populateTerms(''); document.getElementById('studentResultOutput').innerHTML = ''; });
     termSelect.addEventListener('change', function() { refreshBalance(sessionSelect.value, termSelect.value); document.getElementById('studentResultOutput').innerHTML = ''; });
-    checkButton.addEventListener('click', function() { checkResult(sessionSelect.value, termSelect.value); });
+    viewButton.addEventListener('click', function() { checkResult(sessionSelect.value, termSelect.value, false); });
+    fullReportButton.addEventListener('click', function() { checkResult(sessionSelect.value, termSelect.value, true); });
 
     // A successful payment returns to the same session and term. Complete the
     // result check the student originally requested.
-    if (callbackVerified && callbackSession && callbackTerm) await checkResult(callbackSession, callbackTerm);
+    if (callbackVerified && callbackSession && callbackTerm) await checkResult(callbackSession, callbackTerm, true);
   } catch (error) {
     console.error('Secure student result load failed:', error);
     container.innerHTML = '<div class="card"><h2>Result unavailable</h2><p>' + escapeManagementText(error && error.message ? error.message : 'The result service could not be reached. Please try again later.') + '</p></div>';
