@@ -2,3 +2,6 @@ project_id = "de-global-academy-gboko"
 
 [functions.student-admission-login]
 verify_jwt = false
+
+[functions.student-result-token-webhook]
+verify_jwt = false
