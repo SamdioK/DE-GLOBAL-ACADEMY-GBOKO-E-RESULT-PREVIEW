@@ -677,7 +677,7 @@ th { background: #f5f5f5; font-weight: 600; }
       </div>
     </div>
   </div>
-  <div id="userMenuPanel" class="hidden" style="position:absolute;z-index:1000;top:calc(100% - 6px);right:12px;width:min(290px,calc(100vw - 24px));max-height:min(72vh,560px);overflow-y:auto;background:#fff;color:#24345f;border:1px solid #dce3ef;border-radius:13px;box-shadow:0 14px 34px rgba(20,35,75,.24);padding:12px"><div style="padding:5px 8px 11px;border-bottom:1px solid #e8edf5;margin-bottom:7px"><strong id="menuUserName" style="display:block;font-size:15px"></strong><div id="menuUserRole" style="font-size:12px;color:#64748b;margin-top:4px"></div></div><ul id="userMenuTabs" style="list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:3px"></ul><div style="border-top:1px solid #e8edf5;margin-top:8px;padding-top:9px"><button type="button" id="menuLogoutBtn" class="btn btn-danger" style="width:100%;text-align:left;border-radius:8px;padding:10px 12px">Sign out</button></div></div>
+  <div id="userMenuPanel" class="hidden" style="position:absolute;z-index:1000;top:calc(100% - 6px);right:12px;width:min(390px,calc(100vw - 24px));max-height:min(78vh,650px);overflow-y:auto;background:#fff;color:#172b24;border:1px solid #d8e4dc;border-radius:4px;box-shadow:0 14px 34px rgba(0,0,0,.2);padding:14px 16px"><div style="padding:6px 4px 15px;border-bottom:1px solid #e5ebe7;margin-bottom:4px"><strong id="menuUserName" style="display:block;font-size:16px;color:#123c2b"></strong><div id="menuUserRole" style="font-size:13px;color:#63736a;margin-top:4px"></div></div><ul id="userMenuTabs" style="list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:0"></ul><div style="border-top:1px solid #e5ebe7;margin-top:10px;padding-top:12px"><button type="button" id="menuLogoutBtn" style="display:block;width:100%;text-align:left;border:0;border-radius:8px;padding:15px 14px;background:#c62828;color:#fff;font-size:16px;font-weight:800;letter-spacing:.2px;cursor:pointer">Log Out</button></div></div>
   <div class="tabs" id="portalTabs">
     <button
       type="button"
@@ -4179,7 +4179,34 @@ function showApp() {
   });
 }
 
-function setupUserHamburgerMenu(){var t=document.getElementById('userMenuToggle'),p=document.getElementById('userMenuPanel'),l=document.getElementById('userMenuTabs');if(!t||!p||!l||!currentUser)return;var names={admin:'Administrator',principal:'Principal',subadmin:'Sub-Administrator',formmaster:'Form Master',subjectteacher:'Subject Teacher',student:'Student',developer:'Portal Developer'};document.getElementById('menuUserName').textContent=currentUser.name||'Authenticated user';document.getElementById('menuUserRole').textContent=(names[currentUser.type]||'Portal user')+(currentUser.arm?' · '+currentUser.arm:'')+(currentUser.subject?' · '+currentUser.subject:'');l.innerHTML='';Array.prototype.forEach.call(document.querySelectorAll('#tabsContainer .tab'),function(tab){var item=document.createElement('li');item.style.cssText='margin:0;padding:0';var x=document.createElement('button');x.type='button';x.textContent=tab.textContent;x.style.cssText='display:block;width:100%;text-align:left;background:transparent;color:#26386f;border:0;border-radius:8px;padding:11px 10px;font-size:14px;font-weight:500;cursor:pointer';x.addEventListener('mouseenter',function(){x.style.background='#f0f4ff';});x.addEventListener('mouseleave',function(){x.style.background='transparent';});x.addEventListener('click',function(){tab.click();p.classList.add('hidden');t.setAttribute('aria-expanded','false');t.textContent='⋮';});item.appendChild(x);l.appendChild(item);});if(t.dataset.ready!=='true'){t.addEventListener('click',function(){var open=p.classList.toggle('hidden')===false;t.setAttribute('aria-expanded',String(open));t.textContent=open?'×':'⋮';});document.getElementById('menuLogoutBtn').addEventListener('click',handleLogout);document.addEventListener('click',function(e){if(!p.classList.contains('hidden')&&!p.contains(e.target)&&!t.contains(e.target)){p.classList.add('hidden');t.setAttribute('aria-expanded','false');t.textContent='⋮';}});t.dataset.ready='true';}}
+function setupUserHamburgerMenu(){
+  var t=document.getElementById('userMenuToggle'),p=document.getElementById('userMenuPanel'),l=document.getElementById('userMenuTabs');
+  if(!t||!p||!l||!currentUser)return;
+  var names={admin:'Administrator',principal:'Principal',subadmin:'Sub-Administrator',formmaster:'Form Master',subjectteacher:'Subject Teacher',student:'Student',developer:'Portal Developer'};
+  document.getElementById('menuUserName').textContent=currentUser.name||'Authenticated user';
+  document.getElementById('menuUserRole').textContent=(names[currentUser.type]||'Portal user')+(currentUser.arm?' · '+currentUser.arm:'')+(currentUser.subject?' · '+currentUser.subject:'');
+  l.innerHTML='';
+  Array.prototype.forEach.call(document.querySelectorAll('#tabsContainer .tab'),function(tab){
+    var item=document.createElement('li');
+    item.style.cssText='margin:0;padding:0;border-bottom:1px solid #e7ece8';
+    var x=document.createElement('button');
+    x.type='button';
+    x.textContent=tab.textContent;
+    x.style.cssText='display:block;width:100%;min-height:54px;text-align:left;background:#fff;color:#173c2c;border:0;border-radius:0;padding:15px 8px;font-size:16px;font-weight:700;cursor:pointer';
+    x.addEventListener('mouseenter',function(){x.style.background='#f1f7f3';});
+    x.addEventListener('mouseleave',function(){x.style.background='#fff';});
+    x.addEventListener('focus',function(){x.style.background='#f1f7f3';});
+    x.addEventListener('blur',function(){x.style.background='#fff';});
+    x.addEventListener('click',function(){tab.click();p.classList.add('hidden');t.setAttribute('aria-expanded','false');t.textContent='⋮';});
+    item.appendChild(x);l.appendChild(item);
+  });
+  if(t.dataset.ready!=='true'){
+    t.addEventListener('click',function(){var open=p.classList.toggle('hidden')===false;t.setAttribute('aria-expanded',String(open));t.textContent=open?'×':'⋮';});
+    document.getElementById('menuLogoutBtn').addEventListener('click',function(){p.classList.add('hidden');t.setAttribute('aria-expanded','false');t.textContent='⋮';handleLogout();});
+    document.addEventListener('click',function(e){if(!p.classList.contains('hidden')&&!p.contains(e.target)&&!t.contains(e.target)){p.classList.add('hidden');t.setAttribute('aria-expanded','false');t.textContent='⋮';}});
+    t.dataset.ready='true';
+  }
+}
 
 function setupTabScrollControls() {
   var viewport = document.getElementById('tabsViewport');
