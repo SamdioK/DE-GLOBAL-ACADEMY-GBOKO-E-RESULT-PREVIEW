@@ -484,6 +484,65 @@ th { background: #f5f5f5; font-weight: 600; }
   #loginContainer .login-box #viewManagementBtn,#loginContainer .login-box #openPortalBtn{min-height:47px;font-size:14px}
 }
 </style>
+
+<style id="sdpStyleNavigation">
+/* SDP-BESR-inspired slide-out navigation drawer */
+#userMenuToggle{
+  position:fixed!important;top:90px!important;right:18px!important;z-index:10060!important;
+  display:inline-flex!important;align-items:center!important;justify-content:center!important;
+  width:46px!important;height:46px!important;min-width:46px!important;padding:0!important;
+  border:1px solid #e5a45d!important;border-radius:50%!important;
+  background:linear-gradient(145deg,#7136a5,#49246e)!important;color:#fff!important;
+  font-size:22px!important;font-weight:800!important;line-height:1!important;
+  box-shadow:0 5px 18px #0008!important;cursor:grab!important;
+  touch-action:none!important;user-select:none!important;-webkit-user-select:none!important;
+  transition:background .2s,box-shadow .2s;
+}
+#userMenuToggle:active{cursor:grabbing!important}
+#userMenuToggle.dragging{background:#ed8735!important;color:#092b29!important;box-shadow:0 8px 24px #0009!important;transition:none!important}
+#userMenuToggle:focus-visible,#userMenuClose:focus-visible,#menuLogoutBtn:focus-visible{outline:3px solid #ffbf47!important;outline-offset:3px}
+#userMenuBackdrop{
+  position:fixed;inset:0;z-index:10070;background:rgba(0,12,10,.62);
+  opacity:0;visibility:hidden;pointer-events:none;transition:opacity .24s,visibility .24s;
+}
+#userMenuBackdrop.open{opacity:1;visibility:visible;pointer-events:auto}
+#userMenuPanel.user-navigation-drawer{
+  position:fixed!important;inset:0 auto 0 0!important;z-index:10080!important;
+  display:flex!important;flex-direction:column!important;width:min(310px,86vw)!important;
+  max-width:calc(100vw - 38px)!important;height:100dvh!important;max-height:100dvh!important;
+  overflow:hidden!important;padding:17px 13px 13px!important;margin:0!important;
+  border:0!important;border-right:1px solid #32665c!important;border-radius:0 15px 15px 0!important;
+  background:#082622!important;color:#f4f8f5!important;
+  box-shadow:15px 0 45px #0008!important;
+  transform:translateX(-105%);visibility:hidden;pointer-events:none;
+  transition:transform .26s ease,visibility .26s ease;
+}
+#userMenuPanel.user-navigation-drawer.open{transform:translateX(0);visibility:visible;pointer-events:auto}
+.user-drawer-brand{display:flex;align-items:center;gap:10px;padding:3px 4px 16px;border-bottom:1px solid #28564e}
+.user-drawer-brand-mark{width:42px;height:42px;display:grid;place-items:center;flex:0 0 42px;background:#fff;border-radius:9px;font-size:23px}
+.user-drawer-brand strong{display:block;font-size:12px;letter-spacing:.045em;color:#fff}
+.user-drawer-brand small{display:block;margin-top:4px;font-size:8px;letter-spacing:.13em;color:#9ebdb1}
+#userMenuClose{margin-left:auto;width:34px;height:34px;border:1px solid #32665c;border-radius:8px;background:#123d37;color:#fff;font-size:25px;line-height:1}
+.user-drawer-profile{padding:14px 9px 13px;border-bottom:1px solid #28564e}
+.user-drawer-profile strong{display:block;color:#fff;font-size:14px;overflow-wrap:anywhere}
+.user-drawer-profile span{display:block;margin-top:4px;color:#9ebdb1;font-size:11px;line-height:1.45;overflow-wrap:anywhere}
+.user-drawer-label{padding:15px 10px 8px;color:#789e90;font-size:9px;font-weight:800;letter-spacing:.16em}
+.user-drawer-links{display:flex!important;flex:1 1 auto;flex-direction:column!important;gap:3px!important;overflow-y:auto!important;overscroll-behavior:contain;list-style:none!important;margin:0!important;padding:0 2px 12px!important}
+.user-drawer-links li{margin:0!important;padding:0!important;border:0!important}
+.user-drawer-links button{display:flex!important;align-items:center!important;width:100%!important;min-height:45px!important;padding:10px 12px!important;
+  border:0!important;border-radius:8px!important;background:transparent!important;color:#b7cec3!important;
+  text-align:left!important;font-size:13px!important;font-weight:650!important;line-height:1.35!important;cursor:pointer!important}
+.user-drawer-links button:hover,.user-drawer-links button:focus-visible{background:#ffffff10!important;color:#fff!important}
+.user-drawer-links button.active{background:linear-gradient(90deg,#673294,#49246e)!important;color:#fff!important;box-shadow:inset 3px 0 #ed8735!important}
+.user-drawer-footer{flex:0 0 auto;border-top:1px solid #28564e;padding:13px 2px 2px}
+#menuLogoutBtn{display:flex!important;align-items:center!important;justify-content:flex-start!important;width:100%!important;min-height:48px!important;
+  padding:12px 14px!important;border:1px solid #ff7777!important;border-radius:8px!important;
+  background:#c62828!important;color:#fff!important;font-size:15px!important;font-weight:850!important;
+  letter-spacing:.2px!important;text-align:left!important;cursor:pointer!important}
+#menuLogoutBtn:hover{background:#a91818!important;border-color:#ffaaaa!important}
+@media(max-width:600px){#userMenuToggle{top:82px!important;right:13px!important;width:46px!important;height:46px!important}}
+@media(prefers-reduced-motion:reduce){#userMenuPanel.user-navigation-drawer,#userMenuBackdrop{transition:none!important}}
+</style>
 </head>
 <body>
 
@@ -673,11 +732,27 @@ th { background: #f5f5f5; font-weight: 600; }
           <div id="currentUserName" style="font-size: 14px; font-weight: 600;"></div>
           <div id="schoolLocation" style="font-size: 11px; opacity: 0.9;"></div>
         </div>
-        <button type="button" class="btn" id="userMenuToggle" aria-expanded="false" aria-controls="userMenuPanel" aria-label="Open navigation list" title="Menu" style="min-width:42px;width:42px;height:42px;font-size:25px;line-height:1;padding:4px;background:#fff;color:#25345f;border:1px solid rgba(255,255,255,.7);border-radius:10px">⋮</button>
+        <button type="button" id="userMenuToggle" aria-expanded="false" aria-controls="userMenuPanel" aria-label="Open navigation" title="Open navigation">☰</button>
       </div>
     </div>
   </div>
-  <div id="userMenuPanel" class="hidden" style="position:absolute;z-index:1000;top:calc(100% - 6px);right:12px;width:min(390px,calc(100vw - 24px));max-height:min(78vh,650px);overflow-y:auto;background:#fff;color:#172b24;border:1px solid #d8e4dc;border-radius:4px;box-shadow:0 14px 34px rgba(0,0,0,.2);padding:14px 16px"><div style="padding:6px 4px 15px;border-bottom:1px solid #e5ebe7;margin-bottom:4px"><strong id="menuUserName" style="display:block;font-size:16px;color:#123c2b"></strong><div id="menuUserRole" style="font-size:13px;color:#63736a;margin-top:4px"></div></div><ul id="userMenuTabs" style="list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:0"></ul><div style="border-top:1px solid #e5ebe7;margin-top:10px;padding-top:12px"><button type="button" id="menuLogoutBtn" style="display:block;width:100%;text-align:left;border:0;border-radius:8px;padding:15px 14px;background:#c62828;color:#fff;font-size:16px;font-weight:800;letter-spacing:.2px;cursor:pointer">Log Out</button></div></div>
+  <div id="userMenuBackdrop" aria-hidden="true"></div>
+  <aside id="userMenuPanel" class="user-navigation-drawer" aria-label="Main navigation" aria-hidden="true">
+    <div class="user-drawer-brand">
+      <div class="user-drawer-brand-mark">📊</div>
+      <div><strong>DE-GLOBAL ACADEMY</strong><small>GBOKO E-RESULT SYSTEM</small></div>
+      <button type="button" id="userMenuClose" aria-label="Close navigation">×</button>
+    </div>
+    <div class="user-drawer-profile">
+      <strong id="menuUserName"></strong>
+      <span id="menuUserRole"></span>
+    </div>
+    <div class="user-drawer-label">MAIN NAVIGATION</div>
+    <ul id="userMenuTabs" class="user-drawer-links"></ul>
+    <div class="user-drawer-footer">
+      <button type="button" id="menuLogoutBtn">Log out</button>
+    </div>
+  </aside>
   <div class="tabs" id="portalTabs">
     <button
       type="button"
@@ -4180,77 +4255,105 @@ function showApp() {
 }
 
 function setupUserHamburgerMenu(){
-  var t=document.getElementById('userMenuToggle');
-  var p=document.getElementById('userMenuPanel');
-  var l=document.getElementById('userMenuTabs');
-  if(!t||!p||!l||!currentUser)return;
+  var toggle=document.getElementById('userMenuToggle');
+  var drawer=document.getElementById('userMenuPanel');
+  var backdrop=document.getElementById('userMenuBackdrop');
+  var list=document.getElementById('userMenuTabs');
+  var closeButton=document.getElementById('userMenuClose');
+  var logout=document.getElementById('menuLogoutBtn');
+  if(!toggle||!drawer||!backdrop||!list||!currentUser)return;
 
-  var names={admin:'Administrator',principal:'Principal',subadmin:'Sub-Administrator',formmaster:'Form Master',subjectteacher:'Subject Teacher',student:'Student',developer:'Portal Developer'};
+  var roleNames={admin:'Administrator',principal:'Principal',subadmin:'Sub-Administrator',formmaster:'Form Master',subjectteacher:'Subject Teacher',student:'Student',developer:'Portal Developer'};
   var nameNode=document.getElementById('menuUserName');
   var roleNode=document.getElementById('menuUserRole');
   if(nameNode)nameNode.textContent=currentUser.name||'Authenticated user';
-  if(roleNode)roleNode.textContent=(names[currentUser.type]||'Portal user')+(currentUser.arm?' · '+currentUser.arm:'')+(currentUser.subject?' · '+currentUser.subject:'');
+  if(roleNode)roleNode.textContent=(roleNames[currentUser.type]||'Portal user')+(currentUser.arm?' · '+currentUser.arm:'')+(currentUser.subject?' · '+currentUser.subject:'');
 
-  function isOpen(){return !p.classList.contains('hidden');}
+  function isOpen(){return drawer.classList.contains('open');}
   function setOpen(open){
     var visible=!!open;
-    p.classList.toggle('hidden',!visible);
-    t.setAttribute('aria-expanded',String(visible));
-    t.setAttribute('aria-label',visible?'Close navigation list':'Open navigation list');
-    t.textContent=visible?'×':'⋮';
+    drawer.classList.toggle('open',visible);
+    backdrop.classList.toggle('open',visible);
+    drawer.setAttribute('aria-hidden',String(!visible));
+    backdrop.setAttribute('aria-hidden',String(!visible));
+    toggle.setAttribute('aria-expanded',String(visible));
+    toggle.setAttribute('aria-label',visible?'Close navigation':'Open navigation');
+    toggle.title=visible?'Close navigation':'Open navigation';
+    toggle.textContent=visible?'‹':'☰';
+    document.body.classList.toggle('navigation-drawer-open',visible);
   }
 
-  l.innerHTML='';
+  list.innerHTML='';
   Array.prototype.forEach.call(document.querySelectorAll('#tabsContainer .tab'),function(tab){
     var item=document.createElement('li');
-    item.style.cssText='margin:0;padding:0;border-bottom:1px solid #e7ece8';
-    var x=document.createElement('button');
-    x.type='button';
-    x.textContent=tab.textContent;
-    x.style.cssText='display:block;width:100%;min-height:54px;text-align:left;background:#fff;color:#173c2c;border:0;border-radius:0;padding:15px 8px;font-size:16px;font-weight:700;cursor:pointer';
-    x.addEventListener('mouseenter',function(){x.style.background='#f1f7f3';});
-    x.addEventListener('mouseleave',function(){x.style.background='#fff';});
-    x.addEventListener('focus',function(){x.style.background='#f1f7f3';});
-    x.addEventListener('blur',function(){x.style.background='#fff';});
-    x.addEventListener('click',function(event){
-      event.preventDefault();
+    var button=document.createElement('button');
+    button.type='button';
+    button.textContent=tab.textContent.trim();
+    button.className=tab.classList.contains('active')?'active':'';
+    button.addEventListener('click',function(){
       setOpen(false);
       tab.click();
+      list.querySelectorAll('button').forEach(function(node){node.classList.remove('active');});
+      button.classList.add('active');
     });
-    item.appendChild(x);
-    l.appendChild(item);
+    item.appendChild(button);
+    list.appendChild(item);
   });
 
-  if(t.dataset.menuStateBound!=='true'){
-    t.addEventListener('click',function(event){
+  if(toggle.dataset.drawerBound!=='true'){
+    toggle.addEventListener('click',function(event){
+      if(toggle.dataset.dragged==='true'){toggle.dataset.dragged='false';event.preventDefault();return;}
       event.preventDefault();
-      event.stopPropagation();
       setOpen(!isOpen());
     });
-
-    var logout=document.getElementById('menuLogoutBtn');
+    if(closeButton)closeButton.addEventListener('click',function(){setOpen(false);toggle.focus();});
+    backdrop.addEventListener('click',function(){setOpen(false);});
+    document.addEventListener('keydown',function(event){
+      if(event.key==='Escape'&&isOpen()){setOpen(false);toggle.focus();}
+    });
     if(logout)logout.addEventListener('click',function(event){
       event.preventDefault();
       setOpen(false);
       handleLogout();
     });
 
-    document.addEventListener('pointerdown',function(event){
-      if(isOpen()&&!p.contains(event.target)&&!t.contains(event.target))setOpen(false);
-    },true);
-
-    document.addEventListener('keydown',function(event){
-      if(event.key==='Escape'&&isOpen()){
-        setOpen(false);
-        t.focus();
-      }
+    // SDP-BESR-style draggable floating menu control. Position is session-only:
+    // no browser storage is used for menu position or application data.
+    var dragging=false,moved=false,startX=0,startY=0,originX=0,originY=0;
+    function clamp(value,min,max){return Math.min(Math.max(value,min),max);}
+    function place(x,y){
+      var maxX=Math.max(0,window.innerWidth-toggle.offsetWidth);
+      var maxY=Math.max(0,window.innerHeight-toggle.offsetHeight);
+      toggle.style.left=clamp(x,0,maxX)+'px';
+      toggle.style.top=clamp(y,0,maxY)+'px';
+      toggle.style.right='auto';
+    }
+    toggle.addEventListener('pointerdown',function(event){
+      if(event.button!==undefined&&event.button!==0)return;
+      dragging=true;moved=false;startX=event.clientX;startY=event.clientY;
+      var rect=toggle.getBoundingClientRect();originX=rect.left;originY=rect.top;
+      toggle.classList.add('dragging');
+      if(toggle.setPointerCapture)toggle.setPointerCapture(event.pointerId);
     });
-
-    t.dataset.menuStateBound='true';
+    toggle.addEventListener('pointermove',function(event){
+      if(!dragging)return;
+      var dx=event.clientX-startX,dy=event.clientY-startY;
+      if(Math.abs(dx)>5||Math.abs(dy)>5)moved=true;
+      if(moved)place(originX+dx,originY+dy);
+    });
+    function finishDrag(){
+      if(!dragging)return;
+      dragging=false;toggle.classList.remove('dragging');
+      if(moved)toggle.dataset.dragged='true';
+    }
+    toggle.addEventListener('pointerup',finishDrag);
+    toggle.addEventListener('pointercancel',finishDrag);
+    window.addEventListener('resize',function(){
+      if(toggle.style.left)place(toggle.getBoundingClientRect().left,toggle.getBoundingClientRect().top);
+    });
+    toggle.dataset.drawerBound='true';
   }
-
-  // Always reconcile the visible icon with the actual panel state.
-  setOpen(isOpen());
+  setOpen(false);
 }
 
 function setupTabScrollControls() {
