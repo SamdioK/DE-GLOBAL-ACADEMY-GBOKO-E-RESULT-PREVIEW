@@ -489,9 +489,9 @@ th { background: #f5f5f5; font-weight: 600; }
 
 <style>
 #appContainer .main-content{position:relative;min-height:55vh}
-#appRefreshNotice{display:none;position:absolute;z-index:900;inset:0;min-height:220px;align-items:flex-start;justify-content:center;padding:22px 14px;background:rgba(245,247,252,.88)}
+#appRefreshNotice{display:none;position:fixed;z-index:9999;inset:0;align-items:center;justify-content:center;padding:22px 14px;background:rgba(20,30,55,.18);backdrop-filter:blur(1.5px)}
 #appRefreshNotice.visible{display:flex}
-#appRefreshNotice .refresh-notice-card{width:min(430px,100%);margin-top:clamp(24px,8vh,76px);padding:22px 24px;border-radius:16px;background:#fff;color:#172554;text-align:center;box-shadow:0 12px 34px rgba(20,35,75,.16);border:1px solid #dbe4f4}
+#appRefreshNotice .refresh-notice-card{width:min(430px,100%);padding:22px 24px;border-radius:16px;background:#fff;color:#172554;text-align:center;box-shadow:0 12px 34px rgba(20,35,75,.22);border:1px solid #dbe4f4}
 #appRefreshNotice .refresh-notice-title{font-size:clamp(17px,4.5vw,21px);font-weight:800;line-height:1.35}
 #appRefreshNotice .refresh-notice-sub{font-size:13px;color:#53627d;margin-top:8px}
 #appRefreshNotice .refresh-dots{display:inline-flex;gap:5px;margin-right:9px;vertical-align:middle}
@@ -1134,21 +1134,17 @@ async function loadLandingSchoolIdentity() {
 }
 
 async function initApp() {
-  // Re-open the authenticated application shell while Supabase restores the session.
-  // The refresh notice belongs inside the portal content area, never on the landing page.
+  // Do not expose a half-built portal shell. Restore the session and render the
+  // user's active workspace first; the refresh notice is shown over that workspace.
   var setupView = document.getElementById('setupView');
   var loginView = document.getElementById('loginView');
   if (setupView) setupView.classList.add('hidden');
   if (loginView) loginView.classList.remove('hidden');
-  var appShell=document.getElementById('appContainer');
-  var loginContainer=document.getElementById('loginContainer');
-  if(loginContainer)loginContainer.style.display='none';
-  if(appShell)appShell.classList.add('active');
-  showPageRefreshNotice();
   setupEventListeners();
   var restored = await restoreSupabasePortalSession();
   if (!restored) {
     hidePageRefreshNotice();
+    var appShell=document.getElementById('appContainer');
     if(appShell)appShell.classList.remove('active');
     var loginContainer=document.getElementById('loginContainer');
     if(loginContainer)loginContainer.style.display='';
@@ -4116,7 +4112,6 @@ function hasSubAdminPermission(permission) {
 }
 
 function showApp() {
-  hidePageRefreshNotice();
   document.getElementById('loginContainer').style.display = 'none';
   document.getElementById('appContainer').classList.add('active');
   document.getElementById('currentUserName').textContent = currentUser.name;
@@ -4171,6 +4166,9 @@ function showApp() {
   var initialButton=Array.prototype.find.call(tabsContainer.querySelectorAll('.tab'),function(btn){return btn.textContent===(tabsContainer.querySelectorAll('.tab')[tabs.indexOf(initialTab)]||{}).textContent;});
   if(initialButton){tabsContainer.querySelectorAll('.tab').forEach(function(btn){btn.classList.toggle('active',btn===initialButton);});}
   showTab(initialTab);
+  // Display the refresh notice only after the restored tab and its data are on screen.
+  showPageRefreshNotice();
+  window.setTimeout(hidePageRefreshNotice, 1400);
 }
 
 function setupUserHamburgerMenu(){var t=document.getElementById('userMenuToggle'),p=document.getElementById('userMenuPanel'),l=document.getElementById('userMenuTabs');if(!t||!p||!l||!currentUser)return;var names={admin:'Administrator',principal:'Principal',subadmin:'Sub-Administrator',formmaster:'Form Master',subjectteacher:'Subject Teacher',student:'Student',developer:'Portal Developer'};document.getElementById('menuUserName').textContent=currentUser.name||'Authenticated user';document.getElementById('menuUserRole').textContent=(names[currentUser.type]||'Portal user')+(currentUser.arm?' · '+currentUser.arm:'')+(currentUser.subject?' · '+currentUser.subject:'');l.innerHTML='';Array.prototype.forEach.call(document.querySelectorAll('#tabsContainer .tab'),function(tab){var item=document.createElement('li');item.style.cssText='margin:0;padding:0';var x=document.createElement('button');x.type='button';x.textContent=tab.textContent;x.style.cssText='display:block;width:100%;text-align:left;background:transparent;color:#26386f;border:0;border-radius:8px;padding:11px 10px;font-size:14px;font-weight:500;cursor:pointer';x.addEventListener('mouseenter',function(){x.style.background='#f0f4ff';});x.addEventListener('mouseleave',function(){x.style.background='transparent';});x.addEventListener('click',function(){tab.click();p.classList.add('hidden');t.setAttribute('aria-expanded','false');t.textContent='⋮';});item.appendChild(x);l.appendChild(item);});if(t.dataset.ready!=='true'){t.addEventListener('click',function(){var open=p.classList.toggle('hidden')===false;t.setAttribute('aria-expanded',String(open));t.textContent=open?'×':'⋮';});document.getElementById('menuLogoutBtn').addEventListener('click',handleLogout);document.addEventListener('click',function(e){if(!p.classList.contains('hidden')&&!p.contains(e.target)&&!t.contains(e.target)){p.classList.add('hidden');t.setAttribute('aria-expanded','false');t.textContent='⋮';}});t.dataset.ready='true';}}
