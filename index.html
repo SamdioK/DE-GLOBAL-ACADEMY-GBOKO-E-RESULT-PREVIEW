@@ -2665,7 +2665,7 @@ async function loadFormMasterOfficialEnrolments() {
   formMasterStudentEnrolments = (enrolmentsResult.data || []).map(function(enrolment) {
     var student = Array.isArray(enrolment.students) ? enrolment.students[0] : enrolment.students;
     return student ? { enrolment: enrolment, student: student } : null;
-  }).filter(Boolean);
+  }).filter(Boolean).sort(compareStudentRegisterOrder);
   return formMasterStudentEnrolments;
 }
 
@@ -4733,7 +4733,7 @@ async function renderReleaseResults() {
         return;
       }
       status.textContent = studentsForRelease.length + ' active student enrolment(s) loaded from Supabase.';
-      rowsRoot.innerHTML = '<div style="overflow-x:auto"><table><thead><tr><th>Student</th><th>Admission No.</th><th>Class</th><th>Approved / Published Rows</th><th>Released Through</th><th>Action</th></tr></thead><tbody>' +
+      rowsRoot.innerHTML = '<div style="overflow-x:auto"><table><thead><tr><th>S/N</th><th>Register No.</th><th>Student</th><th>Admission No.</th><th>Class</th><th>Approved / Published Rows</th><th>Released Through</th><th>Action</th></tr></thead><tbody>' +
         studentsForRelease.map(function(student) {
           var stageRecord = (student.stages || []).find(function(x) { return String(x.term_id) === String(termSelect.value) && String(x.academic_session_id) === String(sessionSelect.value); });
           var stage = Number(stageRecord && stageRecord.release_stage || 0);
@@ -5314,7 +5314,7 @@ async function loadOfficialStudents(classId) {
   (studentsResult.data || []).forEach(function(student) { byId[String(student.id)] = student; });
   studentDbState.official = enrolments.map(function(enrolment) {
     return { enrolment: enrolment, student: byId[String(enrolment.student_id)] };
-  }).filter(function(item) { return !!item.student; });
+  }).filter(function(item) { return !!item.student; }).sort(compareStudentRegisterOrder);
 }
 
 async function loadPendingStudentApprovals() {
@@ -13072,6 +13072,23 @@ window.computePositions = async function() {
   showToast('Results computed successfully!', 'success');
 };
 
+// Universal default ordering for student-facing registers and result lists.
+// Register numbers are compared numerically (1, 2, 10), not lexicographically (1, 10, 2).
+function compareStudentRegisterOrder(a, b) {
+  function enrolmentOf(item) { return item && (item.enrolment || item.student_enrolment || item); }
+  function registerOf(item) {
+    var enrolment=enrolmentOf(item)||{};
+    var raw=enrolment.register_number!=null?enrolment.register_number:(enrolment.registerNumber!=null?enrolment.registerNumber:(item&&(item.register_number!=null?item.register_number:item.registerNumber)));
+    var value=String(raw==null?'':raw).trim(), number=value!==''?Number(value):NaN;
+    return {text:value,number:number,numeric:Number.isFinite(number)};
+  }
+  var ar=registerOf(a),br=registerOf(b);
+  if(ar.numeric&&br.numeric&&ar.number!==br.number)return ar.number-br.number;
+  if(ar.numeric!==br.numeric)return ar.numeric?-1:1;
+  var ae=enrolmentOf(a)||{},be=enrolmentOf(b)||{};
+  return String(ae.sid||ar.text||(a&&(a.admission_number||a.admissionNumber))||'').localeCompare(String(be.sid||br.text||(b&&(b.admission_number||b.admissionNumber))||''),undefined,{numeric:true,sensitivity:'base'});
+}
+
 // ===================== VIEW + EXCEL EXPORT =====================
 async function loadAdminCa1ResultsView() {
   if (!currentUser || currentUser.type !== 'admin') return;
@@ -13103,9 +13120,22 @@ async function loadAdminCa1ResultsView() {
       fetchByIds('academic_sessions','id,name','id',sessionIds),
       fetchByIds('terms','id,name,term_number','id',termIds)
     ]);
+    var enrolmentsQuery=studentIds.length&&classIds.length?await supabaseClient.from('student_enrolments')
+      .select('student_id,class_id,academic_session_id,register_number,sid').eq('school_id',schoolId).in('student_id',studentIds).in('class_id',classIds):{data:[],error:null};
+    if(enrolmentsQuery.error)throw enrolmentsQuery.error;
+    var enrolmentByStudentClassSession={};
+    (enrolmentsQuery.data||[]).forEach(function(item){enrolmentByStudentClassSession[String(item.student_id)+'|'+String(item.class_id)+'|'+String(item.academic_session_id)]=item;});
     var indexById = function(list) { var map = {}; list.forEach(function(item) { map[String(item.id)] = item; }); return map; };
     var studentsById=indexById(fetched[0]), classesById=indexById(fetched[1]), subjectsById=indexById(fetched[2]),
         sessionsById=indexById(fetched[3]), termsById=indexById(fetched[4]);
+    rows.sort(function(a,b){
+      var classOrder=String((classesById[String(a.class_id)]||{}).class_name||'').localeCompare(String((classesById[String(b.class_id)]||{}).class_name||''),undefined,{numeric:true});
+      if(classOrder)return classOrder;
+      return compareStudentRegisterOrder(
+        enrolmentByStudentClassSession[String(a.student_id)+'|'+String(a.class_id)+'|'+String(a.academic_session_id)]||{},
+        enrolmentByStudentClassSession[String(b.student_id)+'|'+String(b.class_id)+'|'+String(b.academic_session_id)]||{}
+      );
+    });
     var assessmentQueue = await supabaseClient.rpc('list_result_assessment_submissions',{p_class_id:null,p_academic_session_id:null,p_term_id:null,p_stage:null});
     if(assessmentQueue.error) throw assessmentQueue.error;
     var adminCaPending=(Array.isArray(assessmentQueue.data)?assessmentQueue.data:[]).filter(function(item){
@@ -13114,10 +13144,11 @@ async function loadAdminCa1ResultsView() {
     var esc = escapeManagementText;
     var html = '<div style="margin-bottom:10px"><strong>' + rows.length + ' subject result record(s) with CA1 entered</strong></div>' +
       '<div style="overflow-x:auto"><table><thead><tr><th>Student</th><th>Admission No.</th><th>Class</th><th>Subject</th><th>Session</th><th>Term</th><th>CA1</th><th>CA2</th><th>CA3</th><th>Exam</th><th>Status</th></tr></thead><tbody>';
-    rows.forEach(function(row) {
+    rows.forEach(function(row,index) {
       var student=studentsById[String(row.student_id)]||{}, session=sessionsById[String(row.academic_session_id)]||{}, term=termsById[String(row.term_id)]||{};
+      var enrolment=enrolmentByStudentClassSession[String(row.student_id)+'|'+String(row.class_id)+'|'+String(row.academic_session_id)]||{};
       var name=[student.first_name,student.middle_name,student.last_name].filter(Boolean).join(' ') || 'Student record unavailable';
-      html += '<tr><td>'+esc(name)+'</td><td>'+esc(student.admission_number||'—')+'</td><td>'+esc((classesById[String(row.class_id)]||{}).class_name||'—')+'</td><td>'+esc((subjectsById[String(row.subject_id)]||{}).name||'—')+'</td><td>'+esc(session.name||'—')+'</td><td>'+esc(term.name||('Term '+(term.term_number||'—')) )+'</td><td><strong>'+esc(row.ca1)+'</strong></td><td>'+esc(row.ca2==null?'—':row.ca2)+'</td><td>'+esc(row.ca3==null?'—':row.ca3)+'</td><td>'+esc(row.examination==null?'—':row.examination)+'</td><td>'+esc(row.status||'draft')+'</td></tr>';
+      html += '<tr><td>'+(index+1)+'</td><td>'+esc(enrolment.register_number==null?'—':enrolment.register_number)+'</td><td>'+esc(name)+'</td><td>'+esc(student.admission_number||'—')+'</td><td>'+esc((classesById[String(row.class_id)]||{}).class_name||'—')+'</td><td>'+esc((subjectsById[String(row.subject_id)]||{}).name||'—')+'</td><td>'+esc(session.name||'—')+'</td><td>'+esc(term.name||('Term '+(term.term_number||'—')) )+'</td><td><strong>'+esc(row.ca1)+'</strong></td><td>'+esc(row.ca2==null?'—':row.ca2)+'</td><td>'+esc(row.ca3==null?'—':row.ca3)+'</td><td>'+esc(row.examination==null?'—':row.examination)+'</td><td>'+esc(row.status||'draft')+'</td></tr>';
     });
     html += '</tbody></table></div>';
     var groups={};
@@ -13207,11 +13238,7 @@ async function loadFormMasterSubjectResultsView() {
     var students = enrolments.map(function(item) {
       return { student:item.student, enrolment:item.enrolment };
     }).filter(function(item) { return item.student && item.enrolment; });
-    students.sort(function(a,b) {
-      var an = Number(a.enrolment.register_number), bn = Number(b.enrolment.register_number);
-      if (Number.isFinite(an) && Number.isFinite(bn) && an !== bn) return an-bn;
-      return String(a.enrolment.sid || a.enrolment.register_number || '').localeCompare(String(b.enrolment.sid || b.enrolment.register_number || ''), undefined, {numeric:true});
-    });
+    students.sort(compareStudentRegisterOrder);
     var result = await supabaseClient.from('results')
       .select('id,student_id,subject_id,term_id,ca1,ca2,ca3,examination,total,grade,remark,status,updated_at')
       .eq('school_id', schoolId).eq('class_id', classId)
@@ -13374,7 +13401,16 @@ async function loadSubjectTeacherScoresView() {
     if(selectedSubject!=='all'&&!subjectIds.map(String).includes(selectedSubject))selectedSubject='all';
     if(selectedTerm!=='all'&&!terms.some(function(x){return String(x.id)===selectedTerm;}))selectedTerm='all';
     var visible=records.filter(function(x){return(selectedClass==='all'||String(x.class_id)===selectedClass)&&(selectedSubject==='all'||String(x.subject_id)===selectedSubject)&&(selectedTerm==='all'||String(x.term_id)===selectedTerm);});
-    visible.sort(function(a,b){return String(classMap[String(a.class_id)]&&classMap[String(a.class_id)].class_name||'').localeCompare(String(classMap[String(b.class_id)]&&classMap[String(b.class_id)].class_name||''))||String(subjectMap[String(a.subject_id)]&&subjectMap[String(a.subject_id)].name||'').localeCompare(String(subjectMap[String(b.subject_id)]&&subjectMap[String(b.subject_id)].name||''));});
+    visible.sort(function(a,b){
+      var classOrder=String(classMap[String(a.class_id)]&&classMap[String(a.class_id)].class_name||'').localeCompare(String(classMap[String(b.class_id)]&&classMap[String(b.class_id)].class_name||''),undefined,{numeric:true});
+      if(classOrder)return classOrder;
+      var subjectOrder=String(subjectMap[String(a.subject_id)]&&subjectMap[String(a.subject_id)].name||'').localeCompare(String(subjectMap[String(b.subject_id)]&&subjectMap[String(b.subject_id)].name||''),undefined,{numeric:true});
+      if(subjectOrder)return subjectOrder;
+      return compareStudentRegisterOrder(
+        enrolmentMap[String(a.student_id)+'|'+String(a.class_id)]||{},
+        enrolmentMap[String(b.student_id)+'|'+String(b.class_id)]||{}
+      );
+    });
     var esc=escapeManagementText;
     var html='<div class="card"><div style="display:flex;justify-content:space-between;gap:10px;align-items:center;flex-wrap:wrap"><div><h2 style="margin:0">My Entered Scores</h2><p style="margin:5px 0;color:#64748b;font-size:13px">Read-only scores saved under your active class-arm and subject assignments. This screen has no score-entry keyboards.</p></div><button type="button" class="btn btn-primary" id="refreshSubjectTeacherScores">Refresh</button></div>';
     html+='<div class="grid grid-3" style="margin:14px 0"><div class="input-group"><label>Assigned Class Arm</label><select id="teacherViewClass"><option value="all">All my assigned arms</option>'+classIds.map(function(id){var x=classMap[String(id)]||{};return '<option value="'+esc(id)+'"'+(selectedClass===String(id)?' selected':'')+'>'+esc(x.class_name||'Class')+'</option>';}).join('')+'</select></div>';
