@@ -13328,47 +13328,76 @@ async function loadFormMasterSubjectResultsView() {
     panel.innerHTML = '<p class="alert alert-error">Could not load the subject register: '+escapeManagementText(error.message || 'Unknown error')+'</p>';
   }
 }
-function renderView() {
-  var userStudents = currentUser.type === 'admin' || currentUser.type === 'subadmin' ? students : students.filter(function(s) { return s.className === currentUser.arm; });
-  var canDeleteStudents = currentUser.type === 'admin' || currentUser.type === 'formmaster' || (currentUser.type === 'subadmin' && hasSubAdminPermission('deleteRecords'));
-  var canGenerateSheets = currentUser.type === 'admin' || currentUser.type === 'formmaster' || (currentUser.type === 'subadmin' && hasSubAdminPermission('generateSheets'));
-  var canManagePassports = currentUser.type === 'admin' || currentUser.type === 'formmaster' || (currentUser.type === 'subadmin' && hasSubAdminPermission('manageStudents'));
-  var html = (currentUser.type === 'admin' ? '<div class="card"><h2>Students with CA1 Scores</h2><p style="color:#64748b;font-size:13px">Students appear here once at least their first CA score has been saved.</p><div id="adminCa1ResultsPanel"><p style="color:#64748b">Loading saved CA1 results…</p></div></div>' : '') + (currentUser.type === 'formmaster' ? '<div class="card" id="formMasterSubjectResultsPanel"><p style="color:#64748b">Loading subject scores…</p></div>' : '') + '<div class="card"><div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; flex-wrap: wrap; gap: 10px;"><h2 style="margin: 0;">Classes Catalogue / Students</h2>';
-  if (userStudents.length > 0) html += '<div style="display: flex; gap: 8px; flex-wrap: wrap;">' + (canGenerateSheets ? '<button class="btn btn-success" onclick="exportToExcel()">📊 Export to Excel</button>' : '') + (canDeleteStudents ? '<button class="btn btn-danger" onclick="clearAllStudents()">Clear All Students</button>' : '') + '</div>';
-  html += '</div>';
 
-  if (userStudents.length === 0) {
-    html += '<p style="color: #999; text-align: center; padding: 40px;">No students found</p></div>';
-  } else {
-    html += '<div style="margin-bottom: 15px;"><strong>Total Students: ' + userStudents.length + '</strong></div><div style="overflow-x: auto;"><table><thead><tr><th>Name</th><th>Adm No</th><th>Class</th><th>Term</th><th>Session</th><th>Subjects</th><th>Avg</th><th>Position</th><th>Passport</th><th>Action</th></tr></thead><tbody>';
-    userStudents.forEach(function(s) {
-      var passportCell = s.passport ? '<img src="' + escapeManagementText(s.passport) + '" alt="Passport photo of ' + escapeManagementText(s.studentName) + '" style="width:48px;height:58px;object-fit:cover;border-radius:4px;">' : '<span style="color:#999;">No photo</span>';
-      if (canManagePassports) passportCell = '<label class="btn btn-primary" style="display:inline-block; padding:5px 8px; cursor:pointer;">' + (s.passport ? 'Replace Photo' : 'Upload Photo') + '<input type="file" class="passport-upload" data-student-id="' + s.id + '" accept="image/*" style="display:none;"></label>';
-      html += '<tr><td>' + s.studentName + '</td><td>' + s.admNo + '</td><td>' + s.className + '</td><td>' + s.term + '</td><td>' + escapeManagementText(getLegacyResultSession(s) || '—') + '</td><td>' + s.subjects.length + '</td><td>' + s.averageScore.toFixed(1) + '%</td><td>' + (s.position || '-') + '/' + (s.positionOf || '-') + '</td><td>' + passportCell + '</td><td>' + (canDeleteStudents ? '<button class="btn btn-danger" onclick="removeStudent(' + s.id + ')" style="padding: 4px 12px; font-size: 11px;">Remove</button>' : '—') + '</td></tr>';
-    });
-    html += '</tbody></table></div></div>';
-  }
-  document.getElementById('viewTab').innerHTML = html;
-  if (currentUser.type === 'admin') loadAdminCa1ResultsView();
-  if (currentUser.type === 'formmaster') loadFormMasterSubjectResultsView();
-  document.querySelectorAll('.passport-upload').forEach(function(input) {
-    input.addEventListener('change', async function() {
-      var file = input.files && input.files[0];
-      if (!file) return;
-      var student = students.find(function(item) { return String(item.id) === input.getAttribute('data-student-id'); });
-      if (!student) { showToast('Student record not found', 'error'); return; }
-      input.disabled = true;
-      try {
-        student.passport = await saveStudentPassportToSupabase(student, file);
-        student.passportUrl = student.passport;
-        logActivity('Uploaded / updated student passport photo', (student.studentName || student.fullName || '') + ' / ' + (student.admNo || student.admissionNumber || ''));
-        showToast('Passport photo uploaded to Supabase Storage.', 'success');
-        renderView();
-      } catch (error) {
-        showToast(error && error.message || 'Could not save the passport photo.', 'error');
-      } finally { input.disabled = false; }
-    });
-  });
+async function loadSubjectTeacherScoresView() {
+  var root=document.getElementById('subjectTeacherScoresPanel');
+  if(!root||!supabaseClient||!authenticatedProfile||!authenticatedProfile.school_id||!activeAcademicSession||!currentUser||currentUser.type!=='subjectteacher')return;
+  root.innerHTML='<p style="color:#64748b">Loading your saved scores from Supabase…</p>';
+  try{
+    var schoolId=authenticatedProfile.school_id,teacherId=authenticatedProfile.id;
+    var ar=await supabaseClient.from('teacher_assignments').select('id,class_id,subject_id,academic_session_id,term_id')
+      .eq('school_id',schoolId).eq('teacher_id',teacherId).eq('academic_session_id',activeAcademicSession.id).eq('is_active',true);
+    if(ar.error)throw ar.error;
+    var assignments=ar.data||[];
+    if(!assignments.length){root.innerHTML='<div class="card"><h2>My Entered Scores</h2><p class="alert alert-info">No active class-arm or subject assignments were found for this account in the current academic session.</p></div>';return;}
+    var classIds=Array.from(new Set(assignments.map(function(x){return x.class_id;}).filter(Boolean)));
+    var subjectIds=Array.from(new Set(assignments.map(function(x){return x.subject_id;}).filter(Boolean)));
+    var lookups=await Promise.all([
+      supabaseClient.from('classes').select('id,class_name,level').eq('school_id',schoolId).in('id',classIds),
+      supabaseClient.from('subjects').select('id,name').eq('school_id',schoolId).in('id',subjectIds),
+      supabaseClient.from('terms').select('id,name,term_number,is_current').eq('school_id',schoolId).order('term_number')
+    ]);
+    lookups.forEach(function(x){if(x.error)throw x.error;});
+    var classMap={},subjectMap={},termMap={};
+    (lookups[0].data||[]).forEach(function(x){classMap[String(x.id)]=x;});
+    (lookups[1].data||[]).forEach(function(x){subjectMap[String(x.id)]=x;});
+    (lookups[2].data||[]).forEach(function(x){termMap[String(x.id)]=x;});
+    var recordsByAssignment=await Promise.all(assignments.map(async function(a){
+      var q=supabaseClient.from('results').select('id,student_id,class_id,subject_id,academic_session_id,term_id,entered_by,ca1,ca2,ca3,examination,total,grade,remark,status,updated_at,submitted_at')
+        .eq('school_id',schoolId).eq('entered_by',teacherId).eq('class_id',a.class_id).eq('subject_id',a.subject_id).eq('academic_session_id',activeAcademicSession.id);
+      if(a.term_id)q=q.eq('term_id',a.term_id);
+      var result=await q.order('updated_at',{ascending:false});if(result.error)throw result.error;return result.data||[];
+    }));
+    var seen={},records=[].concat.apply([],recordsByAssignment).filter(function(x){if(seen[String(x.id)])return false;seen[String(x.id)]=true;return true;});
+    var studentIds=Array.from(new Set(records.map(function(x){return x.student_id;}).filter(Boolean)));
+    var related=await Promise.all([
+      studentIds.length?supabaseClient.from('students').select('id,first_name,middle_name,last_name,admission_number').eq('school_id',schoolId).in('id',studentIds):Promise.resolve({data:[],error:null}),
+      studentIds.length?supabaseClient.from('student_enrolments').select('student_id,class_id,academic_session_id,register_number,sid').eq('school_id',schoolId).eq('academic_session_id',activeAcademicSession.id).in('class_id',classIds).in('student_id',studentIds):Promise.resolve({data:[],error:null})
+    ]);
+    related.forEach(function(x){if(x.error)throw x.error;});
+    var studentMap={},enrolmentMap={};
+    (related[0].data||[]).forEach(function(x){studentMap[String(x.id)]=x;});
+    (related[1].data||[]).forEach(function(x){enrolmentMap[String(x.student_id)+'|'+String(x.class_id)]=x;});
+    var terms=lookups[2].data||[],allowedTermIds=Array.from(new Set(assignments.map(function(x){return String(x.term_id||'');}).filter(Boolean)));
+    var selectedClass=root.getAttribute('data-class')||'all',selectedSubject=root.getAttribute('data-subject')||'all',selectedTerm=root.getAttribute('data-term')||'all';
+    if(selectedClass!=='all'&&!classIds.map(String).includes(selectedClass))selectedClass='all';
+    if(selectedSubject!=='all'&&!subjectIds.map(String).includes(selectedSubject))selectedSubject='all';
+    if(selectedTerm!=='all'&&!terms.some(function(x){return String(x.id)===selectedTerm;}))selectedTerm='all';
+    var visible=records.filter(function(x){return(selectedClass==='all'||String(x.class_id)===selectedClass)&&(selectedSubject==='all'||String(x.subject_id)===selectedSubject)&&(selectedTerm==='all'||String(x.term_id)===selectedTerm);});
+    visible.sort(function(a,b){return String(classMap[String(a.class_id)]&&classMap[String(a.class_id)].class_name||'').localeCompare(String(classMap[String(b.class_id)]&&classMap[String(b.class_id)].class_name||''))||String(subjectMap[String(a.subject_id)]&&subjectMap[String(a.subject_id)].name||'').localeCompare(String(subjectMap[String(b.subject_id)]&&subjectMap[String(b.subject_id)].name||''));});
+    var esc=escapeManagementText;
+    var html='<div class="card"><div style="display:flex;justify-content:space-between;gap:10px;align-items:center;flex-wrap:wrap"><div><h2 style="margin:0">My Entered Scores</h2><p style="margin:5px 0;color:#64748b;font-size:13px">Read-only scores saved under your active class-arm and subject assignments. This screen has no score-entry keyboards.</p></div><button type="button" class="btn btn-primary" id="refreshSubjectTeacherScores">Refresh</button></div>';
+    html+='<div class="grid grid-3" style="margin:14px 0"><div class="input-group"><label>Assigned Class Arm</label><select id="teacherViewClass"><option value="all">All my assigned arms</option>'+classIds.map(function(id){var x=classMap[String(id)]||{};return '<option value="'+esc(id)+'"'+(selectedClass===String(id)?' selected':'')+'>'+esc(x.class_name||'Class')+'</option>';}).join('')+'</select></div>';
+    html+='<div class="input-group"><label>Assigned Subject</label><select id="teacherViewSubject"><option value="all">All my assigned subjects</option>'+subjectIds.map(function(id){var x=subjectMap[String(id)]||{};return '<option value="'+esc(id)+'"'+(selectedSubject===String(id)?' selected':'')+'>'+esc(x.name||'Subject')+'</option>';}).join('')+'</select></div>';
+    html+='<div class="input-group"><label>Term</label><select id="teacherViewTerm"><option value="all">All assigned terms</option>'+terms.filter(function(x){return !allowedTermIds.length||allowedTermIds.includes(String(x.id));}).map(function(x){return '<option value="'+esc(x.id)+'"'+(selectedTerm===String(x.id)?' selected':'')+'>'+esc(x.name||('Term '+x.term_number))+'</option>';}).join('')+'</select></div></div>';
+    html+='<div style="display:flex;gap:9px;flex-wrap:wrap;margin:10px 0"><span style="padding:7px 10px;background:#eef2ff;border-radius:8px;color:#3730a3"><strong>'+visible.length+'</strong> saved score records</span><span style="padding:7px 10px;background:#ecfdf3;border-radius:8px;color:#067647"><strong>'+visible.filter(function(x){return ['approved','published'].includes(String(x.status||'').toLowerCase());}).length+'</strong> approved / published</span></div>';
+    if(!visible.length)html+='<p class="alert alert-info">No saved scores were found for this selection. Scores appear here after they are saved under an active assignment.</p>';
+    else{
+      html+='<div style="overflow-x:auto"><table style="width:100%;min-width:980px"><thead><tr><th>S/N</th><th>Register No.</th><th>Student</th><th>Class Arm</th><th>Subject</th><th>Term</th><th>CA1</th><th>CA2</th><th>CA3</th><th>Examination</th><th>Total</th><th>Grade</th><th>Status</th><th>Last Saved</th></tr></thead><tbody>';
+      visible.forEach(function(x,i){var st=studentMap[String(x.student_id)]||{},en=enrolmentMap[String(x.student_id)+'|'+String(x.class_id)]||{},term=termMap[String(x.term_id)]||{},status=String(x.status||'draft').toLowerCase(),color=['approved','published'].includes(status)?'#067647':status==='submitted'?'#1d4ed8':'#9a6700';var val=function(v){return v===null||v===undefined||v===''?'—':esc(v);};html+='<tr><td>'+(i+1)+'</td><td>'+val(en.register_number||en.sid||st.admission_number)+'</td><td>'+esc([st.first_name,st.middle_name,st.last_name].filter(Boolean).join(' ')||'Student record unavailable')+'</td><td>'+val(classMap[String(x.class_id)]&&classMap[String(x.class_id)].class_name)+'</td><td>'+val(subjectMap[String(x.subject_id)]&&subjectMap[String(x.subject_id)].name)+'</td><td>'+val(term.name||('Term '+(term.term_number||'')))+'</td><td>'+val(x.ca1)+'</td><td>'+val(x.ca2)+'</td><td>'+val(x.ca3)+'</td><td>'+val(x.examination)+'</td><td><strong>'+val(x.total)+'</strong></td><td>'+val(x.grade)+'</td><td><strong style="color:'+color+'">'+esc(status.replace(/_/g,' ').toUpperCase())+'</strong></td><td>'+val(x.updated_at?new Date(x.updated_at).toLocaleString():'—')+'</td></tr>';});
+      html+='</tbody></table></div>';
+    }
+    html+='</div>';root.innerHTML=html;
+    ['teacherViewClass','teacherViewSubject','teacherViewTerm'].forEach(function(id){var el=root.querySelector('#'+id);if(el)el.addEventListener('change',function(){root.setAttribute('data-class',root.querySelector('#teacherViewClass').value);root.setAttribute('data-subject',root.querySelector('#teacherViewSubject').value);root.setAttribute('data-term',root.querySelector('#teacherViewTerm').value);loadSubjectTeacherScoresView();});});
+    var refresh=root.querySelector('#refreshSubjectTeacherScores');if(refresh)refresh.addEventListener('click',loadSubjectTeacherScoresView);
+  }catch(error){console.error('Subject teacher score view failed:',error);root.innerHTML='<div class="card"><h2>My Entered Scores</h2><p class="alert alert-error">Could not load your saved scores from Supabase: '+escapeManagementText(error.message||'Unknown error')+'</p></div>';}
+}
+function renderView() {
+  var root=document.getElementById('viewTab');if(!root||!currentUser)return;
+  if(currentUser.type==='subjectteacher'){root.innerHTML='<div id="subjectTeacherScoresPanel"></div>';loadSubjectTeacherScoresView();return;}
+  if(currentUser.type==='formmaster'){root.innerHTML='<div class="card" id="formMasterSubjectResultsPanel"><p style="color:#64748b">Loading your assigned class-arm scores…</p></div>';loadFormMasterSubjectResultsView();return;}
+  if(currentUser.type==='admin'){root.innerHTML='<div class="card"><h2>Students with Entered CA1 Scores</h2><p style="color:#64748b;font-size:13px">Read-only score records and the accumulated CA approval queue.</p><div id="adminCa1ResultsPanel"><p style="color:#64748b">Loading saved scores…</p></div></div>';loadAdminCa1ResultsView();return;}
+  root.innerHTML='<div class="card"><h2>Score View</h2><p class="alert alert-info">A score-view register is not available for this account role.</p></div>';
 }
 
 window.removeStudent = async function(studentId) {
