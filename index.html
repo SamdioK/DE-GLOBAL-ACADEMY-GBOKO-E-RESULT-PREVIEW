@@ -13379,23 +13379,65 @@ async function loadAdminCa1ResultsView() {
     if(!arms.some(function(a){return a.id===selectedArm;}))selectedArm=arms.length?arms[0].id:'';
     panel.setAttribute('data-selected-arm',selectedArm);
     function armRows(armId){return rows.filter(function(r){return String(r.class_id||'')===String(armId);});}
-    function buildArmTable(armId){
-      var chosen=armRows(armId),arm=arms.find(function(a){return a.id===String(armId);});
-      var out='<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;margin:8px 0 10px"><h3 style="margin:0;color:#293968">'+esc(arm?arm.name:'Select a class arm')+' — Entered Scores</h3><span style="padding:6px 10px;background:#eef2ff;color:#3730a3;border-radius:8px;font-size:12px;font-weight:700">'+chosen.length+' records</span></div>';
-      if(!chosen.length)return out+'<p class="alert alert-info">No entered CA1 scores are available for this class arm.</p>';
-      out+='<div style="overflow-x:auto;-webkit-overflow-scrolling:touch"><table style="width:100%;min-width:1120px"><thead><tr><th>S/N</th><th>SID</th><th>Student</th><th>Admission No.</th><th>Class Arm</th><th>Subject</th><th>Session</th><th>Term</th><th>CA1</th><th>CA2</th><th>CA3</th><th>Exam</th><th>Status</th></tr></thead><tbody>';
-      chosen.forEach(function(row,i){
-        var st=studentsById[String(row.student_id)]||{},ss=sessionsById[String(row.academic_session_id)]||{},tm=termsById[String(row.term_id)]||{},en=enrolmentByStudentClassSession[String(row.student_id)+'|'+String(row.class_id)+'|'+String(row.academic_session_id)]||{};
-        var nm=[st.first_name,st.middle_name,st.last_name].filter(Boolean).join(' ')||'Student record unavailable';
-        out+='<tr><td>'+(i+1)+'</td><td>'+esc(en.sid||'—')+'</td><td>'+esc(nm)+'</td><td>'+esc(st.admission_number||'—')+'</td><td>'+esc((classesById[String(row.class_id)]||{}).class_name||'—')+'</td><td>'+esc((subjectsById[String(row.subject_id)]||{}).name||'—')+'</td><td>'+esc(ss.name||'—')+'</td><td>'+esc(tm.name||('Term '+(tm.term_number||'—')) )+'</td><td class="score-value"><strong>'+esc(row.ca1)+'</strong></td><td class="score-value">'+esc(row.ca2==null?'—':row.ca2)+'</td><td class="score-value">'+esc(row.ca3==null?'—':row.ca3)+'</td><td class="score-value">'+esc(row.examination==null?'—':row.examination)+'</td><td>'+esc(row.status||'draft')+'</td></tr>';
+    function buildArmSubjects(armId){
+      var chosen=armRows(armId),subjectGroups={};
+      chosen.forEach(function(row){
+        var key=[row.subject_id||'',row.academic_session_id||'',row.term_id||''].join('|');
+        if(!subjectGroups[key])subjectGroups[key]=[];
+        subjectGroups[key].push(row);
       });
-      return out+'</tbody></table></div>';
+      var keys=Object.keys(subjectGroups).sort(function(a,b){
+        var ar=subjectGroups[a][0],br=subjectGroups[b][0];
+        var an=String((subjectsById[String(ar.subject_id)]||{}).name||'').trim();
+        var bn=String((subjectsById[String(br.subject_id)]||{}).name||'').trim();
+        var order=an.localeCompare(bn,undefined,{numeric:true,sensitivity:'base'});
+        if(order)return order;
+        order=String((sessionsById[String(ar.academic_session_id)]||{}).name||'').localeCompare(String((sessionsById[String(br.academic_session_id)]||{}).name||''),undefined,{numeric:true});
+        if(order)return order;
+        return Number((termsById[String(ar.term_id)]||{}).term_number||0)-Number((termsById[String(br.term_id)]||{}).term_number||0);
+      });
+      var out='';
+      if(!keys.length)return '<p class="alert alert-info">No subject score records are available for this class arm.</p>';
+      keys.forEach(function(key,index){
+        var subjectRows=subjectGroups[key],first=subjectRows[0];
+        subjectRows.sort(function(a,b){
+          var ae=enrolmentByStudentClassSession[String(a.student_id)+'|'+String(a.class_id)+'|'+String(a.academic_session_id)]||{};
+          var be=enrolmentByStudentClassSession[String(b.student_id)+'|'+String(b.class_id)+'|'+String(b.academic_session_id)]||{};
+          var order=compareStudentRegisterOrder(ae,be);
+          if(order)return order;
+          var an=String((studentsById[String(a.student_id)]||{}).admission_number||'');
+          var bn=String((studentsById[String(b.student_id)]||{}).admission_number||'');
+          return an.localeCompare(bn,undefined,{numeric:true,sensitivity:'base'});
+        });
+        var subjectName=(subjectsById[String(first.subject_id)]||{}).name||'Subject not found';
+        var sessionName=(sessionsById[String(first.academic_session_id)]||{}).name||'Session not found';
+        var term=(termsById[String(first.term_id)]||{}).name||('Term '+((termsById[String(first.term_id)]||{}).term_number||'—'));
+        out+='<section class="student-class-details admin-arm-subject-sheet" style="margin:14px 0 18px;padding:14px;border:1px solid #d9e1f2;border-radius:10px;background:#fff;box-shadow:0 3px 10px rgba(42,61,112,.07)">';
+        out+='<div class="student-class-level-banner" style="margin-bottom:10px;text-align:left">Subject '+(index+1)+' — '+esc(subjectName)+'</div>';
+        out+='<div style="display:flex;gap:8px;flex-wrap:wrap;margin:0 0 10px"><span style="padding:5px 9px;border-radius:7px;background:#f0f3ff;color:#3449a1;font-size:12px;font-weight:700">'+esc(sessionName)+'</span><span style="padding:5px 9px;border-radius:7px;background:#f5f1fb;color:#65459a;font-size:12px;font-weight:700">'+esc(term)+'</span><span style="padding:5px 9px;border-radius:7px;background:#eef7f6;color:#246b68;font-size:12px;font-weight:700">'+subjectRows.length+' student record(s)</span></div>';
+        out+='<div style="overflow-x:auto;-webkit-overflow-scrolling:touch"><table style="width:100%;min-width:1050px"><thead><tr><th>S/N</th><th>SID</th><th>Student</th><th>Admission No.</th><th>Class Arm</th><th>Session</th><th>Term</th><th>CA1</th><th>CA2</th><th>CA3</th><th>Examination</th><th>Status</th></tr></thead><tbody>';
+        subjectRows.forEach(function(row,i){
+          var st=studentsById[String(row.student_id)]||{},ss=sessionsById[String(row.academic_session_id)]||{},tm=termsById[String(row.term_id)]||{},en=enrolmentByStudentClassSession[String(row.student_id)+'|'+String(row.class_id)+'|'+String(row.academic_session_id)]||{};
+          var name=[st.first_name,st.middle_name,st.last_name].filter(Boolean).join(' ')||'Student record unavailable';
+          out+='<tr><td>'+(i+1)+'</td><td>'+esc(en.sid||'—')+'</td><td>'+esc(name)+'</td><td>'+esc(st.admission_number||'—')+'</td><td>'+esc((classesById[String(row.class_id)]||{}).class_name||'—')+'</td><td>'+esc(ss.name||'—')+'</td><td>'+esc(tm.name||('Term '+(tm.term_number||'—')) )+'</td><td class="score-value"><strong>'+esc(row.ca1)+'</strong></td><td class="score-value">'+esc(row.ca2==null?'—':row.ca2)+'</td><td class="score-value">'+esc(row.ca3==null?'—':row.ca3)+'</td><td class="score-value">'+esc(row.examination==null?'—':row.examination)+'</td><td>'+esc(row.status||'draft')+'</td></tr>';
+        });
+        out+='</tbody></table></div></section>';
+      });
+      return out;
     }
-    var html='<div style="margin-bottom:10px"><strong>'+rows.length+' subject result record(s) with CA1 entered</strong><p style="margin:5px 0;color:#64748b;font-size:13px">Select a class-arm hanger to display only the saved scores for that arm.</p></div>';
-    html+='<section aria-label="Class arm score filters" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(112px,1fr));gap:9px;margin:12px 0 18px">';
-    arms.forEach(function(a){var active=a.id===selectedArm;html+='<button type="button" class="admin-arm-hanger" data-arm-id="'+esc(a.id)+'" aria-pressed="'+(active?'true':'false')+'" style="min-height:72px;padding:10px;border:1px solid '+(active?'#5368d8':'#dbe2f0')+';border-bottom:4px solid '+(active?'#4357cc':'#cbd5e1')+';border-radius:10px;background:'+(active?'#667eea':'#fff')+';color:'+(active?'#fff':'#34415d')+';text-align:left;cursor:pointer"><strong style="display:block">'+esc(a.name)+'</strong><small>'+a.count+' score records</small></button>';});
+    var selectedArmName=(arms.find(function(a){return a.id===selectedArm;})||{}).name||'Select a class arm';
+    var html='<div style="margin-bottom:10px"><strong>'+rows.length+' subject result record(s) with CA1 entered</strong><p style="margin:5px 0;color:#64748b;font-size:13px">Choose a hanging class arm. All subjects and their student score registers will unfold below.</p></div>';
+    html+='<div class="student-class-picker"><div class="student-class-picker-groups"><div class="student-class-picker-group basic" style="grid-template-columns:repeat(auto-fit,minmax(145px,1fr));gap:12px">';
+    arms.forEach(function(a){
+      var active=a.id===selectedArm;
+      html+='<button type="button" class="student-class-arm admin-arm-hanger'+(active?' selected':'')+'" data-arm-id="'+esc(a.id)+'" aria-pressed="'+(active?'true':'false')+'" aria-label="Select '+esc(a.name)+'">'+esc(a.name)+'</button>';
+    });
     if(!arms.length)html+='<p style="color:#64748b">No class-arm score records found.</p>';
-    html+='</section><div id="adminArmScoreContent">'+buildArmTable(selectedArm)+'</div>';
+    html+='</div></div></div>';
+    html+='<div id="adminArmScoreContent" style="margin-top:14px">';
+    if(selectedArm)html+='<div class="student-class-details" style="padding:14px;border:1px solid #d9e1f2;border-radius:10px;background:#fff"><h3 style="margin:0 0 12px;color:#293968">'+esc(selectedArmName)+' — Subject Score Registers</h3>'+buildArmSubjects(selectedArm)+'</div>';
+    else html+='<p class="alert alert-info">Select a class arm to view its subject registers.</p>';
+    html+='</div>';
     var groups={};
     adminCaPending.forEach(function(item){var key=[item.class_id,item.subject_id,item.academic_session_id,item.term_id].join('|');if(!groups[key])groups[key]=[];groups[key].push(item);});
     html+='<section style="margin-top:18px;padding:14px;border:1px solid #dbe4f0;border-radius:12px;background:#f8fafc"><h3 style="margin:0;color:#293968">Accumulated CA Final Approval Queue</h3><p style="font-size:12px;color:#64748b;margin:5px 0 12px">Approve a CA component individually or select all submitted components within the same class, subject, session and term to approve them together. CA approval is processed in CA1–CA3 order.</p>';
@@ -13404,9 +13446,16 @@ async function loadAdminCa1ResultsView() {
     html+='</section>';
     panel.innerHTML=html;
     panel.querySelectorAll('.admin-arm-hanger').forEach(function(button){button.addEventListener('click',function(){
-      var id=this.getAttribute('data-arm-id')||'';panel.setAttribute('data-selected-arm',id);
-      panel.querySelectorAll('.admin-arm-hanger').forEach(function(tile){var on=tile.getAttribute('data-arm-id')===id;tile.setAttribute('aria-pressed',on?'true':'false');tile.style.background=on?'#667eea':'#fff';tile.style.color=on?'#fff':'#34415d';tile.style.borderColor=on?'#5368d8':'#dbe2f0';tile.style.borderBottomColor=on?'#4357cc':'#cbd5e1';});
-      var target=panel.querySelector('#adminArmScoreContent');if(target)target.innerHTML=buildArmTable(id);
+      var id=this.getAttribute('data-arm-id')||'';
+      panel.setAttribute('data-selected-arm',id);
+      panel.querySelectorAll('.admin-arm-hanger').forEach(function(tile){
+        var active=tile.getAttribute('data-arm-id')===id;
+        tile.classList.toggle('selected',active);
+        tile.setAttribute('aria-pressed',active?'true':'false');
+      });
+      var arm=arms.find(function(item){return item.id===id;});
+      var target=panel.querySelector('#adminArmScoreContent');
+      if(target)target.innerHTML='<div class="student-class-details" style="padding:14px;border:1px solid #d9e1f2;border-radius:10px;background:#fff"><h3 style="margin:0 0 12px;color:#293968">'+esc(arm?arm.name:'Selected class arm')+' — Subject Score Registers</h3>'+buildArmSubjects(id)+'</div>';
     });});
     panel.querySelectorAll('.admin-ca-approve-group').forEach(function(button){
       button.addEventListener('click',async function(){
