@@ -4169,10 +4169,8 @@ function showApp() {
   if(initialButton){tabsContainer.querySelectorAll('.tab').forEach(function(btn){btn.classList.toggle('active',btn===initialButton);});}
   // Wait for asynchronous tab data (especially the teacher's saved-score register)
   // before placing the refresh notice over the restored workspace.
-  var renderReady=(initialTab==='view')?renderViewReadinessPromise():Promise.resolve();
-  if(initialTab==='view'){} 
   showTab(initialTab);
-  if(initialTab==='view')renderReady=window.__activeViewRenderPromise||renderReady;
+  var renderReady=initialTab==='view'?(window.__activeViewRenderPromise||Promise.resolve()):Promise.resolve();
   Promise.resolve(renderReady).catch(function(error){console.warn('Restored tab data:',error);}).then(function(){
     requestAnimationFrame(function(){
       showPageRefreshNotice();
