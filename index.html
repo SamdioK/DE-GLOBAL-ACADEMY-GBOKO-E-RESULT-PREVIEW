@@ -483,6 +483,23 @@ th { background: #f5f5f5; font-weight: 600; }
   #loginContainer .login-box #loginBtn{min-height:50px}
   #loginContainer .login-box #viewManagementBtn,#loginContainer .login-box #openPortalBtn{min-height:47px;font-size:14px}
 }
+
+/* Administrator score view: remove nested card gutters and reclaim mobile width */
+.admin-view-score-card{width:100%;max-width:100%;min-width:0;box-sizing:border-box}
+.admin-view-score-card #adminCa1ResultsPanel,.admin-view-score-card #adminArmScoreContent,
+.admin-view-score-card .admin-arm-subject-sheet{width:100%;max-width:100%;min-width:0;box-sizing:border-box}
+@media(max-width:700px){
+  .admin-view-score-card{padding:10px!important;margin:0 0 10px!important;border-radius:8px!important;box-shadow:none!important}
+  .admin-view-score-card #adminCa1ResultsPanel{padding:0!important;margin:0!important}
+  .admin-view-score-card #adminArmScoreContent{margin-top:8px!important;padding:0!important}
+  .admin-view-score-card .admin-arm-subject-sheet{margin:12px 0 16px!important;padding:0 0 12px!important}
+  .admin-view-score-card .admin-arm-subject-sheet .student-class-level-banner{padding:9px 10px!important;font-size:13px!important}
+  .admin-view-score-card .admin-arm-subject-sheet table{font-size:12px!important}
+  .admin-view-score-card .admin-arm-subject-sheet th,.admin-view-score-card .admin-arm-subject-sheet td{padding:8px 7px!important}
+  .admin-view-score-card .student-class-picker{margin:8px 0 12px!important}
+  .admin-view-score-card .student-class-picker-groups{gap:8px!important}
+  .admin-view-score-card .student-class-picker-group{gap:8px!important}
+}
 </style>
 
 <style id="pageStyleNavigation">
@@ -13412,14 +13429,14 @@ async function loadAdminCa1ResultsView() {
         var subjectName=(subjectsById[String(first.subject_id)]||{}).name||'Subject not found';
         var sessionName=(sessionsById[String(first.academic_session_id)]||{}).name||'Session not found';
         var term=(termsById[String(first.term_id)]||{}).name||('Term '+((termsById[String(first.term_id)]||{}).term_number||'—'));
-        out+='<section class="student-class-details admin-arm-subject-sheet" style="margin:14px 0 18px;padding:14px;border:1px solid #d9e1f2;border-radius:10px;background:#fff;box-shadow:0 3px 10px rgba(42,61,112,.07)">';
+        out+='<section class="admin-arm-subject-sheet" style="width:100%;max-width:100%;min-width:0;margin:16px 0 20px;padding:0 0 16px;border:0;border-bottom:1px solid #dbe2ee;border-radius:0;background:transparent;box-shadow:none">';
         out+='<div class="student-class-level-banner" style="margin-bottom:10px;text-align:left">Subject '+(index+1)+' — '+esc(subjectName)+'</div>';
         out+='<div style="display:flex;gap:8px;flex-wrap:wrap;margin:0 0 10px"><span style="padding:5px 9px;border-radius:7px;background:#f0f3ff;color:#3449a1;font-size:12px;font-weight:700">'+esc(sessionName)+'</span><span style="padding:5px 9px;border-radius:7px;background:#f5f1fb;color:#65459a;font-size:12px;font-weight:700">'+esc(term)+'</span><span style="padding:5px 9px;border-radius:7px;background:#eef7f6;color:#246b68;font-size:12px;font-weight:700">'+subjectRows.length+' student record(s)</span></div>';
-        out+='<div style="overflow-x:auto;-webkit-overflow-scrolling:touch"><table style="width:100%;min-width:1050px"><thead><tr><th>S/N</th><th>SID</th><th>Student</th><th>Admission No.</th><th>Class Arm</th><th>Session</th><th>Term</th><th>CA1</th><th>CA2</th><th>CA3</th><th>Examination</th><th>Status</th></tr></thead><tbody>';
+        out+='<div style="width:100%;max-width:100%;min-width:0;overflow-x:auto;-webkit-overflow-scrolling:touch"><table style="width:100%;min-width:760px"><thead><tr><th>S/N</th><th>SID</th><th>Student</th><th>Admission No.</th><th>CA1</th><th>CA2</th><th>CA3</th><th>Examination</th><th>Status</th></tr></thead><tbody>';
         subjectRows.forEach(function(row,i){
           var st=studentsById[String(row.student_id)]||{},ss=sessionsById[String(row.academic_session_id)]||{},tm=termsById[String(row.term_id)]||{},en=enrolmentByStudentClassSession[String(row.student_id)+'|'+String(row.class_id)+'|'+String(row.academic_session_id)]||{};
           var name=[st.first_name,st.middle_name,st.last_name].filter(Boolean).join(' ')||'Student record unavailable';
-          out+='<tr><td>'+(i+1)+'</td><td>'+esc(en.sid||'—')+'</td><td>'+esc(name)+'</td><td>'+esc(st.admission_number||'—')+'</td><td>'+esc((classesById[String(row.class_id)]||{}).class_name||'—')+'</td><td>'+esc(ss.name||'—')+'</td><td>'+esc(tm.name||('Term '+(tm.term_number||'—')) )+'</td><td class="score-value"><strong>'+esc(row.ca1)+'</strong></td><td class="score-value">'+esc(row.ca2==null?'—':row.ca2)+'</td><td class="score-value">'+esc(row.ca3==null?'—':row.ca3)+'</td><td class="score-value">'+esc(row.examination==null?'—':row.examination)+'</td><td>'+esc(row.status||'draft')+'</td></tr>';
+          out+='<tr><td>'+(i+1)+'</td><td>'+esc(en.sid||'—')+'</td><td>'+esc(name)+'</td><td>'+esc(st.admission_number||'—')+'</td><td class="score-value"><strong>'+esc(row.ca1)+'</strong></td><td class="score-value">'+esc(row.ca2==null?'—':row.ca2)+'</td><td class="score-value">'+esc(row.ca3==null?'—':row.ca3)+'</td><td class="score-value">'+esc(row.examination==null?'—':row.examination)+'</td><td>'+esc(row.status||'draft')+'</td></tr>';
         });
         out+='</tbody></table></div></section>';
       });
@@ -13435,7 +13452,7 @@ async function loadAdminCa1ResultsView() {
     if(!arms.length)html+='<p style="color:#64748b">No class-arm score records found.</p>';
     html+='</div></div></div>';
     html+='<div id="adminArmScoreContent" style="margin-top:14px">';
-    if(selectedArm)html+='<div class="student-class-details" style="padding:14px;border:1px solid #d9e1f2;border-radius:10px;background:#fff"><h3 style="margin:0 0 12px;color:#293968">'+esc(selectedArmName)+' — Subject Score Registers</h3>'+buildArmSubjects(selectedArm)+'</div>';
+    if(selectedArm)html+='<div style="width:100%;max-width:100%;min-width:0;margin:0;padding:0"><h3 style="margin:0 0 10px;color:#293968">'+esc(selectedArmName)+' — Subject Score Registers</h3>'+buildArmSubjects(selectedArm)+'</div>';
     else html+='<p class="alert alert-info">Select a class arm to view its subject registers.</p>';
     html+='</div>';
     var groups={};
@@ -13455,7 +13472,7 @@ async function loadAdminCa1ResultsView() {
       });
       var arm=arms.find(function(item){return item.id===id;});
       var target=panel.querySelector('#adminArmScoreContent');
-      if(target)target.innerHTML='<div class="student-class-details" style="padding:14px;border:1px solid #d9e1f2;border-radius:10px;background:#fff"><h3 style="margin:0 0 12px;color:#293968">'+esc(arm?arm.name:'Selected class arm')+' — Subject Score Registers</h3>'+buildArmSubjects(id)+'</div>';
+      if(target)target.innerHTML='<div style="width:100%;max-width:100%;min-width:0;margin:0;padding:0"><h3 style="margin:0 0 10px;color:#293968">'+esc(arm?arm.name:'Selected class arm')+' — Subject Score Registers</h3>'+buildArmSubjects(id)+'</div>';
     });});
     panel.querySelectorAll('.admin-ca-approve-group').forEach(function(button){
       button.addEventListener('click',async function(){
@@ -13720,7 +13737,7 @@ function renderView() {
   var root=document.getElementById('viewTab');if(!root||!currentUser)return Promise.resolve();
   if(currentUser.type==='subjectteacher'){root.innerHTML='<div id="subjectTeacherScoresPanel"></div>';return loadSubjectTeacherScoresView();}
   if(currentUser.type==='formmaster'){root.innerHTML='<div class="card" id="formMasterSubjectResultsPanel"><p style="color:#64748b">Loading your assigned class-arm scores…</p></div>';return loadFormMasterSubjectResultsView();}
-  if(currentUser.type==='admin'){root.innerHTML='<div class="card"><h2>Students with Entered CA1 Scores</h2><p style="color:#64748b;font-size:13px">Read-only score records and the accumulated CA approval queue.</p><div id="adminCa1ResultsPanel"><p style="color:#64748b">Loading saved scores…</p></div></div>';return loadAdminCa1ResultsView();}
+  if(currentUser.type==='admin'){root.innerHTML='<div class="card admin-view-score-card"><h2>Students with Entered CA1 Scores</h2><p style="color:#64748b;font-size:13px">Read-only score records and the accumulated CA approval queue.</p><div id="adminCa1ResultsPanel"><p style="color:#64748b">Loading saved scores…</p></div></div>';return loadAdminCa1ResultsView();}
   root.innerHTML='<div class="card"><h2>Score View</h2><p class="alert alert-info">A score-view register is not available for this account role.</p></div>';
   return Promise.resolve();
 }
