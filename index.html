@@ -1141,6 +1141,8 @@ async function initApp() {
   if (setupView) setupView.classList.add('hidden');
   if (loginView) loginView.classList.remove('hidden');
   var appShell=document.getElementById('appContainer');
+  var loginContainer=document.getElementById('loginContainer');
+  if(loginContainer)loginContainer.style.display='none';
   if(appShell)appShell.classList.add('active');
   showPageRefreshNotice();
   setupEventListeners();
