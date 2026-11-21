@@ -13371,34 +13371,43 @@ async function loadAdminCa1ResultsView() {
     var adminCaPending=(Array.isArray(assessmentQueue.data)?assessmentQueue.data:[]).filter(function(item){
       return [1,2,3].indexOf(Number(item.assessment_stage))>=0 && item.status==='submitted_to_admin';
     });
-    var esc = escapeManagementText;
-    var html = '<div style="margin-bottom:10px"><strong>' + rows.length + ' subject result record(s) with CA1 entered</strong></div>' +
-      '<div style="overflow-x:auto"><table><thead><tr><th>S/N</th><th>SID</th><th>Student</th><th>Admission No.</th><th>Class</th><th>Subject</th><th>Session</th><th>Term</th><th class="score-heading-cell">CA1</th><th class="score-heading-cell">CA2</th><th class="score-heading-cell">CA3</th><th class="score-heading-cell">Exam</th><th>Status</th></tr></thead><tbody>';
-    rows.forEach(function(row,index) {
-      var student=studentsById[String(row.student_id)]||{}, session=sessionsById[String(row.academic_session_id)]||{}, term=termsById[String(row.term_id)]||{};
-      var enrolment=enrolmentByStudentClassSession[String(row.student_id)+'|'+String(row.class_id)+'|'+String(row.academic_session_id)]||{};
-      var name=[student.first_name,student.middle_name,student.last_name].filter(Boolean).join(' ') || 'Student record unavailable';
-      html += '<tr><td>'+(index+1)+'</td><td>'+esc(enrolment.sid||'—')+'</td><td>'+esc(name)+'</td><td>'+esc(student.admission_number||'—')+'</td><td>'+esc((classesById[String(row.class_id)]||{}).class_name||'—')+'</td><td>'+esc((subjectsById[String(row.subject_id)]||{}).name||'—')+'</td><td>'+esc(session.name||'—')+'</td><td>'+esc(term.name||('Term '+(term.term_number||'—')) )+'</td><td class="score-value"><strong>'+esc(row.ca1)+'</strong></td><td class="score-value">'+esc(row.ca2==null?'—':row.ca2)+'</td><td class="score-value">'+esc(row.ca3==null?'—':row.ca3)+'</td><td class="score-value">'+esc(row.examination==null?'—':row.examination)+'</td><td>'+esc(row.status||'draft')+'</td></tr>';
-    });
-    html += '</tbody></table></div>';
-    var groups={};
-    adminCaPending.forEach(function(item){
-      var key=[item.class_id,item.subject_id,item.academic_session_id,item.term_id].join('|');
-      if(!groups[key])groups[key]=[];
-      groups[key].push(item);
-    });
-    html += '<section style="margin-top:18px;padding:14px;border:1px solid #dbe4f0;border-radius:12px;background:#f8fafc"><h3 style="margin:0;color:#293968">Accumulated CA Final Approval Queue</h3><p style="font-size:12px;color:#64748b;margin:5px 0 12px">Approve a CA component individually or select all submitted components within the same class, subject, session and term to approve them together. CA approval is processed in CA1–CA3 order.</p>';
-    if(!adminCaPending.length) html += '<p style="color:#64748b;font-size:13px">No CA submissions are currently awaiting final approval.</p>';
-    Object.keys(groups).forEach(function(key,index){
-      var group=groups[key],first=group[0],groupLabel=esc((classesById[String(first.class_id)]||{}).class_name||'Class')+' · '+esc((subjectsById[String(first.subject_id)]||{}).name||'Subject')+' · '+esc((termsById[String(first.term_id)]||{}).name||'Term');
-      html += '<div style="padding:10px;margin:10px 0;background:#fff;border:1px solid #e2e8f0;border-radius:9px"><div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap"><strong>'+groupLabel+'</strong><button type="button" class="btn btn-primary admin-ca-approve-group" data-group="'+esc(key)+'">Approve selected / all below</button></div>';
-      group.forEach(function(item){
-        html += '<label style="display:flex;align-items:center;gap:8px;padding:7px 2px;font-size:13px"><input type="checkbox" class="admin-ca-queue-check" data-group="'+esc(key)+'" value="'+esc(item.id)+'"><span>CA'+Number(item.assessment_stage)+' — submitted '+esc(item.submitted_at?new Date(item.submitted_at).toLocaleString():'')+'</span></label>';
+    var esc=escapeManagementText;
+    var armCounts={};
+    rows.forEach(function(row){var k=String(row.class_id||'');armCounts[k]=(armCounts[k]||0)+1;});
+    var arms=Object.keys(armCounts).map(function(id){return {id:id,name:(classesById[id]||{}).class_name||'Unnamed arm',count:armCounts[id]};}).sort(function(a,b){return a.name.localeCompare(b.name,undefined,{numeric:true,sensitivity:'base'});});
+    var selectedArm=panel.getAttribute('data-selected-arm')||'';
+    if(!arms.some(function(a){return a.id===selectedArm;}))selectedArm=arms.length?arms[0].id:'';
+    panel.setAttribute('data-selected-arm',selectedArm);
+    function armRows(armId){return rows.filter(function(r){return String(r.class_id||'')===String(armId);});}
+    function buildArmTable(armId){
+      var chosen=armRows(armId),arm=arms.find(function(a){return a.id===String(armId);});
+      var out='<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;margin:8px 0 10px"><h3 style="margin:0;color:#293968">'+esc(arm?arm.name:'Select a class arm')+' — Entered Scores</h3><span style="padding:6px 10px;background:#eef2ff;color:#3730a3;border-radius:8px;font-size:12px;font-weight:700">'+chosen.length+' records</span></div>';
+      if(!chosen.length)return out+'<p class="alert alert-info">No entered CA1 scores are available for this class arm.</p>';
+      out+='<div style="overflow-x:auto;-webkit-overflow-scrolling:touch"><table style="width:100%;min-width:1120px"><thead><tr><th>S/N</th><th>SID</th><th>Student</th><th>Admission No.</th><th>Class Arm</th><th>Subject</th><th>Session</th><th>Term</th><th>CA1</th><th>CA2</th><th>CA3</th><th>Exam</th><th>Status</th></tr></thead><tbody>';
+      chosen.forEach(function(row,i){
+        var st=studentsById[String(row.student_id)]||{},ss=sessionsById[String(row.academic_session_id)]||{},tm=termsById[String(row.term_id)]||{},en=enrolmentByStudentClassSession[String(row.student_id)+'|'+String(row.class_id)+'|'+String(row.academic_session_id)]||{};
+        var nm=[st.first_name,st.middle_name,st.last_name].filter(Boolean).join(' ')||'Student record unavailable';
+        out+='<tr><td>'+(i+1)+'</td><td>'+esc(en.sid||'—')+'</td><td>'+esc(nm)+'</td><td>'+esc(st.admission_number||'—')+'</td><td>'+esc((classesById[String(row.class_id)]||{}).class_name||'—')+'</td><td>'+esc((subjectsById[String(row.subject_id)]||{}).name||'—')+'</td><td>'+esc(ss.name||'—')+'</td><td>'+esc(tm.name||('Term '+(tm.term_number||'—')) )+'</td><td class="score-value"><strong>'+esc(row.ca1)+'</strong></td><td class="score-value">'+esc(row.ca2==null?'—':row.ca2)+'</td><td class="score-value">'+esc(row.ca3==null?'—':row.ca3)+'</td><td class="score-value">'+esc(row.examination==null?'—':row.examination)+'</td><td>'+esc(row.status||'draft')+'</td></tr>';
       });
-      html += '</div>';
-    });
-    html += '</section>';
-    panel.innerHTML = html;
+      return out+'</tbody></table></div>';
+    }
+    var html='<div style="margin-bottom:10px"><strong>'+rows.length+' subject result record(s) with CA1 entered</strong><p style="margin:5px 0;color:#64748b;font-size:13px">Select a class-arm hanger to display only the saved scores for that arm.</p></div>';
+    html+='<section aria-label="Class arm score filters" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(112px,1fr));gap:9px;margin:12px 0 18px">';
+    arms.forEach(function(a){var active=a.id===selectedArm;html+='<button type="button" class="admin-arm-hanger" data-arm-id="'+esc(a.id)+'" aria-pressed="'+(active?'true':'false')+'" style="min-height:72px;padding:10px;border:1px solid '+(active?'#5368d8':'#dbe2f0')+';border-bottom:4px solid '+(active?'#4357cc':'#cbd5e1')+';border-radius:10px;background:'+(active?'#667eea':'#fff')+';color:'+(active?'#fff':'#34415d')+';text-align:left;cursor:pointer"><strong style="display:block">'+esc(a.name)+'</strong><small>'+a.count+' score records</small></button>';});
+    if(!arms.length)html+='<p style="color:#64748b">No class-arm score records found.</p>';
+    html+='</section><div id="adminArmScoreContent">'+buildArmTable(selectedArm)+'</div>';
+    var groups={};
+    adminCaPending.forEach(function(item){var key=[item.class_id,item.subject_id,item.academic_session_id,item.term_id].join('|');if(!groups[key])groups[key]=[];groups[key].push(item);});
+    html+='<section style="margin-top:18px;padding:14px;border:1px solid #dbe4f0;border-radius:12px;background:#f8fafc"><h3 style="margin:0;color:#293968">Accumulated CA Final Approval Queue</h3><p style="font-size:12px;color:#64748b;margin:5px 0 12px">Approve a CA component individually or select all submitted components within the same class, subject, session and term to approve them together. CA approval is processed in CA1–CA3 order.</p>';
+    if(!adminCaPending.length)html+='<p style="color:#64748b;font-size:13px">No CA submissions are currently awaiting final approval.</p>';
+    Object.keys(groups).forEach(function(key){var group=groups[key],first=group[0],label=esc((classesById[String(first.class_id)]||{}).class_name||'Class')+' · '+esc((subjectsById[String(first.subject_id)]||{}).name||'Subject')+' · '+esc((termsById[String(first.term_id)]||{}).name||'Term');html+='<div style="padding:10px;margin:10px 0;background:#fff;border:1px solid #e2e8f0;border-radius:9px"><div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap"><strong>'+label+'</strong><button type="button" class="btn btn-primary admin-ca-approve-group" data-group="'+esc(key)+'">Approve selected / all below</button></div>';group.forEach(function(item){html+='<label style="display:flex;align-items:center;gap:8px;padding:7px 2px;font-size:13px"><input type="checkbox" class="admin-ca-queue-check" data-group="'+esc(key)+'" value="'+esc(item.id)+'"><span>CA'+Number(item.assessment_stage)+' — submitted '+esc(item.submitted_at?new Date(item.submitted_at).toLocaleString():'')+'</span></label>';});html+='</div>';});
+    html+='</section>';
+    panel.innerHTML=html;
+    panel.querySelectorAll('.admin-arm-hanger').forEach(function(button){button.addEventListener('click',function(){
+      var id=this.getAttribute('data-arm-id')||'';panel.setAttribute('data-selected-arm',id);
+      panel.querySelectorAll('.admin-arm-hanger').forEach(function(tile){var on=tile.getAttribute('data-arm-id')===id;tile.setAttribute('aria-pressed',on?'true':'false');tile.style.background=on?'#667eea':'#fff';tile.style.color=on?'#fff':'#34415d';tile.style.borderColor=on?'#5368d8':'#dbe2f0';tile.style.borderBottomColor=on?'#4357cc':'#cbd5e1';});
+      var target=panel.querySelector('#adminArmScoreContent');if(target)target.innerHTML=buildArmTable(id);
+    });});
     panel.querySelectorAll('.admin-ca-approve-group').forEach(function(button){
       button.addEventListener('click',async function(){
         var key=this.getAttribute('data-group');
