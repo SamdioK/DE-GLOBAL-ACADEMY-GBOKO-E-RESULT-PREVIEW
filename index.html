@@ -500,7 +500,7 @@ th { background: #f5f5f5; font-weight: 600; }
 #appRefreshNotice .refresh-dots i:nth-child(3){animation-delay:.32s}
 @keyframes refreshDotPulse{0%,65%,100%{opacity:.3;transform:translateY(0)}32%{opacity:1;transform:translateY(-5px)}}
 </style>
-<div class="login-container" id="loginContainer">
+<div class="login-container" id="loginContainer" style="display:none">
 <div class="landing-campus-scene" aria-hidden="true"></div>
   <div class="landing-shell">
     <div class="landing-academic-strip" aria-label="Current academic session and term">
@@ -1146,8 +1146,10 @@ async function initApp() {
     hidePageRefreshNotice();
     var appShell=document.getElementById('appContainer');
     if(appShell)appShell.classList.remove('active');
+    // Reveal the public landing/login screen only after confirming there is no
+    // restorable authenticated session. This prevents a landing-page flash.
     var loginContainer=document.getElementById('loginContainer');
-    if(loginContainer)loginContainer.style.display='';
+    if(loginContainer)loginContainer.style.display='flex';
   }
 }
 
