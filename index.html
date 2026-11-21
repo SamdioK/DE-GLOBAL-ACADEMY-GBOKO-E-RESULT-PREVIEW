@@ -1144,6 +1144,12 @@ function generateArms() {
 
 // ===================== INIT =====================
 document.addEventListener('DOMContentLoaded', async function() {
+  // Populate the public landing identity, live WAT clock, active academic session,
+  // current term and school crest independently of authentication/login state.
+  // This must run for visitors who have not signed in as well as authenticated users.
+  loadLandingSchoolIdentity().catch(function(error) {
+    console.warn('Landing school identity initialisation failed:', error);
+  });
   await initApp();
 });
 
