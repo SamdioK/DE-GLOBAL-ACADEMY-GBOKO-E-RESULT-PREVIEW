@@ -4733,7 +4733,7 @@ async function renderReleaseResults() {
         return;
       }
       status.textContent = studentsForRelease.length + ' active student enrolment(s) loaded from Supabase.';
-      rowsRoot.innerHTML = '<div style="overflow-x:auto"><table><thead><tr><th>S/N</th><th>Register No.</th><th>Student</th><th>Admission No.</th><th>Class</th><th>Approved / Published Rows</th><th>Released Through</th><th>Action</th></tr></thead><tbody>' +
+      rowsRoot.innerHTML = '<div style="overflow-x:auto"><table><thead><tr><th>Student</th><th>Admission No.</th><th>Class</th><th>Approved / Published Rows</th><th>Released Through</th><th>Action</th></tr></thead><tbody>' +
         studentsForRelease.map(function(student) {
           var stageRecord = (student.stages || []).find(function(x) { return String(x.term_id) === String(termSelect.value) && String(x.academic_session_id) === String(sessionSelect.value); });
           var stage = Number(stageRecord && stageRecord.release_stage || 0);
@@ -13143,7 +13143,7 @@ async function loadAdminCa1ResultsView() {
     });
     var esc = escapeManagementText;
     var html = '<div style="margin-bottom:10px"><strong>' + rows.length + ' subject result record(s) with CA1 entered</strong></div>' +
-      '<div style="overflow-x:auto"><table><thead><tr><th>Student</th><th>Admission No.</th><th>Class</th><th>Subject</th><th>Session</th><th>Term</th><th>CA1</th><th>CA2</th><th>CA3</th><th>Exam</th><th>Status</th></tr></thead><tbody>';
+      '<div style="overflow-x:auto"><table><thead><tr><th>S/N</th><th>Register No.</th><th>Student</th><th>Admission No.</th><th>Class</th><th>Subject</th><th>Session</th><th>Term</th><th>CA1</th><th>CA2</th><th>CA3</th><th>Exam</th><th>Status</th></tr></thead><tbody>';
     rows.forEach(function(row,index) {
       var student=studentsById[String(row.student_id)]||{}, session=sessionsById[String(row.academic_session_id)]||{}, term=termsById[String(row.term_id)]||{};
       var enrolment=enrolmentByStudentClassSession[String(row.student_id)+'|'+String(row.class_id)+'|'+String(row.academic_session_id)]||{};
