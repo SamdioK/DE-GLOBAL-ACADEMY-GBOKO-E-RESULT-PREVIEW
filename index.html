@@ -14,6 +14,8 @@
 <script src="supabase-persistence.js?v=2026110901"></script>
 <script src="score-entry-engine.js"></script>
 <style>
+.score-value,.score-heading-cell{text-align:center!important;vertical-align:middle!important}.score-value input,.score-value select{display:block;margin-left:auto;margin-right:auto;text-align:center!important}
+
 * { margin: 0; padding: 0; box-sizing: border-box; }
 body { font-family: 'Segoe UI', Arial, sans-serif; background: #f5f5f5; }
 .login-container{min-height:100svh;display:flex;align-items:center;justify-content:center;padding:clamp(18px,3vw,44px);position:relative;isolation:isolate;overflow:hidden;background:radial-gradient(ellipse at 12% 25%,rgba(255,180,45,.24),transparent 30%),radial-gradient(ellipse at 90% 80%,rgba(12,119,58,.3),transparent 28%),linear-gradient(135deg,#26064f 0%,#54109a 45%,#211047 100%)}
@@ -4658,7 +4660,7 @@ async function renderScoreApproval() {
       [students,subjects,classRows,teachers].forEach(function(x){if(x.error)throw x.error;});
       var maps=[students,subjects,classRows,teachers].map(function(x){var m={};(x.data||[]).forEach(function(v){m[String(v.id)]=v;});return m;});
       summary.textContent=records.length+' submitted subject result(s) awaiting approval. Scope: '+(scope.value==='school'?'Entire School':scope.value==='all_arms'?'All arms in selected level':'Selected class arm')+'.';
-      rows.innerHTML='<table style="width:100%;min-width:720px"><thead><tr><th>Student</th><th>Class</th><th>Subject</th><th>Teacher</th><th>CA1</th><th>CA2</th><th>CA3</th><th>Exam</th><th>Total</th><th>Submitted</th></tr></thead><tbody>'+records.map(function(x){var st=maps[0][String(x.student_id)]||{},su=maps[1][String(x.subject_id)]||{},cl=maps[2][String(x.class_id)]||{},te=maps[3][String(x.entered_by)]||{};return '<tr><td>'+escapeManagementText([st.first_name,st.middle_name,st.last_name].filter(Boolean).join(' '))+'</td><td>'+escapeManagementText(cl.class_name||'—')+'</td><td>'+escapeManagementText(su.name||'—')+'</td><td>'+escapeManagementText(te.full_name||'—')+'</td><td>'+x.ca1+'</td><td>'+x.ca2+'</td><td>'+x.ca3+'</td><td>'+x.examination+'</td><td><strong>'+x.total+'</strong></td><td>'+escapeManagementText(x.submitted_at?new Date(x.submitted_at).toLocaleString():'—')+'</td></tr>';}).join('')+'</tbody></table>';
+      rows.innerHTML='<table style="width:100%;min-width:720px"><thead><tr><th>Student</th><th>Class</th><th>Subject</th><th>Teacher</th><th class="score-heading-cell">CA1</th><th class="score-heading-cell">CA2</th><th class="score-heading-cell">CA3</th><th class="score-heading-cell">Exam</th><th class="score-heading-cell">Total</th><th>Submitted</th></tr></thead><tbody>'+records.map(function(x){var st=maps[0][String(x.student_id)]||{},su=maps[1][String(x.subject_id)]||{},cl=maps[2][String(x.class_id)]||{},te=maps[3][String(x.entered_by)]||{};return '<tr><td>'+escapeManagementText([st.first_name,st.middle_name,st.last_name].filter(Boolean).join(' '))+'</td><td>'+escapeManagementText(cl.class_name||'—')+'</td><td>'+escapeManagementText(su.name||'—')+'</td><td>'+escapeManagementText(te.full_name||'—')+'</td><td>'+x.ca1+'</td><td>'+x.ca2+'</td><td>'+x.ca3+'</td><td>'+x.examination+'</td><td><strong>'+x.total+'</strong></td><td>'+escapeManagementText(x.submitted_at?new Date(x.submitted_at).toLocaleString():'—')+'</td></tr>';}).join('')+'</tbody></table>';
       approve.dataset.count=String(records.length);
     }
     scope.addEventListener('change',function(){wrap.style.display=scope.value==='school'?'none':'';loadRows().catch(function(e){summary.textContent=e.message;});});
@@ -12761,7 +12763,7 @@ function renderSubjectTeacherInputLegacyLocal() {
     return;
   }
 
-  html += '<div style="overflow-x:auto; margin-top:15px;"><table><thead><tr><th>Student Name</th><th>Adm No</th><th>CA1</th><th>CA2</th><th>CA3</th><th>Exam</th><th>Total</th><th>Grade</th></tr></thead><tbody>';
+  html += '<div style="overflow-x:auto; margin-top:15px;"><table><thead><tr><th>Student Name</th><th>Adm No</th><th class="score-heading-cell">CA1</th><th class="score-heading-cell">CA2</th><th class="score-heading-cell">CA3</th><th class="score-heading-cell">Exam</th><th class="score-heading-cell">Total</th><th>Grade</th></tr></thead><tbody>';
   classStudents.forEach(function(s) {
     var existing = s.subjects.find(function(sub) { return sub.name === subject; });
     var ca1 = existing ? existing.ca1 : '';
@@ -12771,10 +12773,10 @@ function renderSubjectTeacherInputLegacyLocal() {
     var total = existing ? existing.total : 0;
     var grade = existing ? existing.grade : '-';
     html += '<tr data-student-id="' + s.id + '"><td>' + s.studentName + '</td><td>' + s.admNo + '</td>' +
-      '<td><input type="number" class="score-input st-score" min="0" data-field="ca1" max="' + config.ca1 + '" value="' + ca1 + '"></td>' +
-      '<td><input type="number" class="score-input st-score" min="0" data-field="ca2" max="' + config.ca2 + '" value="' + ca2 + '"></td>' +
-      '<td><input type="number" class="score-input st-score" min="0" data-field="ca3" max="' + config.ca3 + '" value="' + ca3 + '"></td>' +
-      '<td><input type="number" class="score-input st-score" min="0" data-field="exam" max="' + config.exam + '" value="' + exam + '"></td>' +
+      '<td class="score-value"><input type="number" class="score-input st-score" min="0" data-field="ca1" max="' + config.ca1 + '" value="' + ca1 + '"></td>' +
+      '<td class="score-value"><input type="number" class="score-input st-score" min="0" data-field="ca2" max="' + config.ca2 + '" value="' + ca2 + '"></td>' +
+      '<td class="score-value"><input type="number" class="score-input st-score" min="0" data-field="ca3" max="' + config.ca3 + '" value="' + ca3 + '"></td>' +
+      '<td class="score-value"><input type="number" class="score-input st-score" min="0" data-field="exam" max="' + config.exam + '" value="' + exam + '"></td>' +
       '<td class="st-total"><strong>' + total + '</strong></td><td class="st-grade">' + grade + '</td></tr>';
   });
   html += '</tbody></table></div><button class="btn btn-success" id="saveAllScoresBtn" style="margin-top:15px;">Save All Scores for ' + subject + '</button></div>';
@@ -13143,12 +13145,12 @@ async function loadAdminCa1ResultsView() {
     });
     var esc = escapeManagementText;
     var html = '<div style="margin-bottom:10px"><strong>' + rows.length + ' subject result record(s) with CA1 entered</strong></div>' +
-      '<div style="overflow-x:auto"><table><thead><tr><th>S/N</th><th>SID</th><th>Student</th><th>Admission No.</th><th>Class</th><th>Subject</th><th>Session</th><th>Term</th><th>CA1</th><th>CA2</th><th>CA3</th><th>Exam</th><th>Status</th></tr></thead><tbody>';
+      '<div style="overflow-x:auto"><table><thead><tr><th>S/N</th><th>SID</th><th>Student</th><th>Admission No.</th><th>Class</th><th>Subject</th><th>Session</th><th>Term</th><th class="score-heading-cell">CA1</th><th class="score-heading-cell">CA2</th><th class="score-heading-cell">CA3</th><th class="score-heading-cell">Exam</th><th>Status</th></tr></thead><tbody>';
     rows.forEach(function(row,index) {
       var student=studentsById[String(row.student_id)]||{}, session=sessionsById[String(row.academic_session_id)]||{}, term=termsById[String(row.term_id)]||{};
       var enrolment=enrolmentByStudentClassSession[String(row.student_id)+'|'+String(row.class_id)+'|'+String(row.academic_session_id)]||{};
       var name=[student.first_name,student.middle_name,student.last_name].filter(Boolean).join(' ') || 'Student record unavailable';
-      html += '<tr><td>'+(index+1)+'</td><td>'+esc(enrolment.sid||'—')+'</td><td>'+esc(name)+'</td><td>'+esc(student.admission_number||'—')+'</td><td>'+esc((classesById[String(row.class_id)]||{}).class_name||'—')+'</td><td>'+esc((subjectsById[String(row.subject_id)]||{}).name||'—')+'</td><td>'+esc(session.name||'—')+'</td><td>'+esc(term.name||('Term '+(term.term_number||'—')) )+'</td><td><strong>'+esc(row.ca1)+'</strong></td><td>'+esc(row.ca2==null?'—':row.ca2)+'</td><td>'+esc(row.ca3==null?'—':row.ca3)+'</td><td>'+esc(row.examination==null?'—':row.examination)+'</td><td>'+esc(row.status||'draft')+'</td></tr>';
+      html += '<tr><td>'+(index+1)+'</td><td>'+esc(enrolment.sid||'—')+'</td><td>'+esc(name)+'</td><td>'+esc(student.admission_number||'—')+'</td><td>'+esc((classesById[String(row.class_id)]||{}).class_name||'—')+'</td><td>'+esc((subjectsById[String(row.subject_id)]||{}).name||'—')+'</td><td>'+esc(session.name||'—')+'</td><td>'+esc(term.name||('Term '+(term.term_number||'—')) )+'</td><td class="score-value"><strong>'+esc(row.ca1)+'</strong></td><td class="score-value">'+esc(row.ca2==null?'—':row.ca2)+'</td><td class="score-value">'+esc(row.ca3==null?'—':row.ca3)+'</td><td class="score-value">'+esc(row.examination==null?'—':row.examination)+'</td><td>'+esc(row.status||'draft')+'</td></tr>';
     });
     html += '</tbody></table></div>';
     var groups={};
@@ -13291,7 +13293,7 @@ async function loadFormMasterSubjectResultsView() {
     } else {
       html += '<div style="display:flex;gap:12px;flex-wrap:wrap;margin:12px 0"><span style="padding:7px 10px;background:#ecfdf3;border-radius:7px;color:#067647"><strong>'+savedCount+'</strong> with saved scores</span><span style="padding:7px 10px;background:#fff7ed;border-radius:7px;color:#c2410c"><strong>'+pendingCount+'</strong> not yet entered</span><span style="padding:7px 10px;background:#eff6ff;border-radius:7px;color:#1d4ed8"><strong>'+students.length+'</strong> enrolled students</span></div>';
       html += '<h4 style="margin:12px 0 8px;color:#293968">'+esc(selectedSubjectName)+' — '+esc(selectedTerm ? selectedTerm.name : '')+'</h4>';
-      html += '<div style="overflow-x:auto"><table style="min-width:900px;width:100%"><thead><tr><th>SID</th><th>Student</th><th>CA1</th><th>CA2</th><th>CA3</th><th>Exam</th><th>Total</th><th>Grade</th><th>Status</th><th>Last Saved</th></tr></thead><tbody>';
+      html += '<div style="overflow-x:auto"><table style="min-width:900px;width:100%"><thead><tr><th>SID</th><th>Student</th><th class="score-heading-cell">CA1</th><th class="score-heading-cell">CA2</th><th class="score-heading-cell">CA3</th><th class="score-heading-cell">Exam</th><th class="score-heading-cell">Total</th><th>Grade</th><th>Status</th><th>Last Saved</th></tr></thead><tbody>';
       students.forEach(function(item) {
         var student = item.student, enrolment = item.enrolment, row = scoreMap[String(student.id)];
         var name = [student.first_name,student.middle_name,student.last_name].filter(Boolean).join(' ') || 'Student';
@@ -13299,7 +13301,7 @@ async function loadFormMasterSubjectResultsView() {
         var badgeStyle = status === 'published' || status === 'approved' || status === 'submitted'
           ? 'background:#ecfdf3;color:#067647' : status === 'draft' ? 'background:#eff6ff;color:#1d4ed8' : 'background:#fff7ed;color:#c2410c';
         html += '<tr><td><strong>'+esc(enrolment.sid || '—')+'</strong></td><td>'+esc(name)+'</td>';
-        html += '<td>'+esc(row && row.ca1 != null ? row.ca1 : '—')+'</td><td>'+esc(row && row.ca2 != null ? row.ca2 : '—')+'</td><td>'+esc(row && row.ca3 != null ? row.ca3 : '—')+'</td><td>'+esc(row && row.examination != null ? row.examination : '—')+'</td><td><strong>'+esc(row && row.total != null ? row.total : '—')+'</strong></td><td>'+esc(row && row.grade || '—')+'</td><td><span style="display:inline-block;padding:4px 8px;border-radius:20px;font-size:11px;font-weight:700;'+badgeStyle+'">'+esc(status === 'pending' ? 'NOT ENTERED' : status.toUpperCase())+'</span></td><td>'+esc(row && row.updated_at ? new Date(row.updated_at).toLocaleString() : '—')+'</td></tr>';
+        html += '<td class="score-value">'+esc(row && row.ca1 != null ? row.ca1 : '—')+'</td><td class="score-value">'+esc(row && row.ca2 != null ? row.ca2 : '—')+'</td><td class="score-value">'+esc(row && row.ca3 != null ? row.ca3 : '—')+'</td><td class="score-value">'+esc(row && row.examination != null ? row.examination : '—')+'</td><td class="score-value"><strong>'+esc(row && row.total != null ? row.total : '—')+'</strong></td><td>'+esc(row && row.grade || '—')+'</td><td><span style="display:inline-block;padding:4px 8px;border-radius:20px;font-size:11px;font-weight:700;'+badgeStyle+'">'+esc(status === 'pending' ? 'NOT ENTERED' : status.toUpperCase())+'</span></td><td>'+esc(row && row.updated_at ? new Date(row.updated_at).toLocaleString() : '—')+'</td></tr>';
       });
       html += '</tbody></table></div>';
       var pendingCa=caQueueRows.filter(function(item){return item.status==='submitted_to_form_master' && String(item.subject_id)===String(selectedSubjectId) && String(item.term_id)===String(selectedTermId);});
@@ -13419,8 +13421,8 @@ async function loadSubjectTeacherScoresView() {
     html+='<div style="display:flex;gap:9px;flex-wrap:wrap;margin:10px 0"><span style="padding:7px 10px;background:#eef2ff;border-radius:8px;color:#3730a3"><strong>'+visible.length+'</strong> saved score records</span><span style="padding:7px 10px;background:#ecfdf3;border-radius:8px;color:#067647"><strong>'+visible.filter(function(x){return ['approved','published'].includes(String(x.status||'').toLowerCase());}).length+'</strong> approved / published</span></div>';
     if(!visible.length)html+='<p class="alert alert-info">No saved scores were found for this selection. Scores appear here after they are saved under an active assignment.</p>';
     else{
-      html+='<div style="overflow-x:auto"><table style="width:100%;min-width:980px"><thead><tr><th>S/N</th><th>SID</th><th>Student</th><th>Class Arm</th><th>Subject</th><th>Term</th><th>CA1</th><th>CA2</th><th>CA3</th><th>Examination</th><th>Total</th><th>Grade</th><th>Status</th><th>Last Saved</th></tr></thead><tbody>';
-      visible.forEach(function(x,i){var st=studentMap[String(x.student_id)]||{},en=enrolmentMap[String(x.student_id)+'|'+String(x.class_id)]||{},term=termMap[String(x.term_id)]||{},status=String(x.status||'draft').toLowerCase(),color=['approved','published'].includes(status)?'#067647':status==='submitted'?'#1d4ed8':'#9a6700';var val=function(v){return v===null||v===undefined||v===''?'—':esc(v);};html+='<tr><td>'+(i+1)+'</td><td>'+val(en.sid)+'</td><td>'+esc([st.first_name,st.middle_name,st.last_name].filter(Boolean).join(' ')||'Student record unavailable')+'</td><td>'+val(classMap[String(x.class_id)]&&classMap[String(x.class_id)].class_name)+'</td><td>'+val(subjectMap[String(x.subject_id)]&&subjectMap[String(x.subject_id)].name)+'</td><td>'+val(term.name||('Term '+(term.term_number||'')))+'</td><td>'+val(x.ca1)+'</td><td>'+val(x.ca2)+'</td><td>'+val(x.ca3)+'</td><td>'+val(x.examination)+'</td><td><strong>'+val(x.total)+'</strong></td><td>'+val(x.grade)+'</td><td><strong style="color:'+color+'">'+esc(status.replace(/_/g,' ').toUpperCase())+'</strong></td><td>'+val(x.updated_at?new Date(x.updated_at).toLocaleString():'—')+'</td></tr>';});
+      html+='<div style="overflow-x:auto"><table style="width:100%;min-width:980px"><thead><tr><th>S/N</th><th>SID</th><th>Student</th><th>Class Arm</th><th>Subject</th><th>Term</th><th class="score-heading-cell">CA1</th><th class="score-heading-cell">CA2</th><th class="score-heading-cell">CA3</th><th class="score-heading-cell">Examination</th><th class="score-heading-cell">Total</th><th>Grade</th><th>Status</th><th>Last Saved</th></tr></thead><tbody>';
+      visible.forEach(function(x,i){var st=studentMap[String(x.student_id)]||{},en=enrolmentMap[String(x.student_id)+'|'+String(x.class_id)]||{},term=termMap[String(x.term_id)]||{},status=String(x.status||'draft').toLowerCase(),color=['approved','published'].includes(status)?'#067647':status==='submitted'?'#1d4ed8':'#9a6700';var val=function(v){return v===null||v===undefined||v===''?'—':esc(v);};html+='<tr><td>'+(i+1)+'</td><td>'+val(en.sid)+'</td><td>'+esc([st.first_name,st.middle_name,st.last_name].filter(Boolean).join(' ')||'Student record unavailable')+'</td><td>'+val(classMap[String(x.class_id)]&&classMap[String(x.class_id)].class_name)+'</td><td>'+val(subjectMap[String(x.subject_id)]&&subjectMap[String(x.subject_id)].name)+'</td><td>'+val(term.name||('Term '+(term.term_number||'')))+'</td><td class="score-value">'+val(x.ca1)+'</td><td class="score-value">'+val(x.ca2)+'</td><td class="score-value">'+val(x.ca3)+'</td><td class="score-value">'+val(x.examination)+'</td><td class="score-value"><strong>'+val(x.total)+'</strong></td><td>'+val(x.grade)+'</td><td><strong style="color:'+color+'">'+esc(status.replace(/_/g,' ').toUpperCase())+'</strong></td><td>'+val(x.updated_at?new Date(x.updated_at).toLocaleString():'—')+'</td></tr>';});
       html+='</tbody></table></div>';
     }
     html+='</div>';root.innerHTML=html;
