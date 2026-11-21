@@ -487,6 +487,25 @@ th { background: #f5f5f5; font-weight: 600; }
 </head>
 <body>
 
+<style>
+#pageRefreshNotice{position:fixed;inset:0;z-index:99999;display:none;align-items:center;justify-content:center;padding:22px;background:rgba(12,18,38,.28);backdrop-filter:blur(2px)}
+#pageRefreshNotice.visible{display:flex}
+#pageRefreshNotice .refresh-notice-card{width:min(430px,100%);padding:22px 24px;border-radius:16px;background:#fff;color:#172554;text-align:center;box-shadow:0 16px 44px rgba(0,0,0,.24);border:1px solid #dbe4f4}
+#pageRefreshNotice .refresh-notice-title{font-size:clamp(17px,4.5vw,21px);font-weight:800;line-height:1.35}
+#pageRefreshNotice .refresh-notice-sub{font-size:13px;color:#53627d;margin-top:8px}
+#pageRefreshNotice .refresh-dots{display:inline-flex;gap:5px;margin-right:9px;vertical-align:middle}
+#pageRefreshNotice .refresh-dots i{width:8px;height:8px;border-radius:50%;background:#314b9b;display:block;animation:refreshDotPulse 1.05s infinite ease-in-out}
+#pageRefreshNotice .refresh-dots i:nth-child(2){animation-delay:.16s}
+#pageRefreshNotice .refresh-dots i:nth-child(3){animation-delay:.32s}
+@keyframes refreshDotPulse{0%,65%,100%{opacity:.3;transform:translateY(0)}32%{opacity:1;transform:translateY(-5px)}}
+</style>
+<div id="pageRefreshNotice" role="status" aria-live="polite" aria-label="Refreshing the page">
+  <div class="refresh-notice-card">
+    <div class="refresh-notice-title"><span class="refresh-dots" aria-hidden="true"><i></i><i></i><i></i></span>Refreshing the page ...</div>
+    <div class="refresh-notice-sub">Please wait. Your page information and active session are being reloaded.</div>
+  </div>
+</div>
+
 <div class="login-container" id="loginContainer">
 <div class="landing-campus-scene" aria-hidden="true"></div>
   <div class="landing-shell">
@@ -1120,19 +1139,26 @@ async function loadLandingSchoolIdentity() {
 }
 
 async function initApp() {
-  // Keep the landing/login screen hidden while checking the existing Supabase session.
-  // A returning authenticated user should see the portal directly after refresh.
+  // Keep the branded landing page visible while Supabase restores the authenticated portal.
+  // The refresh notice sits over the page; never leave a blank white screen.
   var setupView = document.getElementById('setupView');
   var loginView = document.getElementById('loginView');
-  var loginContainer = document.getElementById('loginContainer');
   if (setupView) setupView.classList.add('hidden');
   if (loginView) loginView.classList.remove('hidden');
-  if (loginContainer) loginContainer.style.display = 'none';
-
+  showPageRefreshNotice();
   setupEventListeners();
   await loadLandingSchoolIdentity();
   var restored = await restoreSupabasePortalSession();
-  if (!restored && loginContainer) loginContainer.style.display = '';
+  if (!restored) hidePageRefreshNotice();
+}
+
+function showPageRefreshNotice(){
+  var n=document.getElementById('pageRefreshNotice');
+  if(n)n.classList.add('visible');
+}
+function hidePageRefreshNotice(){
+  var n=document.getElementById('pageRefreshNotice');
+  if(n)n.classList.remove('visible');
 }
 
 async function restoreSupabasePortalSession(){try{if(!supabaseClient)return false;var sr=await supabaseClient.auth.getSession();if(sr.error)throw sr.error;var session=sr.data&&sr.data.session;if(!session||!session.user)return false;var pr=await supabaseClient.from('profiles').select('id,school_id,full_name,username,email,gender,role,is_active,must_change_password').eq('id',session.user.id).maybeSingle();if(pr.error)throw pr.error;var profile=pr.data;if(!profile||profile.is_active!==true)throw new Error('Account inactive or profile unavailable.');var rr=await supabaseClient.from('profile_roles').select('role').eq('profile_id',profile.id).eq('is_active',true);if(rr.error)throw rr.error;var roles=[profile.role].concat((rr.data||[]).map(function(x){return x.role;})).filter(function(x,i,a){return x&&a.indexOf(x)===i;});var map={administrator:'admin',principal:'principal',sub_administrator:'subadmin',form_master:'formmaster',subject_teacher:'subjectteacher',student:'student',portal_developer:'developer'};var type=map[profile.role]||roles.map(function(x){return map[x];}).find(Boolean);if(!type)throw new Error('No active portal role found.');if(type==='student'){var st=await supabaseClient.from('students').select('id,school_id,profile_id,admission_number').eq('profile_id',profile.id).eq('school_id',profile.school_id).maybeSingle();if(st.error)throw st.error;await restoreStudentPortalSession(profile,st.data);return true;}var sel=document.getElementById('userType');if(sel)sel.value=type;var eid=type==='developer'?'developerEmail':(type==='principal'?'principalEmail':'authEmail');var em=document.getElementById(eid);if(em)em.value=session.user.email||profile.email||'';await handleSupabaseLogin(type,document.getElementById('loginError'),true);return document.getElementById('appContainer').classList.contains('active');}catch(e){console.warn('Session restore:',e);var el=document.getElementById('loginError');if(el){el.textContent='Your previous session could not be restored. Please sign in again. '+(e.message||'');el.classList.remove('hidden');}return false;}}
@@ -1200,7 +1226,8 @@ function setupEventListeners() {
       formMasterPasswordChangePending = false;
       subAdminPasswordChangePending = false;
       if (wasStudent) students = [];
-      document.getElementById('loginContainer').style.display = 'flex';
+      hidePageRefreshNotice();
+  document.getElementById('loginContainer').style.display = 'flex';
       document.getElementById('appContainer').classList.remove('active');
       showToast('Your Supabase session ended. Please sign in again.', 'info');
     } else if (event === 'SIGNED_OUT' && studentPasswordChangePending) {
@@ -4086,6 +4113,7 @@ function hasSubAdminPermission(permission) {
 }
 
 function showApp() {
+  hidePageRefreshNotice();
   document.getElementById('loginContainer').style.display = 'none';
   document.getElementById('appContainer').classList.add('active');
   document.getElementById('currentUserName').textContent = currentUser.name;
