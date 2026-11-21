@@ -660,10 +660,11 @@ th { background: #f5f5f5; font-weight: 600; }
           <div id="currentUserName" style="font-size: 14px; font-weight: 600;"></div>
           <div id="schoolLocation" style="font-size: 11px; opacity: 0.9;"></div>
         </div>
-        <button class="btn btn-danger" id="logoutBtn">Logout</button>
+        <button type="button" class="btn" id="userMenuToggle" aria-expanded="false" aria-controls="userMenuPanel" aria-label="Open user menu" style="min-width:44px;font-size:22px;padding:7px 11px;background:#fff;color:#25345f;border:1px solid rgba(255,255,255,.65)">☰</button>
       </div>
     </div>
   </div>
+  <div id="userMenuPanel" class="hidden" style="position:relative;z-index:30;background:#fff;color:#24345f;border-bottom:1px solid #dbe3f0;box-shadow:0 8px 22px rgba(0,0,0,.12);padding:14px 16px"><div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:10px"><div><strong id="menuUserName"></strong><div id="menuUserRole" style="font-size:12px;color:#64748b;margin-top:3px"></div></div><button type="button" id="menuLogoutBtn" class="btn btn-danger">Sign out</button></div><div id="userMenuTabs" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(145px,1fr));gap:8px"></div></div>
   <div class="tabs" id="portalTabs">
     <button
       type="button"
@@ -956,7 +957,7 @@ var SUPABASE_URL = 'https://rvmcqvfuioxmbtvgdptb.supabase.co';
 var SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJ2bWNxdmZ1aW94bWJ0dmdkcHRiIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTA5MTMxMzIsImV4cCI6MjEwNjQ4OTEzMn0.0pOQxL3vIi9GAMIKXdmzAw6bRnygf3Ew5s2dzYsgvmM';
 var supabaseClient = null;
 if (window.supabase && SUPABASE_ANON_KEY !== 'INSERT_SUPABASE_ANON_OR_PUBLISHABLE_KEY_HERE') {
-  supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+  supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, { auth: { persistSession:true, autoRefreshToken:true, detectSessionInUrl:true } });
 }
 var supabasePersistence = null;
 if (supabaseClient && window.SupabasePersistence) {
@@ -1129,7 +1130,12 @@ async function initApp() {
 
   setupEventListeners();
   await loadLandingSchoolIdentity();
+  await restoreSupabasePortalSession();
 }
+
+async function restoreSupabasePortalSession(){try{if(!supabaseClient)return;var sr=await supabaseClient.auth.getSession();if(sr.error)throw sr.error;var session=sr.data&&sr.data.session;if(!session||!session.user)return;var pr=await supabaseClient.from('profiles').select('id,school_id,full_name,username,email,gender,role,is_active,must_change_password').eq('id',session.user.id).maybeSingle();if(pr.error)throw pr.error;var profile=pr.data;if(!profile||profile.is_active!==true)throw new Error('Account inactive or profile unavailable.');var rr=await supabaseClient.from('profile_roles').select('role').eq('profile_id',profile.id).eq('is_active',true);if(rr.error)throw rr.error;var roles=[profile.role].concat((rr.data||[]).map(function(x){return x.role;})).filter(function(x,i,a){return x&&a.indexOf(x)===i;});var map={administrator:'admin',principal:'principal',sub_administrator:'subadmin',form_master:'formmaster',subject_teacher:'subjectteacher',student:'student',portal_developer:'developer'};var type=map[profile.role]||roles.map(function(x){return map[x];}).find(Boolean);if(!type)throw new Error('No active portal role found.');if(type==='student'){var st=await supabaseClient.from('students').select('id,school_id,profile_id,admission_number').eq('profile_id',profile.id).eq('school_id',profile.school_id).maybeSingle();if(st.error)throw st.error;await restoreStudentPortalSession(profile,st.data);return;}var sel=document.getElementById('userType');if(sel)sel.value=type;var eid=type==='developer'?'developerEmail':(type==='principal'?'principalEmail':'authEmail');var em=document.getElementById(eid);if(em)em.value=session.user.email||profile.email||'';await handleSupabaseLogin(type,document.getElementById('loginError'),true);}catch(e){console.warn('Session restore:',e);var el=document.getElementById('loginError');if(el){el.textContent='Your previous session could not be restored. Please sign in again. '+(e.message||'');el.classList.remove('hidden');}}}
+
+async function restoreStudentPortalSession(profile,student){if(!student||!student.admission_number)throw new Error('Student record unavailable.');var sr=await supabaseClient.from('schools').select('*').eq('id',profile.school_id).maybeSingle();if(sr.error)throw sr.error;if(!sr.data)throw new Error('School profile unavailable.');var s=sr.data;currentSchool={schoolId:s.id,supabaseSchoolId:s.id,schoolName:s.name,name:s.name,location:s.address||'',address:s.address||'',email:s.email||'',phone:s.phone||'',logo:s.logo_url||'',session:'',adminName:profile.full_name,profileId:profile.id};authenticatedProfile=profile;cloudStorage.setSchoolId(String(profile.school_id));await loadSupabaseAssessmentConfigurations();var er=await supabaseClient.from('student_enrolments').select('id').eq('school_id',profile.school_id).eq('academic_session_id',activeAcademicSession.id).eq('student_id',student.id).limit(1);if(er.error)throw er.error;if(!er.data||!er.data.length)throw new Error('No current enrolment for this student.');await loadStudentPortalData(student.admission_number);currentUser={type:'student',id:profile.id,name:profile.full_name||student.admission_number,admission:student.admission_number,studentId:student.id,profile:profile};showApp();}
 
 function setHeaderLogo(logoDataUrl) {
   var el = document.getElementById('headerLogo');
@@ -1551,7 +1557,7 @@ async function handleStudentPasswordChange() {
   }
 }
 
-async function handleSupabaseLogin(userType, errorDiv) {
+async function handleSupabaseLogin(userType, errorDiv, restoringSession) {
   if (!supabaseClient) {
     if (!window.supabase) {
       errorDiv.textContent = 'The Supabase client library did not load. Check your connection or access to the Supabase CDN, then reload the page.';
@@ -1563,10 +1569,7 @@ async function handleSupabaseLogin(userType, errorDiv) {
     errorDiv.classList.remove('hidden');
     return;
   }
-  if (userType === 'student') {
-    await handleStudentAdmissionLogin(errorDiv);
-    return;
-  }
+  if (userType === 'student') { if(restoringSession){var u=await supabaseClient.auth.getUser();if(u.error||!u.data.user)throw new Error('Student session expired.');var p=await supabaseClient.from('profiles').select('id,school_id,full_name,is_active,role').eq('id',u.data.user.id).maybeSingle();if(p.error)throw p.error;var st=await supabaseClient.from('students').select('id,school_id,profile_id,admission_number').eq('profile_id',u.data.user.id).eq('school_id',p.data.school_id).maybeSingle();if(st.error)throw st.error;await restoreStudentPortalSession(p.data,st.data);return;}await handleStudentAdmissionLogin(errorDiv);return;}
   var emailInputId = userType === 'developer' ? 'developerEmail' : (userType === 'principal' ? 'principalEmail' : 'authEmail');
   var email = (
     document.getElementById(emailInputId)?.value || ''
@@ -1576,7 +1579,7 @@ async function handleSupabaseLogin(userType, errorDiv) {
     subadmin: 'subadminPassword', student: 'studentPassword', developer: 'developerPassword'
   }[userType];
   var password = passwordInput ? document.getElementById(passwordInput).value : '';
-  if (!email || !password) {
+  if (!email || (!password && !restoringSession)) {
     errorDiv.textContent = 'Enter your Supabase account email and password.';
     errorDiv.classList.remove('hidden');
     return;
@@ -1594,8 +1597,7 @@ async function handleSupabaseLogin(userType, errorDiv) {
     if (existingSessionResult.error) throw existingSessionResult.error;
     var existingSession = existingSessionResult.data && existingSessionResult.data.session;
     var authResult;
-    if (existingSession && existingSession.user &&
-        String(existingSession.user.email || '').toLowerCase() === email.toLowerCase()) {
+    if (existingSession && existingSession.user && (restoringSession || String(existingSession.user.email || '').toLowerCase() === email.toLowerCase())) {
       authResult = { data: { user: existingSession.user }, error: null };
     } else {
       if (existingSession) await supabaseClient.auth.signOut();
@@ -1839,7 +1841,7 @@ async function handleSupabaseLogin(userType, errorDiv) {
         }) || null;
       }
 
-      if (!chosen && validAssignments.length === 1) {
+      if (!chosen && (validAssignments.length === 1 || restoringSession)) {
         chosen = validAssignments[0];
       }
 
@@ -1857,10 +1859,7 @@ async function handleSupabaseLogin(userType, errorDiv) {
 
         // End this authentication attempt cleanly so the teacher can
         // choose an assignment and sign in again with that selection.
-        currentUser = null;
-        authenticatedProfile = null;
-
-        await supabaseClient.auth.signOut();
+        if (!restoringSession) { currentUser = null; authenticatedProfile = null; await supabaseClient.auth.signOut(); }
 
         errorDiv.textContent =
           'Your assigned class arms and subjects are now available. ' +
@@ -1904,7 +1903,7 @@ async function handleSupabaseLogin(userType, errorDiv) {
     showApp();
   } catch (error) {
     stopStudentCorrectionRealtime();
-    if (supabaseClient) await supabaseClient.auth.signOut();
+    if (supabaseClient && !restoringSession) await supabaseClient.auth.signOut();
     authenticatedProfile = null;
     errorDiv.textContent = error && error.message ? error.message : 'Supabase sign-in failed. Check your credentials and account profile.';
     errorDiv.classList.remove('hidden');
@@ -4086,6 +4085,7 @@ function hasSubAdminPermission(permission) {
 
 function showApp() {
   document.getElementById('loginContainer').style.display = 'none';
+  setupUserHamburgerMenu();
   document.getElementById('appContainer').classList.add('active');
   document.getElementById('currentUserName').textContent = currentUser.name;
   document.getElementById('schoolLocation').textContent = currentSchool.schoolName + ' - ' + currentSchool.location;
@@ -4135,6 +4135,8 @@ function showApp() {
   setupTabScrollControls();
   showTab(tabs[0]);
 }
+
+function setupUserHamburgerMenu(){var t=document.getElementById('userMenuToggle'),p=document.getElementById('userMenuPanel'),l=document.getElementById('userMenuTabs');if(!t||!p||!l||!currentUser)return;var names={admin:'Administrator',principal:'Principal',subadmin:'Sub-Administrator',formmaster:'Form Master',subjectteacher:'Subject Teacher',student:'Student',developer:'Portal Developer'};document.getElementById('menuUserName').textContent=currentUser.name||'Authenticated user';document.getElementById('menuUserRole').textContent=(names[currentUser.type]||'Portal user')+(currentUser.arm?' · '+currentUser.arm:'')+(currentUser.subject?' · '+currentUser.subject:'');l.innerHTML='';Array.prototype.forEach.call(document.querySelectorAll('#tabsContainer .tab'),function(tab){var x=document.createElement('button');x.type='button';x.className='btn';x.textContent=tab.textContent;x.style.cssText='text-align:left;background:#f4f6fb;color:#26386f;border:1px solid #e0e6f0;padding:10px 12px;border-radius:9px';x.addEventListener('click',function(){tab.click();p.classList.add('hidden');t.setAttribute('aria-expanded','false');t.textContent='☰';});l.appendChild(x);});if(t.dataset.ready!=='true'){t.addEventListener('click',function(){var open=p.classList.toggle('hidden')===false;t.setAttribute('aria-expanded',String(open));t.textContent=open?'×':'☰';});document.getElementById('menuLogoutBtn').addEventListener('click',handleLogout);t.dataset.ready='true';}}
 
 function setupTabScrollControls() {
   var viewport = document.getElementById('tabsViewport');
