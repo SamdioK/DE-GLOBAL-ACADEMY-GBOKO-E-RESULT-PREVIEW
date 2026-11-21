@@ -8991,13 +8991,13 @@ function getPortalStaffDirectory() {
 }
 
 function getPortalStudentOptions() {
-  var records = students.map(function(student) { return { name: student.studentName, className: student.className }; });
+  var records = students.map(function(student) { return { name: student.studentName, className: student.className, register_number: student.registerNumber || student.register_number || '' }; });
   classArms.forEach(function(arm) {
     (arm.studentNames || []).forEach(function(name) {
       if (name && !records.some(function(record) { return record.name === name && record.className === arm.name; })) records.push({ name: name, className: arm.name });
     });
   });
-  return records.filter(function(record) { return record.name; });
+  return records.filter(function(record) { return record.name; }).sort(compareStudentRegisterOrder);
 }
 
 function getPortalSubjectNames() {
