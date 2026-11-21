@@ -1717,7 +1717,7 @@ async function handleSupabaseLogin(userType, errorDiv, restoringSession) {
       var selectedArmInput = document.getElementById('selectedArm');
       var requestedArm = selectedArmInput ? selectedArmInput.value : '';
       var assignedClass = assignedClasses.find(function(item) { return item.class_name === requestedArm; });
-      if (!assignedClass && formMasterAssignmentRows.length === 1) {
+      if (!assignedClass && (formMasterAssignmentRows.length === 1 || restoringSession)) {
         assignedClass = assignedClasses.find(function(item) { return String(item.id) === String(formMasterAssignmentRows[0].class_id); });
       }
       if (!assignedClass || !formMasterAssignmentRows.some(function(item) { return String(item.class_id) === String(assignedClass.id); })) {
@@ -4085,7 +4085,6 @@ function hasSubAdminPermission(permission) {
 
 function showApp() {
   document.getElementById('loginContainer').style.display = 'none';
-  setupUserHamburgerMenu();
   document.getElementById('appContainer').classList.add('active');
   document.getElementById('currentUserName').textContent = currentUser.name;
   document.getElementById('schoolLocation').textContent = currentSchool.schoolName + ' - ' + currentSchool.location;
@@ -4133,6 +4132,7 @@ function showApp() {
     tabsContainer.appendChild(btn);
   });
   setupTabScrollControls();
+  setupUserHamburgerMenu();
   showTab(tabs[0]);
 }
 
