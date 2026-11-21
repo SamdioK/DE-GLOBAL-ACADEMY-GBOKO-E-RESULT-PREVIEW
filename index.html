@@ -4167,10 +4167,18 @@ function showApp() {
   var initialTab=tabs.indexOf(requestedTab)!==-1?requestedTab:tabs[0];
   var initialButton=Array.prototype.find.call(tabsContainer.querySelectorAll('.tab'),function(btn){return btn.textContent===(tabsContainer.querySelectorAll('.tab')[tabs.indexOf(initialTab)]||{}).textContent;});
   if(initialButton){tabsContainer.querySelectorAll('.tab').forEach(function(btn){btn.classList.toggle('active',btn===initialButton);});}
+  // Wait for asynchronous tab data (especially the teacher's saved-score register)
+  // before placing the refresh notice over the restored workspace.
+  var renderReady=(initialTab==='view')?renderViewReadinessPromise():Promise.resolve();
+  if(initialTab==='view'){} 
   showTab(initialTab);
-  // Display the refresh notice only after the restored tab and its data are on screen.
-  showPageRefreshNotice();
-  window.setTimeout(hidePageRefreshNotice, 1400);
+  if(initialTab==='view')renderReady=window.__activeViewRenderPromise||renderReady;
+  Promise.resolve(renderReady).catch(function(error){console.warn('Restored tab data:',error);}).then(function(){
+    requestAnimationFrame(function(){
+      showPageRefreshNotice();
+      window.setTimeout(hidePageRefreshNotice,1400);
+    });
+  });
 }
 
 function setupUserHamburgerMenu(){var t=document.getElementById('userMenuToggle'),p=document.getElementById('userMenuPanel'),l=document.getElementById('userMenuTabs');if(!t||!p||!l||!currentUser)return;var names={admin:'Administrator',principal:'Principal',subadmin:'Sub-Administrator',formmaster:'Form Master',subjectteacher:'Subject Teacher',student:'Student',developer:'Portal Developer'};document.getElementById('menuUserName').textContent=currentUser.name||'Authenticated user';document.getElementById('menuUserRole').textContent=(names[currentUser.type]||'Portal user')+(currentUser.arm?' · '+currentUser.arm:'')+(currentUser.subject?' · '+currentUser.subject:'');l.innerHTML='';Array.prototype.forEach.call(document.querySelectorAll('#tabsContainer .tab'),function(tab){var item=document.createElement('li');item.style.cssText='margin:0;padding:0';var x=document.createElement('button');x.type='button';x.textContent=tab.textContent;x.style.cssText='display:block;width:100%;text-align:left;background:transparent;color:#26386f;border:0;border-radius:8px;padding:11px 10px;font-size:14px;font-weight:500;cursor:pointer';x.addEventListener('mouseenter',function(){x.style.background='#f0f4ff';});x.addEventListener('mouseleave',function(){x.style.background='transparent';});x.addEventListener('click',function(){tab.click();p.classList.add('hidden');t.setAttribute('aria-expanded','false');t.textContent='⋮';});item.appendChild(x);l.appendChild(item);});if(t.dataset.ready!=='true'){t.addEventListener('click',function(){var open=p.classList.toggle('hidden')===false;t.setAttribute('aria-expanded',String(open));t.textContent=open?'×':'⋮';});document.getElementById('menuLogoutBtn').addEventListener('click',handleLogout);document.addEventListener('click',function(e){if(!p.classList.contains('hidden')&&!p.contains(e.target)&&!t.contains(e.target)){p.classList.add('hidden');t.setAttribute('aria-expanded','false');t.textContent='⋮';}});t.dataset.ready='true';}}
@@ -4273,6 +4281,7 @@ function showTab(tabName) {
     document.getElementById(t + 'Tab').classList.add('hidden');
   });
   document.getElementById(tabName + 'Tab').classList.remove('hidden');
+  if(tabName==='view')window.__activeViewRenderPromise=renderView();
   if (tabName.indexOf('principal') === 0) renderPrincipalWorkspace(tabName);
   else if (tabName === 'dashboard') renderDashboard();
   else if (tabName === 'arms') renderArms();
@@ -13471,11 +13480,12 @@ async function loadSubjectTeacherScoresView() {
   }catch(error){console.error('Subject teacher score view failed:',error);root.innerHTML='<div class="card"><h2>My Entered Scores</h2><p class="alert alert-error">Could not load your saved scores from Supabase: '+escapeManagementText(error.message||'Unknown error')+'</p></div>';}
 }
 function renderView() {
-  var root=document.getElementById('viewTab');if(!root||!currentUser)return;
-  if(currentUser.type==='subjectteacher'){root.innerHTML='<div id="subjectTeacherScoresPanel"></div>';loadSubjectTeacherScoresView();return;}
-  if(currentUser.type==='formmaster'){root.innerHTML='<div class="card" id="formMasterSubjectResultsPanel"><p style="color:#64748b">Loading your assigned class-arm scores…</p></div>';loadFormMasterSubjectResultsView();return;}
-  if(currentUser.type==='admin'){root.innerHTML='<div class="card"><h2>Students with Entered CA1 Scores</h2><p style="color:#64748b;font-size:13px">Read-only score records and the accumulated CA approval queue.</p><div id="adminCa1ResultsPanel"><p style="color:#64748b">Loading saved scores…</p></div></div>';loadAdminCa1ResultsView();return;}
+  var root=document.getElementById('viewTab');if(!root||!currentUser)return Promise.resolve();
+  if(currentUser.type==='subjectteacher'){root.innerHTML='<div id="subjectTeacherScoresPanel"></div>';return loadSubjectTeacherScoresView();}
+  if(currentUser.type==='formmaster'){root.innerHTML='<div class="card" id="formMasterSubjectResultsPanel"><p style="color:#64748b">Loading your assigned class-arm scores…</p></div>';return loadFormMasterSubjectResultsView();}
+  if(currentUser.type==='admin'){root.innerHTML='<div class="card"><h2>Students with Entered CA1 Scores</h2><p style="color:#64748b;font-size:13px">Read-only score records and the accumulated CA approval queue.</p><div id="adminCa1ResultsPanel"><p style="color:#64748b">Loading saved scores…</p></div></div>';return loadAdminCa1ResultsView();}
   root.innerHTML='<div class="card"><h2>Score View</h2><p class="alert alert-info">A score-view register is not available for this account role.</p></div>';
+  return Promise.resolve();
 }
 
 window.removeStudent = async function(studentId) {
