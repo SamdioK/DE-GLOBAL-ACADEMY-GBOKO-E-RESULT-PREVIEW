@@ -4180,11 +4180,26 @@ function showApp() {
 }
 
 function setupUserHamburgerMenu(){
-  var t=document.getElementById('userMenuToggle'),p=document.getElementById('userMenuPanel'),l=document.getElementById('userMenuTabs');
+  var t=document.getElementById('userMenuToggle');
+  var p=document.getElementById('userMenuPanel');
+  var l=document.getElementById('userMenuTabs');
   if(!t||!p||!l||!currentUser)return;
+
   var names={admin:'Administrator',principal:'Principal',subadmin:'Sub-Administrator',formmaster:'Form Master',subjectteacher:'Subject Teacher',student:'Student',developer:'Portal Developer'};
-  document.getElementById('menuUserName').textContent=currentUser.name||'Authenticated user';
-  document.getElementById('menuUserRole').textContent=(names[currentUser.type]||'Portal user')+(currentUser.arm?' · '+currentUser.arm:'')+(currentUser.subject?' · '+currentUser.subject:'');
+  var nameNode=document.getElementById('menuUserName');
+  var roleNode=document.getElementById('menuUserRole');
+  if(nameNode)nameNode.textContent=currentUser.name||'Authenticated user';
+  if(roleNode)roleNode.textContent=(names[currentUser.type]||'Portal user')+(currentUser.arm?' · '+currentUser.arm:'')+(currentUser.subject?' · '+currentUser.subject:'');
+
+  function isOpen(){return !p.classList.contains('hidden');}
+  function setOpen(open){
+    var visible=!!open;
+    p.classList.toggle('hidden',!visible);
+    t.setAttribute('aria-expanded',String(visible));
+    t.setAttribute('aria-label',visible?'Close navigation list':'Open navigation list');
+    t.textContent=visible?'×':'⋮';
+  }
+
   l.innerHTML='';
   Array.prototype.forEach.call(document.querySelectorAll('#tabsContainer .tab'),function(tab){
     var item=document.createElement('li');
@@ -4197,15 +4212,45 @@ function setupUserHamburgerMenu(){
     x.addEventListener('mouseleave',function(){x.style.background='#fff';});
     x.addEventListener('focus',function(){x.style.background='#f1f7f3';});
     x.addEventListener('blur',function(){x.style.background='#fff';});
-    x.addEventListener('click',function(){tab.click();p.classList.add('hidden');t.setAttribute('aria-expanded','false');t.textContent='⋮';});
-    item.appendChild(x);l.appendChild(item);
+    x.addEventListener('click',function(event){
+      event.preventDefault();
+      setOpen(false);
+      tab.click();
+    });
+    item.appendChild(x);
+    l.appendChild(item);
   });
-  if(t.dataset.ready!=='true'){
-    t.addEventListener('click',function(){var open=p.classList.toggle('hidden')===false;t.setAttribute('aria-expanded',String(open));t.textContent=open?'×':'⋮';});
-    document.getElementById('menuLogoutBtn').addEventListener('click',function(){p.classList.add('hidden');t.setAttribute('aria-expanded','false');t.textContent='⋮';handleLogout();});
-    document.addEventListener('click',function(e){if(!p.classList.contains('hidden')&&!p.contains(e.target)&&!t.contains(e.target)){p.classList.add('hidden');t.setAttribute('aria-expanded','false');t.textContent='⋮';}});
-    t.dataset.ready='true';
+
+  if(t.dataset.menuStateBound!=='true'){
+    t.addEventListener('click',function(event){
+      event.preventDefault();
+      event.stopPropagation();
+      setOpen(!isOpen());
+    });
+
+    var logout=document.getElementById('menuLogoutBtn');
+    if(logout)logout.addEventListener('click',function(event){
+      event.preventDefault();
+      setOpen(false);
+      handleLogout();
+    });
+
+    document.addEventListener('pointerdown',function(event){
+      if(isOpen()&&!p.contains(event.target)&&!t.contains(event.target))setOpen(false);
+    },true);
+
+    document.addEventListener('keydown',function(event){
+      if(event.key==='Escape'&&isOpen()){
+        setOpen(false);
+        t.focus();
+      }
+    });
+
+    t.dataset.menuStateBound='true';
   }
+
+  // Always reconcile the visible icon with the actual panel state.
+  setOpen(isOpen());
 }
 
 function setupTabScrollControls() {
