@@ -4908,7 +4908,7 @@ function getSubjectPerformanceStats(student, subjectName) {
 async function renderScoreApproval() {
   var root = document.getElementById('scoreApprovalTab');
   if (!root || !currentUser || currentUser.type !== 'admin' || !authenticatedProfile || !authenticatedProfile.school_id) return;
-  root.innerHTML = '<div class="card"><h2>Score Approval</h2><p>Review scores submitted by teachers. Approval is recorded in Supabase with the Administrator and approval timestamp. Select the scope for one approval action.</p><div class="grid grid-3"><div class="input-group"><label>Academic Session</label><select id="scoreApprovalSession"></select></div><div class="input-group"><label>Term</label><select id="scoreApprovalTerm"></select></div><div class="input-group"><label>Approval Scope</label><select id="scoreApprovalScope"><option value="class">Selected Class Arm</option><option value="all_arms">All Arms in Selected Class Level</option><option value="school">Entire School</option></select></div><div class="input-group" id="scoreApprovalClassWrap"><label>Class Arm / Level Reference</label><select id="scoreApprovalClass"></select></div></div><div style="display:flex;gap:8px;flex-wrap:wrap;margin:12px 0"><button type="button" class="btn btn-primary" id="scoreApprovalRefresh">Refresh Submitted Scores</button><button type="button" class="btn btn-success" id="scoreApprovalRun">Approve Selected Scope</button></div><div id="scoreApprovalSummary" role="status" aria-live="polite">Loading approval records…</div><div id="scoreApprovalRows" style="overflow-x:auto"></div></div>';
+  root.innerHTML = '<div class="card"><h2>Score Approval</h2><p>Review scores submitted by teachers. Approval is recorded in Supabase with the Administrator and approval timestamp. Select the scope for one approval action.</p><div class="grid grid-3"><div class="input-group"><label>Academic Session</label><select id="scoreApprovalSession"></select></div><div class="input-group"><label>Term</label><select id="scoreApprovalTerm"></select></div><div class="input-group"><label>Approval Scope</label><select id="scoreApprovalScope"><option value="class">Selected Class Arm</option><option value="all_arms">All Arms in Selected Class Level</option><option value="school">Entire School</option></select></div><div class="input-group" id="scoreApprovalClassWrap"><label>Class Arm / Level Reference</label><select id="scoreApprovalClass"></select></div></div><div style="display:flex;gap:8px;flex-wrap:wrap;margin:12px 0"><button type="button" class="btn btn-primary" id="scoreApprovalRefresh">Refresh Submitted Scores</button><button type="button" class="btn btn-success" id="scoreApprovalRun">Approve Selected Scope</button></div><div id="scoreApprovalSummary" role="status" aria-live="polite">Loading approval records…</div><div id="scoreApprovalRows" style="overflow-x:auto"></div><section id="scoreApprovalCaQueue" style="margin-top:22px;padding:16px;border:1px solid #dbe4f0;border-radius:14px;background:#f8fafc"><h3 style="margin:0;color:#293968">Accumulated CA Final Approval Queue</h3><p style="font-size:13px;color:#64748b;margin:6px 0 12px">Approve a CA component individually or select multiple submitted components within the same class arm, subject, session and term. CA approval is processed in CA1–CA3 order.</p><div id="scoreApprovalCaQueueRows" aria-live="polite">Loading CA submissions awaiting final approval…</div></section></div>';
   var session=root.querySelector('#scoreApprovalSession'), term=root.querySelector('#scoreApprovalTerm'), scope=root.querySelector('#scoreApprovalScope'), cls=root.querySelector('#scoreApprovalClass'), wrap=root.querySelector('#scoreApprovalClassWrap'), summary=root.querySelector('#scoreApprovalSummary'), rows=root.querySelector('#scoreApprovalRows'), approve=root.querySelector('#scoreApprovalRun');
   try {
     var loaded=await Promise.all([
@@ -4943,8 +4943,69 @@ async function renderScoreApproval() {
       rows.innerHTML='<table style="width:100%;min-width:720px"><thead><tr><th>Student</th><th>Class</th><th>Subject</th><th>Teacher</th><th class="score-heading-cell">CA1</th><th class="score-heading-cell">CA2</th><th class="score-heading-cell">CA3</th><th class="score-heading-cell">Exam</th><th class="score-heading-cell">Total</th><th>Submitted</th></tr></thead><tbody>'+records.map(function(x){var st=maps[0][String(x.student_id)]||{},su=maps[1][String(x.subject_id)]||{},cl=maps[2][String(x.class_id)]||{},te=maps[3][String(x.entered_by)]||{};return '<tr><td>'+escapeManagementText([st.first_name,st.middle_name,st.last_name].filter(Boolean).join(' '))+'</td><td>'+escapeManagementText(cl.class_name||'—')+'</td><td>'+escapeManagementText(su.name||'—')+'</td><td>'+escapeManagementText(te.full_name||'—')+'</td><td>'+x.ca1+'</td><td>'+x.ca2+'</td><td>'+x.ca3+'</td><td>'+x.examination+'</td><td><strong>'+x.total+'</strong></td><td>'+escapeManagementText(x.submitted_at?new Date(x.submitted_at).toLocaleString():'—')+'</td></tr>';}).join('')+'</tbody></table>';
       approve.dataset.count=String(records.length);
     }
-    scope.addEventListener('change',function(){wrap.style.display=scope.value==='school'?'none':'';loadRows().catch(function(e){summary.textContent=e.message;});});
-    [session,term,cls].forEach(function(el){el.addEventListener('change',function(){loadRows().catch(function(e){summary.textContent=e.message;});});});
+    async function loadCaFinalApprovalQueue(){
+      var target=root.querySelector('#scoreApprovalCaQueueRows');
+      if(!target)return;
+      target.innerHTML='<p style="color:#64748b">Loading CA submissions awaiting final approval…</p>';
+      try{
+        var response=await supabaseClient.rpc('list_result_assessment_submissions',{p_class_id:null,p_academic_session_id:null,p_term_id:null,p_stage:null});
+        if(response.error)throw response.error;
+        var pending=(Array.isArray(response.data)?response.data:[]).filter(function(item){
+          return [1,2,3].indexOf(Number(item.assessment_stage))>=0 && item.status==='submitted_to_admin'
+            && String(item.academic_session_id)===String(session.value)
+            && String(item.term_id)===String(term.value);
+        });
+        if(scope.value==='class'&&cls.value)pending=pending.filter(function(item){return String(item.class_id)===String(cls.value);});
+        if(scope.value==='all_arms'&&cls.value){
+          var selected=classes.find(function(x){return String(x.id)===String(cls.value);});
+          var peerIds=classes.filter(function(x){return selected&&String(x.level)===String(selected.level);}).map(function(x){return String(x.id);});
+          pending=pending.filter(function(item){return peerIds.indexOf(String(item.class_id))!==-1;});
+        }
+        if(!pending.length){target.innerHTML='<p style="color:#64748b;font-size:14px">No CA submissions are currently awaiting final approval for this session, term and scope.</p>';return;}
+        var ids=function(key){return Array.from(new Set(pending.map(function(x){return x[key];}).filter(Boolean)));};
+        var lookup=await Promise.all([
+          supabaseClient.from('classes').select('id,class_name').eq('school_id',authenticatedProfile.school_id).in('id',ids('class_id')),
+          supabaseClient.from('subjects').select('id,name').eq('school_id',authenticatedProfile.school_id).in('id',ids('subject_id')),
+          supabaseClient.from('academic_sessions').select('id,name').eq('school_id',authenticatedProfile.school_id).in('id',ids('academic_session_id')),
+          supabaseClient.from('terms').select('id,name,term_number').eq('school_id',authenticatedProfile.school_id).in('id',ids('term_id'))
+        ]);
+        lookup.forEach(function(x){if(x.error)throw x.error;});
+        var maps=lookup.map(function(x){var m={};(x.data||[]).forEach(function(v){m[String(v.id)]=v;});return m;});
+        var groups={};
+        pending.forEach(function(item){var key=[item.class_id,item.subject_id,item.academic_session_id,item.term_id].join('|');(groups[key]=groups[key]||[]).push(item);});
+        var html='';
+        Object.keys(groups).sort().forEach(function(key){
+          var group=groups[key].sort(function(a,b){return Number(a.assessment_stage)-Number(b.assessment_stage);}),first=group[0];
+          var label=[maps[0][String(first.class_id)]&&maps[0][String(first.class_id)].class_name||'Class arm',maps[1][String(first.subject_id)]&&maps[1][String(first.subject_id)].name||'Subject',maps[2][String(first.academic_session_id)]&&maps[2][String(first.academic_session_id)].name||'Session',maps[3][String(first.term_id)]&&maps[3][String(first.term_id)].name||'Term'].map(escapeManagementText).join(' · ');
+          html+='<div style="padding:12px;margin:12px 0;background:#fff;border:1px solid #e2e8f0;border-radius:10px"><div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap"><strong>'+label+'</strong><button type="button" class="btn btn-success score-approve-ca-group" data-group="'+escapeManagementText(key)+'">Approve selected / all in this group</button></div>';
+          group.forEach(function(item){
+            html+='<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;padding:9px 0;border-top:1px solid #edf0f5"><label style="display:flex;align-items:center;gap:8px;font-size:13px"><input type="checkbox" class="score-approve-ca-check" data-group="'+escapeManagementText(key)+'" value="'+escapeManagementText(item.id)+'"><strong>CA'+Number(item.assessment_stage)+'</strong><span>Submitted '+escapeManagementText(item.submitted_at?new Date(item.submitted_at).toLocaleString():'—')+'</span></label><button type="button" class="btn btn-primary score-approve-ca-one" data-id="'+escapeManagementText(item.id)+'">Approve CA'+Number(item.assessment_stage)+'</button></div>';
+          });
+          html+='</div>';
+        });
+        target.innerHTML=html;
+        async function approveCa(ids,button){
+          if(!ids.length)return;
+          button.disabled=true;var original=button.textContent;button.textContent='Approving…';
+          try{
+            var reviewed=await supabaseClient.rpc('review_result_assessment_submissions',{p_submission_ids:ids,p_decision:'approve',p_comment:null});
+            if(reviewed.error)throw reviewed.error;
+            var data=Array.isArray(reviewed.data)?reviewed.data[0]:reviewed.data;
+            if(!data||data.success!==true||Number(data.reviewed_count)!==ids.length)throw new Error('Supabase did not confirm every selected CA approval.');
+            showToast(ids.length+' CA component(s) finally approved.','success');
+            await loadCaFinalApprovalQueue();
+          }catch(error){showToast('CA approval failed: '+(error.message||'Unknown error'),'error');button.disabled=false;button.textContent=original;}
+        }
+        target.querySelectorAll('.score-approve-ca-one').forEach(function(button){button.addEventListener('click',function(){approveCa([this.getAttribute('data-id')],this);});});
+        target.querySelectorAll('.score-approve-ca-group').forEach(function(button){button.addEventListener('click',function(){
+          var key=this.getAttribute('data-group'),checks=Array.from(target.querySelectorAll('.score-approve-ca-check[data-group="'+key+'"]'));
+          var selected=checks.filter(function(x){return x.checked;}),chosen=selected.length?selected:checks;
+          approveCa(chosen.map(function(x){return x.value;}),this);
+        });});
+      }catch(error){target.innerHTML='<p class="alert alert-error">Unable to load final CA approval submissions: '+escapeManagementText(error.message||'Unknown error')+'</p>';}
+    }
+    scope.addEventListener('change',function(){wrap.style.display=scope.value==='school'?'none':'';loadRows().catch(function(e){summary.textContent=e.message;});loadCaFinalApprovalQueue();});
+    [session,term,cls].forEach(function(el){el.addEventListener('change',function(){loadRows().catch(function(e){summary.textContent=e.message;});loadCaFinalApprovalQueue();});});
     root.querySelector('#scoreApprovalRefresh').addEventListener('click',function(){loadRows().catch(function(e){summary.textContent=e.message;});});
     approve.addEventListener('click',async function(){
       if(!session.value||!term.value){showToast('Select an academic session and term.','error');return;}
@@ -4963,6 +5024,7 @@ async function renderScoreApproval() {
       finally{approve.disabled=false;approve.textContent='Approve Selected Scope';}
     });
     await loadRows();
+    await loadCaFinalApprovalQueue();
   }catch(error){summary.className='alert alert-error';summary.textContent='Unable to load Score Approval: '+(error.message||'Unknown error');}
 }
 
@@ -13424,14 +13486,6 @@ async function loadAdminCa1ResultsView() {
         enrolmentByStudentClassSession[String(b.student_id)+'|'+String(b.class_id)+'|'+String(b.academic_session_id)]||{}
       );
     });
-    var adminCaPending=[];
-    if(currentUser.type==='admin'){
-      var assessmentQueue = await supabaseClient.rpc('list_result_assessment_submissions',{p_class_id:null,p_academic_session_id:null,p_term_id:null,p_stage:null});
-      if (assessmentQueue.error) throw assessmentQueue.error;
-      adminCaPending=(Array.isArray(assessmentQueue.data)?assessmentQueue.data:[]).filter(function(item){
-        return [1,2,3].indexOf(Number(item.assessment_stage))>=0 && item.status==='submitted_to_admin';
-      });
-    }
     var esc=escapeManagementText;
     var armCounts={};
     rows.forEach(function(row){var k=String(row.class_id||'');armCounts[k]=(armCounts[k]||0)+1;});
@@ -13507,14 +13561,6 @@ async function loadAdminCa1ResultsView() {
     if(selectedArm)html+='<div style="width:100%;max-width:100%;min-width:0;margin:0;padding:0"><h3 style="margin:0 0 10px;color:#293968">'+esc(selectedArmName)+' — Subject Score Registers</h3>'+buildArmSubjects(selectedArm)+'</div>';
     else html+='<p class="alert alert-info">Select a class arm to view its subject registers.</p>';
     html+='</div>';
-    var groups={};
-    adminCaPending.forEach(function(item){var key=[item.class_id,item.subject_id,item.academic_session_id,item.term_id].join('|');if(!groups[key])groups[key]=[];groups[key].push(item);});
-    if(currentUser.type==='admin'){
-    html+='<section style="margin-top:18px;padding:14px;border:1px solid #dbe4f0;border-radius:12px;background:#f8fafc"><h3 style="margin:0;color:#293968">Accumulated CA Final Approval Queue</h3><p style="font-size:12px;color:#64748b;margin:5px 0 12px">Approve a CA component individually or select all submitted components within the same class, subject, session and term to approve them together. CA approval is processed in CA1–CA3 order.</p>';
-    if(!adminCaPending.length)html+='<p style="color:#64748b;font-size:13px">No CA submissions are currently awaiting final approval.</p>';
-    Object.keys(groups).forEach(function(key){var group=groups[key],first=group[0],label=esc((classesById[String(first.class_id)]||{}).class_name||'Class')+' · '+esc((subjectsById[String(first.subject_id)]||{}).name||'Subject')+' · '+esc((termsById[String(first.term_id)]||{}).name||'Term');html+='<div style="padding:10px;margin:10px 0;background:#fff;border:1px solid #e2e8f0;border-radius:9px"><div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap"><strong>'+label+'</strong><button type="button" class="btn btn-primary admin-ca-approve-group" data-group="'+esc(key)+'">Approve selected / all below</button></div>';group.forEach(function(item){html+='<label style="display:flex;align-items:center;gap:8px;padding:7px 2px;font-size:13px"><input type="checkbox" class="admin-ca-queue-check" data-group="'+esc(key)+'" value="'+esc(item.id)+'"><span>CA'+Number(item.assessment_stage)+' — submitted '+esc(item.submitted_at?new Date(item.submitted_at).toLocaleString():'')+'</span></label>';});html+='</div>';});
-    html+='</section>';
-    }
     panel.innerHTML=html;
     panel.querySelectorAll('.admin-arm-hanger').forEach(function(button){button.addEventListener('click',function(){
       var id=this.getAttribute('data-arm-id')||'';
@@ -13528,28 +13574,6 @@ async function loadAdminCa1ResultsView() {
       var target=panel.querySelector('#adminArmScoreContent');
       if(target)target.innerHTML='<div style="width:100%;max-width:100%;min-width:0;margin:0;padding:0"><h3 style="margin:0 0 10px;color:#293968">'+esc(arm?arm.name:'Selected class arm')+' — Subject Score Registers</h3>'+buildArmSubjects(id)+'</div>';
     });});
-    panel.querySelectorAll('.admin-ca-approve-group').forEach(function(button){
-      button.addEventListener('click',async function(){
-        var key=this.getAttribute('data-group');
-        var checks=Array.from(panel.querySelectorAll('.admin-ca-queue-check[data-group="'+key+'"]'));
-        var selected=checks.filter(function(input){return input.checked;});
-        var chosen=selected.length?selected:checks;
-        var ids=chosen.map(function(input){return input.value;});
-        if(!ids.length)return;
-        button.disabled=true;button.textContent='Approving…';
-        try{
-          var reviewed=await supabaseClient.rpc('review_result_assessment_submissions',{p_submission_ids:ids,p_decision:'approve',p_comment:null});
-          if(reviewed.error)throw reviewed.error;
-          var data=Array.isArray(reviewed.data)?reviewed.data[0]:reviewed.data;
-          if(!data||data.success!==true||Number(data.reviewed_count)!==ids.length)throw new Error('Supabase did not confirm every selected CA approval.');
-          showToast(ids.length+' CA component(s) finally approved.','success');
-          await loadAdminCa1ResultsView();
-        }catch(error){
-          showToast('CA approval failed: '+(error.message||'Unknown error'),'error');
-          button.disabled=false;button.textContent='Approve selected / all below';
-        }
-      });
-    });
   } catch (error) {
     console.error('Admin CA1 results view failed:', error);
     panel.innerHTML = '<p style="color:#b42318">Could not load saved CA1 results: '+escapeManagementText(error.message||'Unknown error')+'</p>';
