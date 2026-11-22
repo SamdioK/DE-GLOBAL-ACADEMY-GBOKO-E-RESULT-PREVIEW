@@ -9889,15 +9889,8 @@ function renderDashboard() {
   html += '<button class="btn btn-primary" onclick="showActivationPanel()" style="padding: 10px 20px;">Manage Class Activation</button></div>';
 
   html += '<div class="card" style="margin-top: 20px;"><h3 style="margin-bottom: 15px;">🔓 Activate Subject Teacher Access</h3><p style="color: #666; margin-bottom: 15px;">Enable specific class + subject slots to allow subject teachers to login and enter scores</p>';
-  html += '<div style="background: #fff3e0; padding: 15px; border-radius: 8px; margin-bottom: 15px;"><strong style="color: #e65100;">📊 Status:</strong> ' + activatedAssignments.length + ' of ' + subjectAssignments.length + ' subject slots activated</div>';
-  if (activatedAssignments.length > 0) {
-    html += '<div style="margin-bottom:15px;"><strong style="font-size:13px; display:block; margin-bottom:8px;">Currently Active Subject Slots:</strong><div style="display:flex; flex-wrap:wrap; gap:8px;">';
-    activatedAssignments.forEach(function(a) {
-      html += '<span style="background:#ffe0b2; color:#e65100; padding:5px 10px; border-radius:12px; font-size:12px;">✓ ' + a.className + ' - ' + a.subject + ' — ' + a.teacherName + '</span>';
-    });
-    html += '</div></div>';
-  }
-  html += '<button class="btn btn-primary" onclick="showTab(\'masters\'); document.querySelectorAll(\'.tab\').forEach(function(t){t.classList.remove(\'active\'); if(t.textContent===\'Masters\')t.classList.add(\'active\');});" style="padding: 10px 20px;">Manage Subject Teachers</button></div>';
+  html += '<div style="background: #fff3e0; padding: 12px 15px; border-radius: 8px; margin-bottom: 15px;"><strong style="color: #e65100;">📊 Activation Status:</strong> <span style="font-weight:700; color:#9a3412;">' + activatedAssignments.length + ' of ' + subjectAssignments.length + ' subject slots activated</span></div>';
+  html += '<button class="btn btn-primary" onclick="showTab(\\'masters\\'); document.querySelectorAll(\\'.tab\\').forEach(function(t){t.classList.remove(\\'active\\'); if(t.textContent===\\'Masters\\')t.classList.add(\\'active\\');});" style="padding: 10px 20px;">Manage Subject Teachers</button></div>';
 
   document.getElementById('dashboardTab').innerHTML = html;
   loadDashboardAnalytics();
