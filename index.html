@@ -644,16 +644,6 @@ th { background: #f5f5f5; font-weight: 600; }
 
 <style>
 #appContainer .main-content{position:relative;min-height:55vh}
-#appRefreshNotice{display:none;position:fixed;z-index:9999;inset:0;align-items:center;justify-content:center;padding:22px 14px;background:rgba(20,30,55,.18);backdrop-filter:blur(1.5px)}
-#appRefreshNotice.visible{display:flex}
-#appRefreshNotice .refresh-notice-card{width:min(430px,100%);padding:22px 24px;border-radius:16px;background:#fff;color:#172554;text-align:center;box-shadow:0 12px 34px rgba(20,35,75,.22);border:1px solid #dbe4f4}
-#appRefreshNotice .refresh-notice-title{font-size:clamp(17px,4.5vw,21px);font-weight:800;line-height:1.35}
-#appRefreshNotice .refresh-notice-sub{font-size:13px;color:#53627d;margin-top:8px}
-#appRefreshNotice .refresh-dots{display:inline-flex;gap:5px;margin-right:9px;vertical-align:middle}
-#appRefreshNotice .refresh-dots i{width:8px;height:8px;border-radius:50%;background:#314b9b;display:block;animation:refreshDotPulse 1.05s infinite ease-in-out}
-#appRefreshNotice .refresh-dots i:nth-child(2){animation-delay:.16s}
-#appRefreshNotice .refresh-dots i:nth-child(3){animation-delay:.32s}
-@keyframes refreshDotPulse{0%,65%,100%{opacity:.3;transform:translateY(0)}32%{opacity:1;transform:translateY(-5px)}}
 </style>
 <div class="login-container" id="loginContainer" style="display:none">
 <div class="landing-campus-scene" aria-hidden="true"></div>
@@ -871,7 +861,6 @@ th { background: #f5f5f5; font-weight: 600; }
     >&#8250;</button>
   </div>
   <div class="main-content">
-    <div id="appRefreshNotice" class="visible" role="status" aria-live="polite" aria-label="Refreshing the page"><div class="refresh-notice-card"><div class="refresh-notice-title"><span class="refresh-dots" aria-hidden="true"><i></i><i></i><i></i></span>Refreshing the page ...</div><div class="refresh-notice-sub">Please wait. Your page information and active session are being reloaded.</div></div></div>
     <div id="principalDashboardTab" class="hidden"></div>
     <div id="principalStudentsTab" class="hidden"></div>
     <div id="principalScoreSheetTab" class="hidden"></div>
@@ -1319,15 +1308,15 @@ async function initApp() {
   if (setupView) setupView.classList.add('hidden');
   if (loginView) loginView.classList.remove('hidden');
   setupEventListeners();
+  // Keep the public login/landing screen visible while Supabase checks for a
+  // restorable session. A slow or unavailable auth request must never leave a
+  // blank page or a permanent refresh overlay.
+  var loginContainer=document.getElementById('loginContainer');
+  if(loginContainer)loginContainer.style.display='flex';
   var restored = await restoreSupabasePortalSession();
   if (!restored) {
-    hidePageRefreshNotice();
     var appShell=document.getElementById('appContainer');
     if(appShell)appShell.classList.remove('active');
-    // Reveal the public landing/login screen only after confirming there is no
-    // restorable authenticated session. This prevents a landing-page flash.
-    var loginContainer=document.getElementById('loginContainer');
-    if(loginContainer)loginContainer.style.display='flex';
   }
 }
 
@@ -4345,16 +4334,9 @@ function showApp() {
   var initialTab=tabs.indexOf(requestedTab)!==-1?requestedTab:tabs[0];
   var initialButton=Array.prototype.find.call(tabsContainer.querySelectorAll('.tab'),function(btn){return btn.textContent===(tabsContainer.querySelectorAll('.tab')[tabs.indexOf(initialTab)]||{}).textContent;});
   if(initialButton){tabsContainer.querySelectorAll('.tab').forEach(function(btn){btn.classList.toggle('active',btn===initialButton);});}
-  // Wait for asynchronous tab data (especially the teacher's saved-score register)
-  // before placing the refresh notice over the restored workspace.
+  // Render the requested workspace directly. Do not place a blocking
+  // "refreshing" overlay over the portal while tab data is loading.
   showTab(initialTab);
-  var renderReady=initialTab==='view'?(window.__activeViewRenderPromise||Promise.resolve()):Promise.resolve();
-  Promise.resolve(renderReady).catch(function(error){console.warn('Restored tab data:',error);}).then(function(){
-    requestAnimationFrame(function(){
-      showPageRefreshNotice();
-      window.setTimeout(hidePageRefreshNotice,1400);
-    });
-  });
 }
 
 function setupUserHamburgerMenu(){
