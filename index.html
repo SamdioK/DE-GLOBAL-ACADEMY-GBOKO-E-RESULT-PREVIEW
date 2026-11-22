@@ -9915,7 +9915,7 @@ function renderDashboard() {
 
   html += '<div class="card dashboard-access-card dashboard-subject-access" style="margin-top: 20px;"><h3 style="margin-bottom: 15px;">🔓 Activate Subject Teacher Access</h3><p style="color: #666; margin-bottom: 15px;">Enable specific class + subject slots to allow subject teachers to login and enter scores</p>';
   html += '<div class="dashboard-status dashboard-subject-status"><strong>📊 Activation Status:</strong> <span>' + activatedAssignments.length + ' of ' + subjectAssignments.length + ' subject slots activated</span></div>';
-  html += '<button class="btn btn-primary" onclick="showTab(\\'masters\\'); document.querySelectorAll(\\'.tab\\').forEach(function(t){t.classList.remove(\\'active\\'); if(t.textContent===\\'Masters\\')t.classList.add(\\'active\\');});" style="padding: 10px 20px;">Manage Subject Teachers</button></div>';
+  html += '<button class="btn btn-primary" onclick="showTab(\'masters\'); document.querySelectorAll(\'.tab\').forEach(function(t){t.classList.remove(\'active\'); if(t.textContent===\'Masters\')t.classList.add(\'active\');});" style="padding: 10px 20px;">Manage Subject Teachers</button></div>';
 
   document.getElementById('dashboardTab').innerHTML = html;
   loadDashboardAnalytics();
