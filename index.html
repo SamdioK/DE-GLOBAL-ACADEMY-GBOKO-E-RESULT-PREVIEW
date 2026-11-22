@@ -518,6 +518,8 @@ th { background: #f5f5f5; font-weight: 600; }
  .admin-view-guidance p{font-size:12px;line-height:1.55}
  .admin-view-guidance strong{font-size:13px}
 }
+/* Live administrator dashboard analytics */
+.dashboard-live-kpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:14px;margin-top:16px}.dashboard-kpi{min-width:0;padding:20px 18px;background:#fff;border-radius:14px;box-shadow:0 2px 7px rgba(15,23,42,.09);display:flex;flex-direction:column;gap:6px}.dashboard-kpi strong{font-size:30px;line-height:1.1;color:#667eea;font-weight:750}.dashboard-kpi span{font-size:13px;color:#667085;line-height:1.35}.dashboard-analytics{padding:20px}.dashboard-analytics-heading{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:16px}.dashboard-analytics-heading h3{margin:0;color:#26365b}.dashboard-analytics-heading p{margin:5px 0 0;color:#667085;font-size:13px}.dashboard-analysis-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}.dashboard-analysis-panel{min-width:0;padding:16px;border:1px solid #e6eaf1;border-radius:12px;background:#fff}.dashboard-analysis-panel h4{margin:0 0 13px;color:#34446b;font-size:16px}.dashboard-metric-pairs{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}.dashboard-metric-pairs>div{padding:12px;border-radius:9px;background:#f5f7fc;display:flex;flex-direction:column;gap:4px;min-width:0}.dashboard-metric-pairs strong{font-size:23px;color:#536fe5}.dashboard-metric-pairs span{font-size:11px;color:#667085;line-height:1.35}.dashboard-bar-row{margin:11px 0}.dashboard-bar-label{display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;font-size:12px;margin-bottom:5px}.dashboard-bar-label strong{color:#34446b}.dashboard-bar-label span{color:#667085}.dashboard-bar-track{height:9px;background:#edf0f7;border-radius:20px;overflow:hidden}.dashboard-bar-track i{display:block;height:100%;border-radius:20px;background:linear-gradient(90deg,#667eea,#764ba2)}.dashboard-score-summary{display:flex;align-items:baseline;gap:9px;margin-bottom:8px}.dashboard-score-summary strong{font-size:30px;color:#536fe5}.dashboard-score-summary span{font-size:12px;color:#667085}.dashboard-score-track{margin-bottom:12px}.dashboard-mini-row{display:flex;justify-content:space-between;gap:10px;padding:7px 0;border-bottom:1px solid #edf0f5;font-size:12px}.dashboard-mini-row span{color:#667085}.dashboard-mini-row strong{color:#34446b}.dashboard-data-note{font-size:12px;line-height:1.5;color:#946200;background:#fff8e6;padding:10px;border-radius:8px;margin:12px 0 0}.dashboard-activity-row{display:flex;gap:10px;padding:9px 0;border-bottom:1px solid #edf0f5}.dashboard-activity-dot{width:9px;height:9px;flex:0 0 9px;border-radius:50%;background:#667eea;margin-top:5px}.dashboard-activity-row div{min-width:0;display:flex;flex-direction:column;gap:3px}.dashboard-activity-row strong{font-size:12px;color:#34446b}.dashboard-activity-row small{font-size:11px;color:#667085;overflow-wrap:anywhere}@media(max-width:760px){.dashboard-live-kpis{grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}.dashboard-kpi{padding:16px 13px}.dashboard-kpi strong{font-size:26px}.dashboard-kpi span{font-size:12px}.dashboard-analysis-grid{grid-template-columns:1fr}.dashboard-analytics{padding:14px}.dashboard-metric-pairs{gap:8px}}
 /* Administrator score view: remove nested card gutters and reclaim mobile width */
 .admin-view-score-card{width:100%;max-width:100%;min-width:0;box-sizing:border-box}
 .admin-view-score-card #adminCa1ResultsPanel,.admin-view-score-card #adminArmScoreContent,
@@ -9870,13 +9872,13 @@ function renderDashboard() {
   var activatedAssignments = subjectAssignments.filter(function(a) { return a.activated; });
 
   var html = '<div class="card" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 30px;"><h2 style="margin-bottom: 10px;">Welcome, ' + currentUser.name + '!</h2><p style="opacity: 0.9;">' + currentSchool.schoolName + '</p><p style="opacity: 0.9;">Location: <strong>' + currentSchool.location + '</strong></p></div>';
-  html += '<div class="grid grid-2"><div class="card"><div style="font-size: 28px; font-weight: bold; color: #667eea;">30</div><div style="color: #666; margin-top: 5px; font-size: 14px;">Class Arms</div></div>';
-  html += '<div class="card"><div style="font-size: 28px; font-weight: bold; color: #667eea;">' + formMasters.length + '</div><div style="color: #666; margin-top: 5px; font-size: 14px;">Form Masters</div></div>';
-  html += '<div class="card"><div style="font-size: 28px; font-weight: bold; color: #667eea;">' + students.length + '</div><div style="color: #666; margin-top: 5px; font-size: 14px;">Student Result Records (All Sessions)</div></div>';
-  html += '<div class="card"><div style="font-size: 28px; font-weight: bold; color: #667eea;">' + assigned + '</div><div style="color: #666; margin-top: 5px; font-size: 14px;">Assigned Arms</div></div></div>';
+  html += '<section class="dashboard-live-kpis" aria-label="Live school statistics">';
+  html += '<div class="dashboard-kpi"><strong id="dashClassArms">—</strong><span>Class Arms</span></div><div class="dashboard-kpi"><strong id="dashSchoolPopulation">—</strong><span>School Population</span></div><div class="dashboard-kpi"><strong id="dashActiveStudents">—</strong><span>Active Students</span></div><div class="dashboard-kpi"><strong id="dashStaffPopulation">—</strong><span>Staff Population</span></div>';
+  html += '<div class="dashboard-kpi"><strong id="dashFormMasters">—</strong><span>Active Form Masters</span></div><div class="dashboard-kpi"><strong id="dashSubjectTeachers">—</strong><span>Active Subject Teachers</span></div><div class="dashboard-kpi"><strong id="dashResultRecords">—</strong><span>Student Result Records (All Sessions)</span></div><div class="dashboard-kpi"><strong id="dashAssignedArms">—</strong><span>Assigned Arms</span></div></section>';
+  html += '<section class="dashboard-analytics card" style="margin-top:18px"><div class="dashboard-analytics-heading"><div><h3>School Operations & Performance Analytics</h3><p>Live figures retrieved directly from the school database.</p></div><button type="button" class="btn btn-primary" id="refreshDashboardAnalytics">Refresh Analytics</button></div><div id="dashboardAnalyticsContent"><p style="color:#64748b">Loading school-wide analytics from Supabase…</p></div></section>';
 
   html += '<div class="card" style="margin-top: 20px;"><h3 style="margin-bottom: 15px;">🔓 Activate Form Master Access</h3><p style="color: #666; margin-bottom: 15px;">Enable specific class arms to allow their form masters to login and enter results</p>';
-  html += '<div style="background: #e3f2fd; padding: 15px; border-radius: 8px; margin-bottom: 15px;"><strong style="color: #1976d2;">📊 Status:</strong> ' + activatedArms.length + ' of 30 classes activated</div>';
+  html += '<div style="background: #e3f2fd; padding: 15px; border-radius: 8px; margin-bottom: 15px;"><strong style="color: #1976d2;">📊 Status:</strong> <span id="dashboardActivationStatus">Loading activation status…</span></div>';
   if (activatedArms.length > 0) {
     html += '<div style="margin-bottom:15px;"><strong style="font-size:13px; display:block; margin-bottom:8px;">Currently Active Classes (Form Master Login):</strong><div style="display:flex; flex-wrap:wrap; gap:8px;">';
     activatedArms.forEach(function(a) {
@@ -9898,6 +9900,9 @@ function renderDashboard() {
   html += '<button class="btn btn-primary" onclick="showTab(\'masters\'); document.querySelectorAll(\'.tab\').forEach(function(t){t.classList.remove(\'active\'); if(t.textContent===\'Masters\')t.classList.add(\'active\');});" style="padding: 10px 20px;">Manage Subject Teachers</button></div>';
 
   document.getElementById('dashboardTab').innerHTML = html;
+  loadDashboardAnalytics();
+  var refreshDashboardButton=document.getElementById('refreshDashboardAnalytics');
+  if(refreshDashboardButton)refreshDashboardButton.addEventListener('click',loadDashboardAnalytics);
   var staffAcademicAuditButton = document.getElementById('runStaffAcademicAuditBtn');
   if (staffAcademicAuditButton) {
     staffAcademicAuditButton.addEventListener('click', async function() {
@@ -10189,6 +10194,59 @@ function safeAuditMessage(error) {
   return String(error && error.message || 'Unknown audit error').replace(/[&<>"']/g, function(ch) {
     return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch];
   });
+}
+
+async function loadDashboardAnalytics() {
+ var schoolId=authenticatedProfile&&authenticatedProfile.school_id,content=document.getElementById('dashboardAnalyticsContent');
+ if(!schoolId||!supabaseClient||!content)return;
+ var refresh=document.getElementById('refreshDashboardAnalytics');if(refresh){refresh.disabled=true;refresh.textContent='Refreshing…';}
+ content.innerHTML='<p style="color:#64748b">Refreshing live school statistics…</p>';
+ function put(id,value){var el=document.getElementById(id);if(el)el.textContent=Number(value||0).toLocaleString('en-GB');}
+ async function exactCount(table,filters){var q=supabaseClient.from(table).select('id',{count:'exact',head:true}).eq('school_id',schoolId);if(filters)q=filters(q);var r=await q;if(r.error)throw r.error;return Number(r.count||0);}
+ try{
+  var sr=await supabaseClient.from('academic_sessions').select('id,name').eq('school_id',schoolId).eq('is_current',true).maybeSingle();if(sr.error)throw sr.error;
+  var currentSession=sr.data||null,sessionId=currentSession&&currentSession.id;
+  var out=await Promise.all([
+   exactCount('classes'),exactCount('students'),exactCount('students',q=>q.eq('status','active')),exactCount('school_staff_directory'),exactCount('school_staff_directory',q=>q.eq('status','Active')),
+   exactCount('profiles',q=>q.eq('role','form_master').eq('is_active',true)),exactCount('profiles',q=>q.eq('role','subject_teacher').eq('is_active',true)),
+   exactCount('results'),exactCount('results',q=>q.or('ca1.not.is.null,ca2.not.is.null,ca3.not.is.null,examination.not.is.null')),
+   exactCount('results',q=>q.eq('status','submitted')),exactCount('results',q=>q.eq('status','approved')),exactCount('results',q=>q.eq('status','published')),
+   supabaseClient.from('classes').select('id,class_name,level').eq('school_id',schoolId).order('class_name'),
+   supabaseClient.from('form_master_assignments').select('class_id,teacher_id,academic_session_id').eq('school_id',schoolId),
+   supabaseClient.from('teacher_assignments').select('id').eq('school_id',schoolId).eq('is_active',true),
+   supabaseClient.from('school_staff_directory').select('designation').eq('school_id',schoolId).eq('status','Active'),
+   supabaseClient.from('school_activity_audit').select('action,occurred_at,affected_record').eq('school_id',schoolId).order('occurred_at',{ascending:false}).limit(8),
+   supabaseClient.from('students').select('gender').eq('school_id',schoolId).range(0,4999),
+   sessionId?supabaseClient.from('student_enrolments').select('class_id,student_id').eq('school_id',schoolId).eq('academic_session_id',sessionId).is('archived_at',null).range(0,4999):Promise.resolve({data:[],error:null}),
+   sessionId?supabaseClient.from('form_master_assignments').select('class_id,teacher_id').eq('school_id',schoolId).eq('academic_session_id',sessionId):Promise.resolve({data:[],error:null}),
+   supabaseClient.rpc('list_result_assessment_submissions',{p_class_id:null,p_academic_session_id:sessionId||null,p_term_id:null,p_stage:null})
+  ]);
+  out.forEach((x,i)=>{if(i>=12&&x&&x.error)throw x.error;});
+  var classCount=out[0],studentCount=out[1],activeStudents=out[2],staffCount=out[3],activeStaff=out[4],formMastersCount=out[5],subjectTeachersCount=out[6],resultCount=out[7],scoredCount=out[8],submittedCount=out[9],approvedCount=out[10],publishedCount=out[11];
+  var classes=out[12].data||[],allAssignments=out[13].data||[],teacherAssignments=out[14].data||[],staffRows=out[15].data||[],activity=out[16].data||[],genderRows=out[17].data||[],enrolments=out[18].data||[],sessionAssignments=out[19].data||[];
+  var assignedClassIds=Array.from(new Set(sessionAssignments.map(x=>String(x.class_id)))),genderRecorded=genderRows.filter(x=>x.gender==='Male'||x.gender==='Female').length,genderMissing=Math.max(0,studentCount-genderRecorded),assignedTeachers=Array.from(new Set(allAssignments.map(x=>String(x.teacher_id)))).length,currentAssignedArms=assignedClassIds.length,pendingCa=0,formMasterCa=0;
+  (out[20]&&Array.isArray(out[20].data)?out[20].data:[]).forEach(item=>{if([1,2,3].indexOf(Number(item.assessment_stage))!==-1){if(item.status==='submitted_to_admin')pendingCa++;if(item.status==='submitted_to_form_master')formMasterCa++;}});
+  [['dashClassArms',classCount],['dashSchoolPopulation',studentCount],['dashActiveStudents',activeStudents],['dashStaffPopulation',activeStaff],['dashFormMasters',formMastersCount],['dashSubjectTeachers',subjectTeachersCount],['dashResultRecords',resultCount],['dashAssignedArms',currentAssignedArms]].forEach(x=>put(x[0],x[1]));
+  var activation=document.getElementById('dashboardActivationStatus');if(activation)activation.textContent=currentAssignedArms+' of '+classCount+' class arms have a Form Master assignment for the current session.';
+  var esc=escapeManagementText,byLevel={},classById={};
+  classes.forEach(cls=>{classById[String(cls.id)]=cls;var k=cls.level||'Unclassified';if(!byLevel[k])byLevel[k]={arms:0,students:0};byLevel[k].arms++;});
+  enrolments.forEach(en=>{var cls=classById[String(en.class_id)];if(cls)byLevel[cls.level||'Unclassified'].students++;});
+  var levels=Object.keys(byLevel).sort((a,b)=>a.localeCompare(b,undefined,{numeric:true})),maxLevel=Math.max(1,...levels.map(k=>byLevel[k].students));
+  var levelHtml=levels.map(k=>{var x=byLevel[k],pct=Math.round(x.students/maxLevel*100);return '<div class="dashboard-bar-row"><div class="dashboard-bar-label"><strong>'+esc(k)+'</strong><span>'+x.students.toLocaleString('en-GB')+' students · '+x.arms+' arms</span></div><div class="dashboard-bar-track"><i style="width:'+pct+'%"></i></div></div>';}).join('');
+  var scorePct=resultCount?Math.round(scoredCount/resultCount*100):0,missingScores=Math.max(0,resultCount-scoredCount),staffGroups={};
+  staffRows.forEach(x=>{var k=x.designation||'Unspecified';staffGroups[k]=(staffGroups[k]||0)+1;});
+  var staffHtml=Object.keys(staffGroups).sort().map(k=>'<div class="dashboard-mini-row"><span>'+esc(k)+'</span><strong>'+staffGroups[k]+'</strong></div>').join('');
+  var activityHtml=activity.map(x=>'<div class="dashboard-activity-row"><span class="dashboard-activity-dot"></span><div><strong>'+esc(x.action||'System activity')+'</strong><small>'+esc(x.affected_record||'School record')+' · '+esc(x.occurred_at?new Date(x.occurred_at).toLocaleString('en-GB'):'Time unavailable')+'</small></div></div>').join('');
+  var html='<div class="dashboard-analysis-grid">';
+  html+='<section class="dashboard-analysis-panel"><h4>Current Session: '+esc(currentSession?currentSession.name:'Not configured')+'</h4><div class="dashboard-metric-pairs"><div><strong>'+enrolments.length.toLocaleString('en-GB')+'</strong><span>Current-session enrolments</span></div><div><strong>'+teacherAssignments.length.toLocaleString('en-GB')+'</strong><span>Active subject assignments</span></div><div><strong>'+assignedTeachers.toLocaleString('en-GB')+'</strong><span>Staff with Form Master assignments (all sessions)</span></div><div><strong>'+allAssignments.length.toLocaleString('en-GB')+'</strong><span>Form Master assignment records</span></div></div></section>';
+  html+='<section class="dashboard-analysis-panel"><h4>Student Score Processing</h4><div class="dashboard-score-summary"><strong>'+scorePct+'%</strong><span>of result records contain at least one score</span></div><div class="dashboard-bar-track dashboard-score-track"><i style="width:'+scorePct+'%"></i></div><div class="dashboard-mini-row"><span>Records with entered scores</span><strong>'+scoredCount.toLocaleString('en-GB')+'</strong></div><div class="dashboard-mini-row"><span>Records without scores</span><strong>'+missingScores.toLocaleString('en-GB')+'</strong></div><div class="dashboard-mini-row"><span>Submitted results</span><strong>'+submittedCount.toLocaleString('en-GB')+'</strong></div><div class="dashboard-mini-row"><span>Approved results</span><strong>'+approvedCount.toLocaleString('en-GB')+'</strong></div><div class="dashboard-mini-row"><span>Published results</span><strong>'+publishedCount.toLocaleString('en-GB')+'</strong></div><div class="dashboard-mini-row"><span>CA components awaiting Admin approval</span><strong>'+pendingCa.toLocaleString('en-GB')+'</strong></div><div class="dashboard-mini-row"><span>CA components awaiting Form Master review</span><strong>'+formMasterCa.toLocaleString('en-GB')+'</strong></div></section>';
+  html+='<section class="dashboard-analysis-panel"><h4>Student Enrolment by Class Level</h4>'+(levelHtml||'<p>No class levels are configured.</p>')+'</section>';
+  html+='<section class="dashboard-analysis-panel"><h4>Staff Composition · Active Directory</h4><div class="dashboard-metric-pairs"><div><strong>'+activeStaff.toLocaleString('en-GB')+'</strong><span>Active staff directory records</span></div><div><strong>'+staffCount.toLocaleString('en-GB')+'</strong><span>Total staff directory records</span></div><div><strong>'+formMastersCount.toLocaleString('en-GB')+'</strong><span>Active Form Master accounts</span></div><div><strong>'+subjectTeachersCount.toLocaleString('en-GB')+'</strong><span>Active Subject Teacher accounts</span></div></div>'+(staffHtml||'<p>No staff designations found.</p>')+'</section>';
+  html+='<section class="dashboard-analysis-panel"><h4>Student Data Completeness</h4><div class="dashboard-metric-pairs"><div><strong>'+genderRecorded.toLocaleString('en-GB')+'</strong><span>Students with gender recorded</span></div><div><strong>'+genderMissing.toLocaleString('en-GB')+'</strong><span>Students with gender not recorded</span></div></div><p class="dashboard-data-note">'+(genderMissing?'Gender information is incomplete for '+genderMissing.toLocaleString('en-GB')+' student record(s). This is a data-quality indicator, not an estimate.':'Gender information is recorded for all student records.')+'</p></section>';
+  html+='<section class="dashboard-analysis-panel"><h4>Recent System Activity</h4>'+(activityHtml||'<p>No activity audit entries are currently available.</p>')+'</section></div>';
+  content.innerHTML=html;
+ }catch(error){console.error('Dashboard analytics could not load:',error);content.innerHTML='<div class="alert alert-error">Live dashboard analytics could not be loaded from Supabase: '+escapeManagementText(error.message||'Unknown error')+'. Please refresh the analytics after checking the connection.</div>';}
+ finally{if(refresh){refresh.disabled=false;refresh.textContent='Refresh Analytics';}}
 }
 
 window.showActivationPanel = function() {
