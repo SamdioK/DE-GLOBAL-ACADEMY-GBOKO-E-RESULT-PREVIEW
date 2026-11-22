@@ -596,6 +596,49 @@ th { background: #f5f5f5; font-weight: 600; }
 @media(max-width:600px){#userMenuToggle{top:82px;right:13px;left:auto;width:46px!important;height:46px!important}}
 @media(prefers-reduced-motion:reduce){#userMenuPanel.user-navigation-drawer,#userMenuBackdrop{transition:none!important}}
 </style>
+
+<style id="dashboard-colour-refresh">
+/* Purple, green, blue and amber dashboard colour system */
+.header{background:linear-gradient(110deg,#3f075f 0%,#65118a 58%,#7d1fa3 100%);box-shadow:0 3px 14px rgba(57,10,82,.22)}
+.tab.active{background:#65118a;color:#fff}
+.tab-scroll-arrow{color:#65118a}
+.dashboard-welcome{background:linear-gradient(118deg,#542080 0%,#7625a6 62%,#9b2fc1 100%);color:#fff;padding:clamp(22px,3vw,30px);border-radius:20px;box-shadow:0 10px 24px rgba(83,25,125,.18);position:relative;overflow:hidden}
+.dashboard-welcome:after{content:"";position:absolute;width:260px;height:260px;border-radius:50%;right:-90px;bottom:-190px;background:rgba(255,255,255,.09);pointer-events:none}
+.dashboard-welcome h2{font-size:clamp(23px,3vw,32px);font-weight:800;position:relative;z-index:1}
+.dashboard-welcome p{color:rgba(255,255,255,.92);position:relative;z-index:1}
+.dashboard-live-kpis{grid-template-columns:repeat(4,minmax(0,1fr));gap:14px}
+.dashboard-kpi{border-radius:16px;border:1px solid rgba(70,60,100,.06);box-shadow:0 4px 12px rgba(20,25,50,.07);padding:18px;position:relative;overflow:hidden}
+.dashboard-kpi:before{content:"";position:absolute;left:0;top:0;bottom:0;width:6px;background:#20a64a}
+.dashboard-kpi:nth-child(1),.dashboard-kpi:nth-child(5),.dashboard-kpi:nth-child(8){background:#edf9f0}
+.dashboard-kpi:nth-child(1):before,.dashboard-kpi:nth-child(5):before,.dashboard-kpi:nth-child(8):before{background:#20a64a}
+.dashboard-kpi:nth-child(2),.dashboard-kpi:nth-child(6){background:#f4edfc}
+.dashboard-kpi:nth-child(2):before,.dashboard-kpi:nth-child(6):before{background:#8736c8}
+.dashboard-kpi:nth-child(3){background:#eaf4ff}.dashboard-kpi:nth-child(3):before{background:#1684d8}
+.dashboard-kpi:nth-child(4){background:#fff4e8}.dashboard-kpi:nth-child(4):before{background:#e87912}
+.dashboard-kpi:nth-child(7){background:#fff0f2}.dashboard-kpi:nth-child(7):before{background:#e43e62}
+.dashboard-kpi strong{font-size:clamp(25px,2.2vw,32px);color:#4e197b}
+.dashboard-kpi:nth-child(1) strong,.dashboard-kpi:nth-child(5) strong,.dashboard-kpi:nth-child(8) strong{color:#16833b}
+.dashboard-kpi:nth-child(3) strong{color:#1269b2}.dashboard-kpi:nth-child(4) strong{color:#b95b0a}.dashboard-kpi:nth-child(7) strong{color:#c42e50}
+.dashboard-kpi span{font-weight:650;color:#27304b}
+.dashboard-analytics{border:1px solid #ece8f2;border-radius:20px;box-shadow:0 7px 22px rgba(28,25,45,.08);padding:22px;background:#fff}
+.dashboard-analytics-heading h3{color:#32104f;font-size:clamp(18px,2vw,23px)}
+.dashboard-analytics-heading p{color:#596579}
+.dashboard-analytics .btn-primary,.dashboard-access-card .btn-primary{background:linear-gradient(100deg,#0755b9,#126bd1);color:#fff;border-radius:12px;font-weight:750;box-shadow:0 4px 10px rgba(12,82,173,.16)}
+.dashboard-analytics .btn-primary:hover,.dashboard-access-card .btn-primary:hover{filter:brightness(1.06);transform:translateY(-1px)}
+.dashboard-access-card{background:#fff;border:1px solid #e9e7ee;border-radius:20px;padding:22px;box-shadow:0 7px 20px rgba(28,25,45,.08)}
+.dashboard-access-card h3{color:#27103f;font-size:clamp(19px,2vw,23px)}
+.dashboard-access-card>p{color:#586276!important;line-height:1.5}
+.dashboard-access-card .btn-primary{width:100%;min-height:48px;font-size:15px}
+.dashboard-status{padding:13px 16px;border-radius:13px;margin:14px 0 15px;display:flex;align-items:center;gap:7px;flex-wrap:wrap;font-weight:650}
+.dashboard-form-status{background:#e5f2ff;color:#124f9f}
+.dashboard-form-status strong{color:#0755b9}
+.dashboard-subject-status{background:#fff0d5;color:#9c4700}
+.dashboard-subject-status strong{color:#bd5b08}
+.dashboard-form-access{border-top:4px solid #1684d8}
+.dashboard-subject-access{border-top:4px solid #8736c8}
+@media(max-width:900px){.dashboard-live-kpis{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:560px){.dashboard-live-kpis{gap:10px}.dashboard-kpi{padding:15px 13px}.dashboard-kpi strong{font-size:25px}.dashboard-kpi span{font-size:12px}.dashboard-analytics,.dashboard-access-card{padding:16px;border-radius:16px}.dashboard-welcome{border-radius:16px}.dashboard-access-card .btn-primary{min-height:46px}}
+</style>
 </head>
 <body>
 
@@ -9871,14 +9914,14 @@ function renderDashboard() {
   var activatedArms = classArms.filter(function(a) { return a.activated; });
   var activatedAssignments = subjectAssignments.filter(function(a) { return a.activated; });
 
-  var html = '<div class="card" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 30px;"><h2 style="margin-bottom: 10px;">Welcome, ' + currentUser.name + '!</h2><p style="opacity: 0.9;">' + currentSchool.schoolName + '</p><p style="opacity: 0.9;">Location: <strong>' + currentSchool.location + '</strong></p></div>';
+  var html = '<div class="card dashboard-welcome"><h2 style="margin-bottom: 10px;">Welcome, ' + currentUser.name + '!</h2><p style="opacity: 0.9;">' + currentSchool.schoolName + '</p><p style="opacity: 0.9;">Location: <strong>' + currentSchool.location + '</strong></p></div>';
   html += '<section class="dashboard-live-kpis" aria-label="Live school statistics">';
   html += '<div class="dashboard-kpi"><strong id="dashClassArms">—</strong><span>Class Arms</span></div><div class="dashboard-kpi"><strong id="dashSchoolPopulation">—</strong><span>School Population</span></div><div class="dashboard-kpi"><strong id="dashActiveStudents">—</strong><span>Active Students</span></div><div class="dashboard-kpi"><strong id="dashStaffPopulation">—</strong><span>Staff Population</span></div>';
   html += '<div class="dashboard-kpi"><strong id="dashFormMasters">—</strong><span>Active Form Masters</span></div><div class="dashboard-kpi"><strong id="dashSubjectTeachers">—</strong><span>Active Subject Teachers</span></div><div class="dashboard-kpi"><strong id="dashResultRecords">—</strong><span>Student Result Records (All Sessions)</span></div><div class="dashboard-kpi"><strong id="dashAssignedArms">—</strong><span>Assigned Arms</span></div></section>';
   html += '<section class="dashboard-analytics card" style="margin-top:18px"><div class="dashboard-analytics-heading"><div><h3>School Operations & Performance Analytics</h3><p>Live figures retrieved directly from the school database.</p></div><button type="button" class="btn btn-primary" id="refreshDashboardAnalytics">Refresh Analytics</button></div><div id="dashboardAnalyticsContent"><p style="color:#64748b">Loading school-wide analytics from Supabase…</p></div></section>';
 
-  html += '<div class="card" style="margin-top: 20px;"><h3 style="margin-bottom: 15px;">🔓 Activate Form Master Access</h3><p style="color: #666; margin-bottom: 15px;">Enable specific class arms to allow their form masters to login and enter results</p>';
-  html += '<div style="background: #e3f2fd; padding: 15px; border-radius: 8px; margin-bottom: 15px;"><strong style="color: #1976d2;">📊 Status:</strong> <span id="dashboardActivationStatus">Loading activation status…</span></div>';
+  html += '<div class="card dashboard-access-card dashboard-form-access" style="margin-top: 20px;"><h3 style="margin-bottom: 15px;">🔓 Activate Form Master Access</h3><p style="color: #666; margin-bottom: 15px;">Enable specific class arms to allow their form masters to login and enter results</p>';
+  html += '<div class="dashboard-status dashboard-form-status"><strong>📊 Status:</strong> <span id="dashboardActivationStatus">Loading activation status…</span></div>';
   if (activatedArms.length > 0) {
     html += '<div style="margin-bottom:15px;"><strong style="font-size:13px; display:block; margin-bottom:8px;">Currently Active Classes (Form Master Login):</strong><div style="display:flex; flex-wrap:wrap; gap:8px;">';
     activatedArms.forEach(function(a) {
@@ -9888,8 +9931,8 @@ function renderDashboard() {
   }
   html += '<button class="btn btn-primary" onclick="showActivationPanel()" style="padding: 10px 20px;">Manage Class Activation</button></div>';
 
-  html += '<div class="card" style="margin-top: 20px;"><h3 style="margin-bottom: 15px;">🔓 Activate Subject Teacher Access</h3><p style="color: #666; margin-bottom: 15px;">Enable specific class + subject slots to allow subject teachers to login and enter scores</p>';
-  html += '<div style="background: #fff3e0; padding: 12px 15px; border-radius: 8px; margin-bottom: 15px;"><strong style="color: #e65100;">📊 Activation Status:</strong> <span style="font-weight:700; color:#9a3412;">' + activatedAssignments.length + ' of ' + subjectAssignments.length + ' subject slots activated</span></div>';
+  html += '<div class="card dashboard-access-card dashboard-subject-access" style="margin-top: 20px;"><h3 style="margin-bottom: 15px;">🔓 Activate Subject Teacher Access</h3><p style="color: #666; margin-bottom: 15px;">Enable specific class + subject slots to allow subject teachers to login and enter scores</p>';
+  html += '<div class="dashboard-status dashboard-subject-status"><strong>📊 Activation Status:</strong> <span>' + activatedAssignments.length + ' of ' + subjectAssignments.length + ' subject slots activated</span></div>';
   html += '<button class="btn btn-primary" onclick="showTab(\\'masters\\'); document.querySelectorAll(\\'.tab\\').forEach(function(t){t.classList.remove(\\'active\\'); if(t.textContent===\\'Masters\\')t.classList.add(\\'active\\');});" style="padding: 10px 20px;">Manage Subject Teachers</button></div>';
 
   document.getElementById('dashboardTab').innerHTML = html;
