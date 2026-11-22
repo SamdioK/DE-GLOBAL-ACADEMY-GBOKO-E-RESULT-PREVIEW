@@ -830,6 +830,7 @@ th { background: #f5f5f5; font-weight: 600; }
     <div id="principalDashboardTab" class="hidden"></div>
     <div id="principalStudentsTab" class="hidden"></div>
     <div id="principalScoreSheetTab" class="hidden"></div>
+    <div id="principalScoreRecordsTab" class="hidden"></div>
     <div id="principalStaffTab" class="hidden"></div>
     <div id="principalResultsTab" class="hidden"></div>
     <div id="principalSubmissionTab" class="hidden"></div>
@@ -4256,7 +4257,7 @@ function showApp() {
   if (currentUser.type === 'admin') {
     tabs = ['dashboard', 'masters', 'school', 'profile', 'assessment', 'arms', 'teacherSignatures', 'management', 'staffDatabase', 'studentDatabase', 'passportRegistration', 'userManagement', 'scoreApproval', 'release', 'view', 'compute', 'print', 'portalContent', 'schoolIdCard'];
   } else if (currentUser.type === 'principal') {
-    tabs = ['principalDashboard', 'principalStudents', 'principalScoreSheet', 'principalResults', 'principalSubmission', 'principalReports', 'principalStaff', 'principalRequests', 'principalProfile'];
+    tabs = ['principalDashboard', 'principalStudents', 'principalScoreSheet', 'principalScoreRecords', 'principalResults', 'principalSubmission', 'principalReports', 'principalStaff', 'principalRequests', 'principalProfile'];
   } else if (currentUser.type === 'subadmin') {
     tabs = [];
     if (hasSubAdminPermission('enterResults') || hasSubAdminPermission('editResults')) tabs.push('input');
@@ -4284,7 +4285,7 @@ function showApp() {
     var btn = document.createElement('button');
     btn.className = 'tab';
     if (idx === 0) btn.classList.add('active');
-    var tabLabels = { arms: 'Score Sheet', principalDashboard: 'Overview', principalStudents: 'Student Database', principalScoreSheet: 'Score Sheet', principalStaff: 'Staff & Teachers', principalResults: 'Broadsheet Review', principalSubmission: 'Submission Tracker', principalReports: 'Statistical Analysis', principalRequests: 'Requests & Activity', principalProfile: 'School Profile', profile: 'Admin Profile', teacherSignatures: "Teachers' Signature", management: 'Management Staff', staffDatabase: 'Staff Database', studentDatabase: 'Student Database', subjectRegistration: 'Subject Registration', passportRegistration: 'Student Passport Registration', userManagement: 'User Management', release: 'Release Results', scoreApproval: 'Score Approval', studentResults: 'Student Results', portalContent: 'Portal Options', developerDashboard: 'Developer Dashboard', developer: 'Developer Console', schoolIdCard: 'School ID Card' };
+    var tabLabels = { arms: 'Score Sheet', principalDashboard: 'Overview', principalStudents: 'Student Database', principalScoreSheet: 'Score Sheet', principalScoreRecords: 'Score Records', principalStaff: 'Staff & Teachers', principalResults: 'Broadsheet Review', principalSubmission: 'Submission Tracker', principalReports: 'Statistical Analysis', principalRequests: 'Requests & Activity', principalProfile: 'School Profile', profile: 'Admin Profile', teacherSignatures: "Teachers' Signature", management: 'Management Staff', staffDatabase: 'Staff Database', studentDatabase: 'Student Database', subjectRegistration: 'Subject Registration', passportRegistration: 'Student Passport Registration', userManagement: 'User Management', release: 'Release Results', scoreApproval: 'Score Approval', studentResults: 'Student Results', portalContent: 'Portal Options', developerDashboard: 'Developer Dashboard', developer: 'Developer Console', schoolIdCard: 'School ID Card' };
     btn.textContent = tabLabels[tab] || tab.charAt(0).toUpperCase() + tab.slice(1);
     btn.addEventListener('click', function() {
       document.querySelectorAll('.tab').forEach(function(t) { t.classList.remove('active'); });
@@ -4503,11 +4504,11 @@ function showTab(tabName) {
     }
   }
 
-  if (currentUser && currentUser.type === 'principal' && ['principalDashboard','principalStudents','principalScoreSheet','principalStaff','principalResults','principalSubmission','principalReports','principalRequests','principalProfile'].indexOf(tabName) === -1) return;
+  if (currentUser && currentUser.type === 'principal' && ['principalDashboard','principalStudents','principalScoreSheet','principalScoreRecords','principalStaff','principalResults','principalSubmission','principalReports','principalRequests','principalProfile'].indexOf(tabName) === -1) return;
   var requiredPermission = { input: 'enterResults', view: 'manageStudents', masters: 'manageTeachers', school: 'manageSchool', management: 'manageBoard', userManagement: 'createAdmins', release: 'publishResults', print: 'generateSheets' };
   if (currentUser && currentUser.type === 'subadmin' && (!requiredPermission[tabName] || (!hasSubAdminPermission(requiredPermission[tabName]) && !(tabName === 'input' && hasSubAdminPermission('editResults'))))) return;
   if (currentUser && currentUser.type === 'student' && tabName !== 'studentResults') return;
-  ['principalDashboard','principalStudents','principalScoreSheet','principalStaff','principalResults','principalSubmission','principalReports','principalRequests','principalProfile','dashboard', 'arms', 'masters', 'school', 'profile',  'assessment', 'teacherSignatures', 'management', 'staffDatabase', 'studentDatabase', 'subjectRegistration', 'passportRegistration', 'input', 'compute', 'view', 'print', 'userManagement', 'scoreApproval', 'release', 'studentResults', 'portalContent', 'developerDashboard', 'developer', 'schoolIdCard'].forEach(function(t) {
+  ['principalDashboard','principalStudents','principalScoreSheet','principalScoreRecords','principalStaff','principalResults','principalSubmission','principalReports','principalRequests','principalProfile','dashboard', 'arms', 'masters', 'school', 'profile',  'assessment', 'teacherSignatures', 'management', 'staffDatabase', 'studentDatabase', 'subjectRegistration', 'passportRegistration', 'input', 'compute', 'view', 'print', 'userManagement', 'scoreApproval', 'release', 'studentResults', 'portalContent', 'developerDashboard', 'developer', 'schoolIdCard'].forEach(function(t) {
     document.getElementById(t + 'Tab').classList.add('hidden');
   });
   document.getElementById(tabName + 'Tab').classList.remove('hidden');
@@ -4545,7 +4546,7 @@ function showTab(tabName) {
 
 // ===================== SUB-ADMINISTRATOR + RESULTS ACCESS =====================
 function renderUserManagement() {
-  if (!currentUser || currentUser.type !== 'admin') return;
+  if (!currentUser || ['admin','principal'].indexOf(currentUser.type)===-1) return;
   var root = document.getElementById('userManagementTab');
   if (!root) return;
   var permissionOptions = [
@@ -10181,6 +10182,7 @@ async function renderPrincipalWorkspace(tabName) {
   if (!root || !currentUser || currentUser.type !== 'principal') return;
   if (tabName === 'principalStudents') return renderPrincipalStudentDirectory(root);
   if (tabName === 'principalScoreSheet') return renderPrincipalScoreSheet(root);
+  if (tabName === 'principalScoreRecords') return renderPrincipalScoreRecords(root);
   if (tabName === 'principalResults') return renderPrincipalBroadsheet(root);
   root.innerHTML = '<div class="card"><h2>' + escapeManagementText(tabName.replace('principal','')) + '</h2><p>This Principal workspace is available through its dedicated section.</p></div>';
 }
@@ -10226,6 +10228,11 @@ async function renderPrincipalStudentDirectory(root) {
     if(sessionSelect.value&&classSelect.options.length>1){if(!classSelect.value)classSelect.selectedIndex=1;await loadRows();}
     else status.textContent='Select an academic session and class arm to view students.';
   } catch(error){status.textContent=error.message||'Unable to load Principal Student Database.';status.className='alert alert-error';}
+}
+
+async function renderPrincipalScoreRecords(root) {
+  root.innerHTML='<div class="card admin-view-score-card"><div id="adminCa1ResultsPanel"><p style="color:#64748b">Loading class-arm student score records…</p></div></div>';
+  return loadAdminCa1ResultsView();
 }
 
 async function renderPrincipalScoreSheet(root) {
@@ -13380,7 +13387,7 @@ async function loadAdminCa1ResultsView() {
     var schoolId = authenticatedProfile.school_id;
     var resultsQuery = await supabaseClient.from('results')
       .select('id,student_id,class_id,subject_id,academic_session_id,term_id,ca1,ca2,ca3,examination,total,status,created_at')
-      .eq('school_id', schoolId).not('ca1', 'is', null)
+      .eq('school_id', schoolId).or('ca1.not.is.null,ca2.not.is.null,ca3.not.is.null')
       .order('created_at', { ascending: false });
     if (resultsQuery.error) throw resultsQuery.error;
     var rows = resultsQuery.data || [];
@@ -13417,11 +13424,14 @@ async function loadAdminCa1ResultsView() {
         enrolmentByStudentClassSession[String(b.student_id)+'|'+String(b.class_id)+'|'+String(b.academic_session_id)]||{}
       );
     });
-    var assessmentQueue = await supabaseClient.rpc('list_result_assessment_submissions',{p_class_id:null,p_academic_session_id:null,p_term_id:null,p_stage:null});
-    if(assessmentQueue.error) throw assessmentQueue.error;
-    var adminCaPending=(Array.isArray(assessmentQueue.data)?assessmentQueue.data:[]).filter(function(item){
-      return [1,2,3].indexOf(Number(item.assessment_stage))>=0 && item.status==='submitted_to_admin';
-    });
+    var adminCaPending=[];
+    if(currentUser.type==='admin'){
+      var assessmentQueue = await supabaseClient.rpc('list_result_assessment_submissions',{p_class_id:null,p_academic_session_id:null,p_term_id:null,p_stage:null});
+      if (assessmentQueue.error) throw assessmentQueue.error;
+      adminCaPending=(Array.isArray(assessmentQueue.data)?assessmentQueue.data:[]).filter(function(item){
+        return [1,2,3].indexOf(Number(item.assessment_stage))>=0 && item.status==='submitted_to_admin';
+      });
+    }
     var esc=escapeManagementText;
     var armCounts={};
     rows.forEach(function(row){var k=String(row.class_id||'');armCounts[k]=(armCounts[k]||0)+1;});
@@ -13482,9 +13492,9 @@ async function loadAdminCa1ResultsView() {
     var sessionText=sessionLabels.length===1?sessionLabels[0]:(sessionLabels.length?'Multiple academic sessions':'Not specified');
     var termText=termLabels.length===1?termLabels[0]:(termLabels.length?'Multiple terms':'Not specified');
     var html='<section class="admin-view-intro">';
-    html+='<div class="admin-view-titlebar"><span class="admin-view-title-icon" aria-hidden="true">📝</span><div class="admin-view-title-copy"><h2>Students with Entered CA1 Scores</h2><p>Read-only score records and the accumulated CA approval queue.</p></div></div>';
+    html+='<div class="admin-view-titlebar"><span class="admin-view-title-icon" aria-hidden="true">📝</span><div class="admin-view-title-copy"><h2>Class-Arm Student Score Register</h2><p>Read-only score records arranged by class arm and subject.</p></div></div>';
     html+='<div class="admin-view-session-strip"><div><span class="admin-view-meta-icon">▦</span><span><small>Academic Session</small><strong>'+esc(sessionText)+'</strong></span></div><i></i><div><span class="admin-view-meta-icon">▰</span><span><small>Term</small><strong>'+esc(termText)+'</strong></span></div></div>';
-    html+='<div class="admin-view-guidance"><span class="admin-view-guidance-icon" aria-hidden="true">ⓘ</span><p><strong>'+rows.length+' subject result record(s) with CA1 entered</strong><br>Choose a hanging class arm below. All subjects and their student score registers will unfold beneath it. Scores are displayed read-only.</p></div>';
+    html+='<div class="admin-view-guidance"><span class="admin-view-guidance-icon" aria-hidden="true">ⓘ</span><p><strong>'+rows.length+' student-subject result record(s) found.</strong><br>Only records for students who have at least one Continuous Assessment (CA1, CA2 or CA3) score entered in a subject are displayed here. Choose a hanging class arm below to view its subject registers. All scores are read-only.</p></div>';
     html+='</section>';
     html+='<div class="student-class-picker"><div class="student-class-picker-groups"><div class="student-class-picker-group basic" style="grid-template-columns:repeat(auto-fit,minmax(145px,1fr));gap:12px">';
     arms.forEach(function(a){
@@ -13499,10 +13509,12 @@ async function loadAdminCa1ResultsView() {
     html+='</div>';
     var groups={};
     adminCaPending.forEach(function(item){var key=[item.class_id,item.subject_id,item.academic_session_id,item.term_id].join('|');if(!groups[key])groups[key]=[];groups[key].push(item);});
+    if(currentUser.type==='admin'){
     html+='<section style="margin-top:18px;padding:14px;border:1px solid #dbe4f0;border-radius:12px;background:#f8fafc"><h3 style="margin:0;color:#293968">Accumulated CA Final Approval Queue</h3><p style="font-size:12px;color:#64748b;margin:5px 0 12px">Approve a CA component individually or select all submitted components within the same class, subject, session and term to approve them together. CA approval is processed in CA1–CA3 order.</p>';
     if(!adminCaPending.length)html+='<p style="color:#64748b;font-size:13px">No CA submissions are currently awaiting final approval.</p>';
     Object.keys(groups).forEach(function(key){var group=groups[key],first=group[0],label=esc((classesById[String(first.class_id)]||{}).class_name||'Class')+' · '+esc((subjectsById[String(first.subject_id)]||{}).name||'Subject')+' · '+esc((termsById[String(first.term_id)]||{}).name||'Term');html+='<div style="padding:10px;margin:10px 0;background:#fff;border:1px solid #e2e8f0;border-radius:9px"><div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap"><strong>'+label+'</strong><button type="button" class="btn btn-primary admin-ca-approve-group" data-group="'+esc(key)+'">Approve selected / all below</button></div>';group.forEach(function(item){html+='<label style="display:flex;align-items:center;gap:8px;padding:7px 2px;font-size:13px"><input type="checkbox" class="admin-ca-queue-check" data-group="'+esc(key)+'" value="'+esc(item.id)+'"><span>CA'+Number(item.assessment_stage)+' — submitted '+esc(item.submitted_at?new Date(item.submitted_at).toLocaleString():'')+'</span></label>';});html+='</div>';});
     html+='</section>';
+    }
     panel.innerHTML=html;
     panel.querySelectorAll('.admin-arm-hanger').forEach(function(button){button.addEventListener('click',function(){
       var id=this.getAttribute('data-arm-id')||'';
