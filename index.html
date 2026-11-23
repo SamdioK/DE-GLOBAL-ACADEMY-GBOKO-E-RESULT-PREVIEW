@@ -13580,12 +13580,21 @@ async function loadAdminCa1ResultsView() {
       };
     });
 
-    var resultsQuery = await supabaseClient.from('results')
-      .select('id,student_id,class_id,subject_id,academic_session_id,term_id,ca1,ca2,ca3,examination,total,status,created_at')
-      .eq('school_id', schoolId).or('ca1.not.is.null,ca2.not.is.null,ca3.not.is.null')
-      .order('created_at', { ascending: false });
-    if (resultsQuery.error) throw resultsQuery.error;
-    var rows = resultsQuery.data || [];
+    // Supabase/PostgREST applies a maximum row limit to each response.
+    // Page through the complete school result set so older class-arm records
+    // are not silently omitted from the Administrator's register.
+    var rows = [], resultOffset = 0, resultBatch = [];
+    do {
+      var resultsQuery = await supabaseClient.from('results')
+        .select('id,student_id,class_id,subject_id,academic_session_id,term_id,ca1,ca2,ca3,examination,total,status,created_at')
+        .eq('school_id', schoolId).or('ca1.not.is.null,ca2.not.is.null,ca3.not.is.null')
+        .order('created_at', { ascending: false }).order('id', { ascending: true })
+        .range(resultOffset, resultOffset + 499);
+      if (resultsQuery.error) throw resultsQuery.error;
+      resultBatch = resultsQuery.data || [];
+      rows = rows.concat(resultBatch);
+      resultOffset += resultBatch.length;
+    } while (resultBatch.length === 500);
     // Add a non-student anchor for each registered subject with no saved CA
     // rows yet. This makes zero-score subjects visible without fabricating scores.
     var groupsWithScores = {};
@@ -13614,11 +13623,22 @@ async function loadAdminCa1ResultsView() {
     // the score records. Do not limit enrolments to students who already have a
     // CA result row: the Admin register must show the same class population as
     // the Form Master, with blank score cells for students whose scores are pending.
-    var enrolmentsQuery=classIds.length&&sessionIds.length?await supabaseClient.from('student_enrolments')
-      .select('student_id,class_id,academic_session_id,register_number,sid,archived_at')
-      .eq('school_id',schoolId).in('class_id',classIds).in('academic_session_id',sessionIds).is('archived_at',null):{data:[],error:null};
-    if(enrolmentsQuery.error)throw enrolmentsQuery.error;
-    var enrolmentRows=enrolmentsQuery.data||[];
+    // The active enrolment list can also exceed the API response cap.
+    // Retrieve every page to keep each subject's full class register intact.
+    var enrolmentRows=[], enrolmentOffset=0, enrolmentBatch=[];
+    if(classIds.length&&sessionIds.length){
+      do {
+        var enrolmentsQuery=await supabaseClient.from('student_enrolments')
+          .select('student_id,class_id,academic_session_id,register_number,sid,archived_at')
+          .eq('school_id',schoolId).in('class_id',classIds).in('academic_session_id',sessionIds).is('archived_at',null)
+          .order('class_id',{ascending:true}).order('register_number',{ascending:true})
+          .range(enrolmentOffset,enrolmentOffset+499);
+        if(enrolmentsQuery.error)throw enrolmentsQuery.error;
+        enrolmentBatch=enrolmentsQuery.data||[];
+        enrolmentRows=enrolmentRows.concat(enrolmentBatch);
+        enrolmentOffset+=enrolmentBatch.length;
+      } while(enrolmentBatch.length===500);
+    }
     var enrolmentByStudentClassSession={};
     enrolmentRows.forEach(function(item){enrolmentByStudentClassSession[String(item.student_id)+'|'+String(item.class_id)+'|'+String(item.academic_session_id)]=item;});
     var allStudentIds=Array.from(new Set(studentIds.concat(enrolmentRows.map(function(item){return item.student_id;}).filter(Boolean))));
