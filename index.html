@@ -13541,13 +13541,47 @@ async function loadAdminCa1ResultsView() {
   panel.innerHTML = '<p style="color:#64748b">Loading students with entered CA1 scores…</p>';
   try {
     var schoolId = authenticatedProfile.school_id;
+    // The official subject registrations, not the existence of a score row,
+    // define which class-arm/subject combinations belong in the Admin register.
+    var registrationsQuery = await supabaseClient.from('class_subject_registrations')
+      .select('id,class_id,academic_session_id,term_id').eq('school_id', schoolId);
+    if (registrationsQuery.error) throw registrationsQuery.error;
+    var registrationRows = registrationsQuery.data || [];
+    var registrationIds = registrationRows.map(function(item) { return item.id; }).filter(Boolean);
+    var registrationItemsQuery = registrationIds.length
+      ? await supabaseClient.from('class_subject_registration_items')
+          .select('registration_id,subject_id').eq('school_id', schoolId).in('registration_id', registrationIds)
+      : { data: [], error: null };
+    if (registrationItemsQuery.error) throw registrationItemsQuery.error;
+    var registrationById = {};
+    registrationRows.forEach(function(item) { registrationById[String(item.id)] = item; });
+    var registeredGroups = {};
+    (registrationItemsQuery.data || []).forEach(function(item) {
+      var registration = registrationById[String(item.registration_id)];
+      if (!registration || !registration.class_id || !item.subject_id) return;
+      var key = [registration.class_id, item.subject_id, registration.academic_session_id, registration.term_id].join('|');
+      if (!registeredGroups[key]) registeredGroups[key] = {
+        class_id: registration.class_id, subject_id: item.subject_id,
+        academic_session_id: registration.academic_session_id, term_id: registration.term_id
+      };
+    });
+
     var resultsQuery = await supabaseClient.from('results')
       .select('id,student_id,class_id,subject_id,academic_session_id,term_id,ca1,ca2,ca3,examination,total,status,created_at')
       .eq('school_id', schoolId).or('ca1.not.is.null,ca2.not.is.null,ca3.not.is.null')
       .order('created_at', { ascending: false });
     if (resultsQuery.error) throw resultsQuery.error;
     var rows = resultsQuery.data || [];
-    if (!rows.length) rows = [];
+    // Add a non-student anchor for each registered subject with no saved CA
+    // rows yet. This makes zero-score subjects visible without fabricating scores.
+    var groupsWithScores = {};
+    rows.forEach(function(row) {
+      var key = [row.class_id, row.subject_id, row.academic_session_id, row.term_id].join('|');
+      groupsWithScores[key] = true;
+    });
+    Object.keys(registeredGroups).forEach(function(key) {
+      if (!groupsWithScores[key]) rows.push(Object.assign({ _registrationOnly: true }, registeredGroups[key]));
+    });
     var ids = function(key) { return Array.from(new Set(rows.map(function(row) { return row[key]; }).filter(Boolean))); };
     var studentIds = ids('student_id'), classIds = ids('class_id'), subjectIds = ids('subject_id'),
         sessionIds = ids('academic_session_id'), termIds = ids('term_id');
@@ -13624,7 +13658,7 @@ async function loadAdminCa1ResultsView() {
           return String(item.class_id)===String(first.class_id)&&String(item.academic_session_id)===String(first.academic_session_id);
         });
         var scoreByStudent={};
-        enteredRows.forEach(function(row){scoreByStudent[String(row.student_id)]=row;});
+        enteredRows.forEach(function(row){if(row.student_id)scoreByStudent[String(row.student_id)]=row;});
         // One row per officially enrolled student, whether or not a CA score
         // has been entered yet. This keeps Admin and Form Master class totals aligned.
         var subjectRows=classRoster.map(function(enrolment){
@@ -13649,7 +13683,7 @@ async function loadAdminCa1ResultsView() {
         var term=(termsById[String(first.term_id)]||{}).name||('Term '+((termsById[String(first.term_id)]||{}).term_number||'—'));
         out+='<section class="admin-arm-subject-sheet" style="width:100%;max-width:100%;min-width:0;margin:16px 0 20px;padding:0 0 16px;border:0;border-bottom:1px solid #dbe2ee;border-radius:0;background:transparent;box-shadow:none">';
         out+='<div class="student-class-level-banner" style="margin-bottom:10px;text-align:left">Subject '+(index+1)+' — '+esc(subjectName)+'</div>';
-        var enteredCount=enteredRows.length;
+        var enteredCount=enteredRows.filter(function(row){return !row._registrationOnly;}).length;
         out+='<div style="display:flex;gap:8px;flex-wrap:wrap;margin:0 0 10px"><span style="padding:5px 9px;border-radius:7px;background:#f0f3ff;color:#3449a1;font-size:12px;font-weight:700">'+esc(sessionName)+'</span><span style="padding:5px 9px;border-radius:7px;background:#f5f1fb;color:#65459a;font-size:12px;font-weight:700">'+esc(term)+'</span><span style="padding:5px 9px;border-radius:7px;background:#eef7f6;color:#246b68;font-size:12px;font-weight:700">'+subjectRows.length+' enrolled student(s)</span><span style="padding:5px 9px;border-radius:7px;background:#fff4e5;color:#99520b;font-size:12px;font-weight:700">'+enteredCount+' with CA score record(s)</span></div>';
         out+='<div style="width:100%;max-width:100%;min-width:0;overflow-x:auto;-webkit-overflow-scrolling:touch"><table style="width:100%;min-width:760px"><thead><tr><th>S/N</th><th>SID</th><th>Student</th><th>Admission No.</th><th>CA1</th><th>CA2</th><th>CA3</th><th>Examination</th><th>Status</th></tr></thead><tbody>';
         subjectRows.forEach(function(row,i){
@@ -13669,7 +13703,7 @@ async function loadAdminCa1ResultsView() {
     var html='<section class="admin-view-intro">';
     html+='<div class="admin-view-titlebar"><span class="admin-view-title-icon" aria-hidden="true">📝</span><div class="admin-view-title-copy"><h2>Class-Arm Student Score Register</h2><p>Read-only score records arranged by class arm and subject.</p></div></div>';
     html+='<div class="admin-view-session-strip"><div><span class="admin-view-meta-icon">▦</span><span><small>Academic Session</small><strong>'+esc(sessionText)+'</strong></span></div><i></i><div><span class="admin-view-meta-icon">▰</span><span><small>Term</small><strong>'+esc(termText)+'</strong></span></div></div>';
-    html+='<div class="admin-view-guidance"><span class="admin-view-guidance-icon" aria-hidden="true">ⓘ</span><p><strong>'+rows.length+' student-subject result record(s) found.</strong><br>Each subject register displays the complete active student enrolment for the selected class arm and academic session. Students without entered CA scores remain visible with blank score cells. Choose a class arm below to view its subject registers. All scores are read-only.</p></div>';
+    var savedScoreRecordCount=rows.filter(function(row){return !row._registrationOnly;}).length;\n    html+='<div class="admin-view-guidance"><span class="admin-view-guidance-icon" aria-hidden="true">ⓘ</span><p><strong>'+savedScoreRecordCount+' saved student-subject score record(s) found.</strong><br>Subjects are loaded from the official class subject registrations, including subjects with no scores entered yet. Each subject register displays the complete active student enrolment for the selected class arm and academic session. Students without entered CA scores remain visible with blank score cells. Choose a class arm below to view its subject registers. All scores are read-only.</p></div>';
     html+='</section>';
     html+='<div class="student-class-picker"><div class="student-class-picker-groups"><div class="student-class-picker-group basic" style="grid-template-columns:repeat(auto-fit,minmax(145px,1fr));gap:12px">';
     arms.forEach(function(a){
