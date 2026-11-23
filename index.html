@@ -11621,28 +11621,32 @@ async function renderMasters() {
     if (classResult.error) throw classResult.error;
     availableSupabaseClasses = classResult.data || [];
     registeredSubjectIdsByClass = {};
-    var classIds = availableSupabaseClasses.map(function(cls) { return String(cls.id); });
-    if (classIds.length) {
-      var registrationsResult = await supabaseClient.from('class_subject_registrations')
-        .select('id,class_id').eq('school_id', schoolId)
-        .eq('academic_session_id', session.id).eq('term_id', term.id)
-        .in('class_id', classIds);
-      if (registrationsResult.error) throw registrationsResult.error;
-      var registrations = registrationsResult.data || [];
-      if (registrations.length) {
-        var itemsResult = await supabaseClient.from('class_subject_registration_items')
-          .select('registration_id,subject_id').eq('school_id', schoolId)
-          .in('registration_id', registrations.map(function(item) { return item.id; }));
-        if (itemsResult.error) throw itemsResult.error;
-        var registrationClass = {};
-        registrations.forEach(function(item) { registrationClass[String(item.id)] = String(item.class_id); });
-        (itemsResult.data || []).forEach(function(item) {
-          var classId = registrationClass[String(item.registration_id)];
-          if (!classId) return;
-          if (!registeredSubjectIdsByClass[classId]) registeredSubjectIdsByClass[classId] = new Set();
-          registeredSubjectIdsByClass[classId].add(String(item.subject_id));
-        });
-      }
+    // Read all registrations for the active school session and term, then
+    // map them back to the loaded class arms. Avoid an additional class_id IN
+    // filter here: it can hide valid subject registrations from the allocation
+    // picker when class identifiers are supplied in a different representation.
+    var classIdSet = new Set(availableSupabaseClasses.map(function(cls) { return String(cls.id); }));
+    var registrationsResult = await supabaseClient.from('class_subject_registrations')
+      .select('id,class_id').eq('school_id', schoolId)
+      .eq('academic_session_id', session.id).eq('term_id', term.id);
+    if (registrationsResult.error) throw registrationsResult.error;
+    var registrations = registrationsResult.data || [];
+    if (registrations.length) {
+      var itemsResult = await supabaseClient.from('class_subject_registration_items')
+        .select('registration_id,subject_id').eq('school_id', schoolId)
+        .in('registration_id', registrations.map(function(item) { return item.id; }));
+      if (itemsResult.error) throw itemsResult.error;
+      var registrationClass = {};
+      registrations.forEach(function(item) {
+        var classId = String(item.class_id || '');
+        if (classIdSet.has(classId)) registrationClass[String(item.id)] = classId;
+      });
+      (itemsResult.data || []).forEach(function(item) {
+        var classId = registrationClass[String(item.registration_id)];
+        if (!classId || !item.subject_id) return;
+        if (!registeredSubjectIdsByClass[classId]) registeredSubjectIdsByClass[classId] = new Set();
+        registeredSubjectIdsByClass[classId].add(String(item.subject_id));
+      });
     }
 
     var subjectsResult = await supabaseClient.from('subjects')
