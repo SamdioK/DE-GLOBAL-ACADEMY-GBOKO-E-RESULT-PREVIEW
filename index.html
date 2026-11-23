@@ -13541,6 +13541,22 @@ async function loadAdminCa1ResultsView() {
   panel.innerHTML = '<p style="color:#64748b">Loading students with entered CA1 scores…</p>';
   try {
     var schoolId = authenticatedProfile.school_id;
+    // Keep PostgREST URL filters bounded. Large school-wide rosters can exceed
+    // request URL limits when every student UUID is placed in one .in(...) filter.
+    // Read in small batches without changing school/session scope or row data.
+    var selectInBatches = async function(table, columns, key, values) {
+      var uniqueValues = Array.from(new Set((values || []).filter(Boolean).map(String)));
+      var combined = [];
+      var batchSize = 100;
+      for (var offset = 0; offset < uniqueValues.length; offset += batchSize) {
+        var batch = uniqueValues.slice(offset, offset + batchSize);
+        var response = await supabaseClient.from(table).select(columns)
+          .eq('school_id', schoolId).in(key, batch);
+        if (response.error) throw response.error;
+        combined = combined.concat(response.data || []);
+      }
+      return combined;
+    };
     // The official subject registrations, not the existence of a score row,
     // define which class-arm/subject combinations belong in the Admin register.
     var registrationsQuery = await supabaseClient.from('class_subject_registrations')
@@ -13549,10 +13565,8 @@ async function loadAdminCa1ResultsView() {
     var registrationRows = registrationsQuery.data || [];
     var registrationIds = registrationRows.map(function(item) { return item.id; }).filter(Boolean);
     var registrationItemsQuery = registrationIds.length
-      ? await supabaseClient.from('class_subject_registration_items')
-          .select('registration_id,subject_id').eq('school_id', schoolId).in('registration_id', registrationIds)
+      ? { data: await selectInBatches('class_subject_registration_items', 'registration_id,subject_id', 'registration_id', registrationIds), error: null }
       : { data: [], error: null };
-    if (registrationItemsQuery.error) throw registrationItemsQuery.error;
     var registrationById = {};
     registrationRows.forEach(function(item) { registrationById[String(item.id)] = item; });
     var registeredGroups = {};
@@ -13586,10 +13600,8 @@ async function loadAdminCa1ResultsView() {
     var studentIds = ids('student_id'), classIds = ids('class_id'), subjectIds = ids('subject_id'),
         sessionIds = ids('academic_session_id'), termIds = ids('term_id');
     var fetchByIds = async function(table, columns, key, values) {
-      if (!values.length) return [];
-      var result = await supabaseClient.from(table).select(columns).eq('school_id', schoolId).in(key, values);
-      if (result.error) throw result.error;
-      return result.data || [];
+      if (!values || !values.length) return [];
+      return await selectInBatches(table, columns, key, values);
     };
     var fetched = await Promise.all([
       fetchByIds('students','id,first_name,middle_name,last_name,admission_number','id',studentIds),
@@ -13610,9 +13622,9 @@ async function loadAdminCa1ResultsView() {
     var enrolmentByStudentClassSession={};
     enrolmentRows.forEach(function(item){enrolmentByStudentClassSession[String(item.student_id)+'|'+String(item.class_id)+'|'+String(item.academic_session_id)]=item;});
     var allStudentIds=Array.from(new Set(studentIds.concat(enrolmentRows.map(function(item){return item.student_id;}).filter(Boolean))));
-    var completeStudentsResult=allStudentIds.length?await supabaseClient.from('students')
-      .select('id,first_name,middle_name,last_name,admission_number').eq('school_id',schoolId).in('id',allStudentIds):{data:[],error:null};
-    if(completeStudentsResult.error)throw completeStudentsResult.error;
+    var completeStudentsResult=allStudentIds.length
+      ? {data:await selectInBatches('students','id,first_name,middle_name,last_name,admission_number','id',allStudentIds),error:null}
+      : {data:[],error:null};
     fetched[0]=completeStudentsResult.data||[];
     var indexById = function(list) { var map = {}; list.forEach(function(item) { map[String(item.id)] = item; }); return map; };
     var studentsById=indexById(fetched[0]), classesById=indexById(fetched[1]), subjectsById=indexById(fetched[2]),
