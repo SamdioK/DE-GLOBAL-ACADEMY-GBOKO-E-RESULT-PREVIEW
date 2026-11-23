@@ -2645,9 +2645,14 @@ async function renderSubjectRegistration() {
       var allowedSubjectNames = new Set(subjectGroups.core.concat(subjectGroups.trade).map(function(name) {
         return String(name || '').trim().toLowerCase();
       }));
+      function normalizeSubjectLabel(value) {
+        // Parenthetical catalogue abbreviations are aliases, e.g. CRS.
+        return String(value || '').trim().replace(/\s+/g, ' ')
+          .replace(/\s*\([^)]*\)\s*$/, '').trim().toLowerCase();
+      }
       var seenSubjectNames = new Set();
       var filteredSubjects = subjects.filter(function(subject) {
-        var normalizedName = String(subject.name || '').trim().replace(/\s+/g, ' ').toLowerCase();
+        var normalizedName = normalizeSubjectLabel(subject.name);
         var subjectSection = String(subject.section || '').trim().toLowerCase();
         if (subjectSection !== targetSubjectSection || !normalizedName || !allowedSubjectNames.has(normalizedName) || seenSubjectNames.has(normalizedName)) return false;
         seenSubjectNames.add(normalizedName);
@@ -2656,7 +2661,7 @@ async function renderSubjectRegistration() {
         return String(a.name || '').trim().localeCompare(String(b.name || '').trim(), undefined, { sensitivity: 'base' });
       });
       var coreSubjects = filteredSubjects.filter(function(subject) {
-        return subjectGroups.core.some(function(name) { return String(name).trim().toLowerCase() === String(subject.name || '').trim().toLowerCase(); });
+        return subjectGroups.core.some(function(name) { return normalizeSubjectLabel(name) === normalizeSubjectLabel(subject.name); });
       });
       var tradeOptions = filteredSubjects.filter(function(subject) {
         return subjectGroups.trade.some(function(name) { return String(name).trim().toLowerCase() === String(subject.name || '').trim().toLowerCase(); });
@@ -11511,9 +11516,16 @@ async function renderMasters() {
     Object.keys(registeredSubjectIdsByClass).forEach(function(classId) {
       registeredSubjectIdsByClass[classId].forEach(function(subjectId) { registeredIds.add(String(subjectId)); });
     });
+    function canonicalSubjectLabel(subject) {
+      var raw = String(subject.name || '').trim().replace(/\s+/g, ' ');
+      var normalized = raw.replace(/\s*\([^)]*\)\s*$/, '').trim().toLowerCase();
+      var catalogue = basicCoreSubjects.concat(seniorCoreSubjects, tradeSubjects);
+      return catalogue.find(function(name) { return String(name).trim().toLowerCase() === normalized; }) || raw;
+    }
     var options = availableSupabaseSubjects.filter(function(subject) {
+      var label = canonicalSubjectLabel(subject);
       return registeredIds.has(String(subject.id)) &&
-        (!query || String(subject.name || '').toLowerCase().includes(query));
+        (!query || label.toLowerCase().includes(query) || String(subject.name || '').toLowerCase().includes(query));
     });
     var previous = select.value;
     select.innerHTML = '<option value="">' +
@@ -11521,7 +11533,7 @@ async function renderMasters() {
       '</option>' + options.map(function(subject) {
         var trade = subject.is_trade ? ' · Trade' : '';
         return '<option value="' + escapeManagementText(subject.id) + '">' +
-          escapeManagementText(subject.name) + trade + '</option>';
+          escapeManagementText(canonicalSubjectLabel(subject)) + trade + '</option>';
       }).join('');
     select.disabled = options.length === 0;
     if (previous && options.some(function(item) { return String(item.id) === String(previous); })) {
