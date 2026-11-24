@@ -13539,9 +13539,11 @@ function compareStudentRegisterOrder(a, b) {
 }
 
 // ===================== VIEW + EXCEL EXPORT =====================
-async function loadAdminCa1ResultsView() {
-  if (!currentUser || currentUser.type !== 'admin') return;
-  var panel = document.getElementById('adminCa1ResultsPanel');
+async function loadAdminCa1ResultsView(options) {
+  options = options || {};
+  var principalReadOnly = options.allowPrincipal === true && currentUser && currentUser.type === 'principal';
+  if (!currentUser || (currentUser.type !== 'admin' && !principalReadOnly)) return;
+  var panel = options.panel || document.getElementById('adminCa1ResultsPanel');
   if (!panel || !supabaseClient || !authenticatedProfile || !authenticatedProfile.school_id) return;
   panel.innerHTML = '<p style="color:#64748b">Loading students with entered CA1 scores…</p>';
   try {
