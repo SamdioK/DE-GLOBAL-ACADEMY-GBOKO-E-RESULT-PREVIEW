@@ -2090,7 +2090,8 @@ async function handleSupabaseLogin(userType, errorDiv, restoringSession) {
         submit_results: 'submitResults', view_reports: 'generateSheets',
         manage_students: 'manageStudents', manage_teachers: 'manageTeachers',
         manage_classes: 'manageClasses', manage_subjects: 'manageSubjects',
-        manage_comments: 'manageComments', manage_fees: 'manageFees'
+        manage_comments: 'manageComments', manage_fees: 'manageFees',
+        manage_student_passports: 'manageStudentPassports'
       };
       currentUser.permissions = {};
       (permissionResult.data.permissions || []).forEach(function(permission) {
@@ -4309,6 +4310,7 @@ function showApp() {
     if (hasSubAdminPermission('createAdmins')) tabs.push('userManagement');
     if (hasSubAdminPermission('publishResults')) tabs.push('release');
     if (hasSubAdminPermission('generateSheets')) tabs.push('print');
+    if (hasSubAdminPermission('manageStudentPassports')) tabs.push('passportRegistration');
     if (tabs.length === 0) { showToast('No features are assigned to this account. Contact the main administrator.', 'error'); handleLogout(); return; }
   } else if (currentUser.type === 'student') {
     tabs = ['studentResults', 'schoolIdCard'];
@@ -4589,7 +4591,8 @@ function renderUserManagement() {
     ['view_reports','Generate/View Reports'], ['manage_students','Manage Students'],
     ['manage_teachers','Manage Teachers'], ['manage_classes','Manage Classes'],
     ['manage_subjects','Manage Subjects'], ['manage_comments','Manage Result Comments'],
-    ['manage_fees','Manage Fees']
+    ['manage_fees','Manage Fees'],
+    ['manage_student_passports','Student Passport Registration']
   ];
   var selectedId = '';
   var accounts = [];
