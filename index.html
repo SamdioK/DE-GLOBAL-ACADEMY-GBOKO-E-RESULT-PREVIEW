@@ -10508,12 +10508,17 @@ async function printArmScoreSheet(className, sessionOverride, termOverride) {
         .eq('term_id', sheetTerm.id).eq('is_active', true).maybeSingle();
       if (assignmentLookup.error) throw assignmentLookup.error;
       if (!assignmentLookup.data) throw new Error('No active subject teacher is assigned to '+subjectRow.name+' for '+className+', '+sheetSession.name+', '+sheetTerm.name+'. Assign the teacher before printing.');
-      var teacherProfile = await supabaseClient.from('profiles').select('id,full_name')
-        .eq('school_id', schoolId).eq('id', assignmentLookup.data.teacher_id).eq('is_active', true).maybeSingle();
+      // Principals can read the school staff directory but are not granted
+      // broad access to private profile rows. Resolve the assigned teacher's
+      // display name through the approved school staff directory instead.
+      var teacherProfile = await supabaseClient.from('school_staff_directory')
+        .select('profile_id,full_name,status')
+        .eq('school_id', schoolId).eq('profile_id', assignmentLookup.data.teacher_id)
+        .eq('status', 'Active').maybeSingle();
       if (teacherProfile.error) throw teacherProfile.error;
-      if (!teacherProfile.data || !String(teacherProfile.data.full_name||'').trim()) throw new Error('The assigned teacher profile for '+subjectRow.name+' is unavailable or inactive.');
+      if (!teacherProfile.data || !String(teacherProfile.data.full_name||'').trim()) throw new Error('The assigned teacher for '+subjectRow.name+' has no active matching entry in the school staff directory.');
       var teacherSignature = await supabaseClient.from('school_teacher_signatures')
-        .select('storage_path').eq('school_id', schoolId).eq('teacher_id', teacherProfile.data.id)
+        .select('storage_path').eq('school_id', schoolId).eq('teacher_id', assignmentLookup.data.teacher_id)
         .eq('subject_name', subjectRow.name).eq('phase', classPhase).maybeSingle();
       if (teacherSignature.error) throw teacherSignature.error;
       // Existing school signatures are category-based (BASIC / SS). Preserve and
@@ -10526,7 +10531,7 @@ async function printArmScoreSheet(className, sessionOverride, termOverride) {
       }
       if (!teacherSignature.data) {
         teacherSignature = await supabaseClient.from('school_teacher_signatures')
-          .select('storage_path').eq('school_id', schoolId).eq('teacher_id', teacherProfile.data.id)
+          .select('storage_path').eq('school_id', schoolId).eq('teacher_id', assignmentLookup.data.teacher_id)
           .eq('subject_name', subjectRow.name).eq('phase', 'BOTH').maybeSingle();
         if (teacherSignature.error) throw teacherSignature.error;
       }
