@@ -5,7 +5,7 @@ type Payload = { action?: "my_permissions" | "list" | "grant" | "revoke"; profil
 const DELEGABLE = new Set([
   "view_results", "enter_results", "edit_results", "submit_results",
   "view_reports", "manage_comments", "manage_fees", "manage_students",
-  "manage_classes", "manage_subjects", "manage_teachers"
+  "manage_classes", "manage_subjects", "manage_teachers", "manage_student_passports"
 ]);
 
 export default {
