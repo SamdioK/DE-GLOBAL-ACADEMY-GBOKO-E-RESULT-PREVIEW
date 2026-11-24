@@ -4301,10 +4301,10 @@ function showApp() {
     tabs = ['principalDashboard', 'principalStudents', 'principalScoreSheet', 'principalScoreRecords', 'principalResults', 'principalSubmission', 'principalReports', 'principalStaff', 'principalRequests', 'principalProfile'];
   } else if (currentUser.type === 'subadmin') {
     tabs = [];
-    if (hasSubAdminPermission('enterResults') || hasSubAdminPermission('editResults')) tabs.push('input');
-    if (hasSubAdminPermission('manageStudents')) tabs.push('view');
-    if (hasSubAdminPermission('manageTeachers')) tabs.push('masters');
-    if (hasSubAdminPermission('manageSchool')) tabs.push('school');
+    if (hasSubAdminPermission('enterResults') || hasSubAdminPermission('editResults') || hasSubAdminPermission('submitResults')) tabs.push('input');
+    if (hasSubAdminPermission('viewResults') || hasSubAdminPermission('manageStudents') || hasSubAdminPermission('manageComments')) tabs.push('view');
+    if (hasSubAdminPermission('manageTeachers') || hasSubAdminPermission('manageClasses') || hasSubAdminPermission('manageSubjects')) tabs.push('masters');
+    if (hasSubAdminPermission('manageSchool') || hasSubAdminPermission('manageFees')) tabs.push('school');
     if (hasSubAdminPermission('manageBoard')) tabs.push('management');
     if (hasSubAdminPermission('createAdmins')) tabs.push('userManagement');
     if (hasSubAdminPermission('publishResults')) tabs.push('release');
