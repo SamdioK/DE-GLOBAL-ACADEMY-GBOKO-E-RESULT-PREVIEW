@@ -12956,8 +12956,8 @@ function renderScoreInputs() {
     div.style.cssText = 'display: grid; grid-template-columns: 2fr 1fr 1fr 1fr 1fr 1fr 1fr; gap: 10px; align-items: center; margin-bottom: 10px; padding: 10px; background: #f9f9f9; border-radius: 4px;';
     var scores = subjectScores[subject];
     var total = scores.ca1 + scores.ca2 + scores.ca3 + scores.exam;
-    var grade = 'F', remark = 'Poor';
-    if (total >= 80) { grade = 'A'; remark = 'Excellent'; } else if (total >= 70) { grade = 'B'; remark = 'Very Good'; } else if (total >= 60) { grade = 'C'; remark = 'Good'; } else if (total >= 50) { grade = 'D'; remark = 'Fair'; }
+    var grade = 'E', remark = 'Weak';
+    if (total >= 75) { grade = 'A'; remark = 'Distinction'; } else if (total >= 65) { grade = 'B'; remark = 'Very good'; } else if (total >= 55) { grade = 'C'; remark = 'Good'; } else if (total >= 40) { grade = 'D'; remark = 'Fair'; }
     div.innerHTML = '<strong style="font-size: 12px;">' + subject + (subject === selectedTradeSubject ? ' <span style="color:#e65100; font-size:10px;">(Trade)</span>' : '') + '</strong><input type="number" class="score-input" placeholder="CA1" min="0" value="' + (scores.ca1 || '') + '" data-subject="' + subject + '" data-field="ca1" max="' + config.ca1 + '"><input type="number" class="score-input" placeholder="CA2" min="0" value="' + (scores.ca2 || '') + '" data-subject="' + subject + '" data-field="ca2" max="' + config.ca2 + '"><input type="number" class="score-input" placeholder="CA3" min="0" value="' + (scores.ca3 || '') + '" data-subject="' + subject + '" data-field="ca3" max="' + config.ca3 + '"><input type="number" class="score-input" placeholder="Exam" min="0" value="' + (scores.exam || '') + '" data-subject="' + subject + '" data-field="exam" max="' + config.exam + '"><strong class="score-total" style="font-size: 12px;">' + total + '</strong><div class="score-grade" style="font-size: 11px;"><strong>' + grade + '</strong><br>' + remark + '</div>';
     container.appendChild(div);
   });
@@ -12975,8 +12975,8 @@ function renderScoreInputs() {
       var row = this.closest('.score-row');
       var scores = subjectScores[subject];
       var total = scores.ca1 + scores.ca2 + scores.ca3 + scores.exam;
-      var grade = 'E', remark = 'Poor';
-      if (total >= 75) { grade = 'A'; remark = 'Excellent'; } else if (total >= 65) { grade = 'B'; remark = 'Very Good'; } else if (total >= 55) { grade = 'C'; remark = 'Good'; } else if (total >= 40) { grade = 'D'; remark = 'Fair'; }
+      var grade = 'E', remark = 'Weak';
+      if (total >= 75) { grade = 'A'; remark = 'Distinction'; } else if (total >= 65) { grade = 'B'; remark = 'Very good'; } else if (total >= 55) { grade = 'C'; remark = 'Good'; } else if (total >= 40) { grade = 'D'; remark = 'Fair'; }
       row.querySelector('.score-total').textContent = total;
       row.querySelector('.score-grade').innerHTML = '<strong>' + grade + '</strong><br>' + remark;
     });
@@ -13263,8 +13263,8 @@ function renderSubjectTeacherInputLegacyLocal() {
       var ca3 = parseFloat(row.querySelector('[data-field="ca3"]').value) || 0;
       var exam = parseFloat(row.querySelector('[data-field="exam"]').value) || 0;
       var total = ca1 + ca2 + ca3 + exam;
-      var grade = 'E', remark = 'Poor';
-      if (total >= 75) { grade = 'A'; remark = 'Excellent'; } else if (total >= 65) { grade = 'B'; remark = 'Very Good'; } else if (total >= 55) { grade = 'C'; remark = 'Good'; } else if (total >= 40) { grade = 'D'; remark = 'Fair'; }
+      var grade = 'E', remark = 'Weak';
+      if (total >= 75) { grade = 'A'; remark = 'Distinction'; } else if (total >= 65) { grade = 'B'; remark = 'Very good'; } else if (total >= 55) { grade = 'C'; remark = 'Good'; } else if (total >= 40) { grade = 'D'; remark = 'Fair'; }
 
       var subEntry = { name: subject, ca1: ca1, ca2: ca2, ca3: ca3, exam: exam, total: total, grade: grade, remark: remark };
       var idx = student.subjects.findIndex(function(sub) { return sub.name === subject; });
@@ -13432,8 +13432,8 @@ function processExcelImport() {
           var exam = parseFloat(sr['Exam']) || 0;
           var total = ca1 + ca2 + ca3 + exam;
           totalScore += total; totalObtainable += 100;
-              var grade = 'E', remark = 'Poor';
-    if (total >= 75) { grade = 'A'; remark = 'Excellent'; } else if (total >= 65) { grade = 'B'; remark = 'Very Good'; } else if (total >= 55) { grade = 'C'; remark = 'Good'; } else if (total >= 40) { grade = 'D'; remark = 'Fair'; }
+              var grade = 'E', remark = 'Weak';
+    if (total >= 75) { grade = 'A'; remark = 'Distinction'; } else if (total >= 65) { grade = 'B'; remark = 'Very good'; } else if (total >= 55) { grade = 'C'; remark = 'Good'; } else if (total >= 40) { grade = 'D'; remark = 'Fair'; }
 
           return { name: sr['Subject'] || 'Unknown Subject', ca1: ca1, ca2: ca2, ca3: ca3, exam: exam, total: total, grade: grade, remark: remark };
         });
@@ -14666,8 +14666,8 @@ async function renderSubjectTeacherInputLegacy() {
     var populated = ['ca1','ca2','ca3','exam'].map(function(key) { return record[key]; }).filter(function(item) { return item != null && item !== ''; });
     record.total = populated.reduce(function(sum, item) { return sum + Number(item); }, 0);
     var isComplete = populated.length === 4;
-    record.grade = 'E'; record.remark = 'Poor';
-    if (record.total >= 75) { record.grade = 'A'; record.remark = 'Excellent'; } else if (record.total >= 65) { record.grade = 'B'; record.remark = 'Very Good'; } else if (record.total >= 55) { record.grade = 'C'; record.remark = 'Good'; } else if (record.total >= 40) { record.grade = 'D'; record.remark = 'Fair'; }
+    record.grade = 'E'; record.remark = 'Weak';
+    if (record.total >= 75) { record.grade = 'A'; record.remark = 'Distinction'; } else if (record.total >= 65) { record.grade = 'B'; record.remark = 'Very good'; } else if (record.total >= 55) { record.grade = 'C'; record.remark = 'Good'; } else if (record.total >= 40) { record.grade = 'D'; record.remark = 'Fair'; }
     var totalScore = student.subjects.reduce(function(sum, item) { return sum + (Number(item.total) || 0); }, 0);
     student.totalObtained = totalScore;
     student.totalObtainable = student.subjects.length * 100;
@@ -15064,11 +15064,11 @@ async function renderSubjectTeacherInput() {
       }, 0);
       var grade = null, remark = null;
       if (hasAnyScore) {
-        grade = 'F'; remark = 'Failed';
-        if (total >= configuredTotalMaximum * 0.8) { grade = 'A'; remark = 'Excellent'; }
-        else if (total >= configuredTotalMaximum * 0.7) { grade = 'B'; remark = 'Very Good'; }
-        else if (total >= configuredTotalMaximum * 0.6) { grade = 'C'; remark = 'Good'; }
-        else if (total >= configuredTotalMaximum * 0.5) { grade = 'D'; remark = 'Pass'; }
+        grade = 'E'; remark = 'Weak';
+        if (total >= 75) { grade = 'A'; remark = 'Distinction'; }
+        else if (total >= 65) { grade = 'B'; remark = 'Very good'; }
+        else if (total >= 55) { grade = 'C'; remark = 'Good'; }
+        else if (total >= 40) { grade = 'D'; remark = 'Fair'; }
       }
       var payload = {
         school_id: schoolId, student_id: studentId, class_id: classId,
@@ -15241,10 +15241,10 @@ async function renderSubjectTeacherInput() {
       });
       var total = activeAssessmentFields.reduce(function(sum, item) { return sum + values[item.key]; }, 0);
       var grade = 'F', remark = 'Failed';
-      if (total >= configuredTotalMaximum * 0.8) { grade = 'A'; remark = 'Excellent'; }
-      else if (total >= configuredTotalMaximum * 0.7) { grade = 'B'; remark = 'Very Good'; }
-      else if (total >= configuredTotalMaximum * 0.6) { grade = 'C'; remark = 'Good'; }
-      else if (total >= configuredTotalMaximum * 0.5) { grade = 'D'; remark = 'Pass'; }
+      if (total >= 75) { grade = 'A'; remark = 'Distinction'; }
+      else if (total >= 65) { grade = 'B'; remark = 'Very good'; }
+      else if (total >= 55) { grade = 'C'; remark = 'Good'; }
+      else if (total >= 40) { grade = 'D'; remark = 'Fair'; }
       row.querySelector('.st-total').textContent = total;
       row.querySelector('.st-grade').textContent = grade;
       return { ca1: values.ca1, ca2: values.ca2, ca3: values.ca3, examination: values.examination, total: total, grade: grade, remark: remark };
@@ -15310,10 +15310,10 @@ async function renderSubjectTeacherInput() {
           if (!hasAnyScore) return null;
           var total = activeAssessmentFields.reduce(function(sum, item) { return sum + (values[item.key] == null ? 0 : values[item.key]); }, 0);
           var grade = 'F', remark = 'Failed';
-          if (total >= configuredTotalMaximum * 0.8) { grade = 'A'; remark = 'Excellent'; }
-      else if (total >= configuredTotalMaximum * 0.7) { grade = 'B'; remark = 'Very Good'; }
-      else if (total >= configuredTotalMaximum * 0.6) { grade = 'C'; remark = 'Good'; }
-      else if (total >= configuredTotalMaximum * 0.5) { grade = 'D'; remark = 'Pass'; }
+          if (total >= 75) { grade = 'A'; remark = 'Distinction'; }
+      else if (total >= 65) { grade = 'B'; remark = 'Very good'; }
+      else if (total >= 55) { grade = 'C'; remark = 'Good'; }
+      else if (total >= 40) { grade = 'D'; remark = 'Fair'; }
           var existing = resultsByStudent[String(studentId)];
           if (existing && ['submitted', 'approved', 'published'].indexOf(String(existing.status || '').toLowerCase()) !== -1) {
             throw new Error('The result for ' + row.cells[1].textContent + ' is ' + existing.status + '. It must be returned to an editable state through the authorised workflow before changes can be saved.');
