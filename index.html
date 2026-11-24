@@ -4654,15 +4654,18 @@ function renderUserManagement() {
       '</section>' : '');
     if (activeSection === 'subadmins') {
       html += '<section class="um-panel"><div class="um-panel-heading"><div><h2>Sub-Administrator Accounts</h2></div></div>' +
-      '<div class="um-subadmin-form"><h3>Create Sub-Administrator</h3><div class="grid grid-2">' +
-      '<div class="input-group"><label>Full Name *</label><input id="saFullName" autocomplete="name"></div>' +
-      '<div class="input-group"><label>Username *</label><input id="saUsername" autocomplete="username"></div>' +
-      '<div class="input-group"><label>Email *</label><input id="saEmail" type="email" autocomplete="email"></div>' +
-      '<div class="input-group"><label>Phone</label><input id="saPhone"></div>' +
-      '<div class="input-group"><label>Staff ID</label><input id="saStaffId"></div>' +
-      '<div class="input-group"><label>Designation</label><input id="saDesignation"></div>' +
-      '<div class="input-group" style="grid-column:1/-1"><label>Responsibilities</label><textarea id="saResponsibilities" rows="2"></textarea></div></div>' +
-      '<button class="btn btn-success" id="saCreateBtn">Create Account</button></div>' +
+      '<div class="um-subadmin-form"><h3>Assign Sub-Administrator Access</h3>' +
+      '<p style="color:#64748b;margin:6px 0 16px">Select an active staff member already registered in the school. Their existing Supabase login, email, username and password will remain unchanged.</p>' +
+      '<div class="input-group"><label for="saStaffProfile">Existing School Staff Member *</label><select id="saStaffProfile"><option value="">Loading active staff records…</option></select></div>' +
+      '<div class="grid grid-2">' +
+      '<div class="input-group"><label>Full Name</label><input id="saFullName" autocomplete="name" readonly></div>' +
+      '<div class="input-group"><label>Username</label><input id="saUsername" autocomplete="username" readonly></div>' +
+      '<div class="input-group"><label>Login Email</label><input id="saEmail" type="email" autocomplete="email" readonly></div>' +
+      '<div class="input-group"><label>Phone</label><input id="saPhone" readonly></div>' +
+      '<div class="input-group"><label>Staff ID</label><input id="saStaffId" readonly></div>' +
+      '<div class="input-group"><label>Designation</label><input id="saDesignation" readonly></div>' +
+      '<div class="input-group" style="grid-column:1/-1"><label>Responsibilities (optional)</label><textarea id="saResponsibilities" rows="2" placeholder="Describe the duties delegated to this staff member"></textarea></div></div>' +
+      '<button class="btn btn-success" id="saCreateBtn" disabled>Assign Sub-Administrator Access</button></div>' +
       '<div class="um-existing-section"><div class="um-existing-heading"><h3>Existing Accounts</h3><span class="um-count-pill">' + accounts.length + ' account(s)</span></div>';
     if (!accounts.length) html += '<p class="alert alert-info">No Sub-Administrator accounts have been created in Supabase yet.</p>';
     else {
@@ -4672,7 +4675,7 @@ function renderUserManagement() {
           '</td><td>' + (a.is_active ? 'Active' : 'Inactive') + '</td><td>' +
           '<button class="btn btn-primary sa-select" data-id="' + esc(a.id) + '">Permissions</button> ' +
           '<button class="btn sa-status" data-id="' + esc(a.id) + '" data-active="' + (!a.is_active) + '">' + (a.is_active ? 'Deactivate' : 'Activate') + '</button> ' +
-          '<button class="btn sa-reset" data-id="' + esc(a.id) + '">Reset Password</button></td></tr>';
+          (a.is_linked_staff ? '' : '<button class="btn sa-reset" data-id="' + esc(a.id) + '">Reset Password</button>') + '</td></tr>';
       });
       html += '</tbody></table></div>';
     }
@@ -4689,6 +4692,62 @@ function renderUserManagement() {
     if (notice) html += '<div class="um-credential-notice"><p class="alert alert-info" style="white-space:pre-wrap">' + esc(notice) + '</p><button class="btn" id="saClearNotice">Dismiss</button></div>';
     html += '</div>';
     root.innerHTML = html;
+    if (activeSection === 'subadmins') {
+      var staffSelect = root.querySelector('#saStaffProfile');
+      var assignButton = root.querySelector('#saCreateBtn');
+      var staffByProfileId = {};
+      (async function() {
+        try {
+          var directoryResult = await supabaseClient.from('school_staff_directory')
+            .select('profile_id,staff_id,full_name,designation,phone,email,status')
+            .eq('school_id', authenticatedProfile.school_id).eq('status', 'Active')
+            .not('profile_id', 'is', null).order('full_name');
+          if (directoryResult.error) throw directoryResult.error;
+          var directoryRows = directoryResult.data || [];
+          var profileIds = Array.from(new Set(directoryRows.map(function(row){return row.profile_id;}).filter(Boolean)));
+          if (!profileIds.length) {
+            staffSelect.innerHTML = '<option value="">No active staff linked to a login were found</option>';
+            return;
+          }
+          var profileResult = await supabaseClient.from('profiles')
+            .select('id,full_name,username,email,phone,role,is_active')
+            .eq('school_id', authenticatedProfile.school_id).eq('is_active', true).in('id', profileIds);
+          if (profileResult.error) throw profileResult.error;
+          var profileById = {};
+          (profileResult.data || []).forEach(function(profile){profileById[String(profile.id)] = profile;});
+          var alreadyAssigned = {};
+          accounts.forEach(function(account){if(account.is_active)alreadyAssigned[String(account.id)] = true;});
+          var options = directoryRows.filter(function(row){
+            var profile = profileById[String(row.profile_id)];
+            return profile && profile.username && profile.email &&
+              ['administrator','portal_developer','student'].indexOf(String(profile.role||'').toLowerCase()) === -1 &&
+              !alreadyAssigned[String(profile.id)];
+          });
+          staffSelect.innerHTML = '<option value="">Select an active staff member</option>' + options.map(function(row){
+            var profile = profileById[String(row.profile_id)];
+            staffByProfileId[String(profile.id)] = {directory:row,profile:profile};
+            return '<option value="'+esc(profile.id)+'">'+esc(profile.full_name||row.full_name||'Staff member')+' — '+esc(row.designation||'Staff')+'</option>';
+          }).join('');
+          if (!options.length) staffSelect.innerHTML = '<option value="">No eligible unassigned staff with active logins</option>';
+          staffSelect.addEventListener('change',function(){
+            var item = staffByProfileId[String(staffSelect.value)];
+            var profile = item && item.profile, directory = item && item.directory;
+            ['saFullName','saUsername','saEmail','saPhone','saStaffId','saDesignation'].forEach(function(id){var field=root.querySelector('#'+id);if(field)field.value='';});
+            if (!profile || !directory) { assignButton.disabled = true; return; }
+            root.querySelector('#saFullName').value = profile.full_name || directory.full_name || '';
+            root.querySelector('#saUsername').value = profile.username || '';
+            root.querySelector('#saEmail').value = profile.email || '';
+            root.querySelector('#saPhone').value = directory.phone || profile.phone || '';
+            root.querySelector('#saStaffId').value = directory.staff_id || '';
+            root.querySelector('#saDesignation').value = directory.designation || '';
+            assignButton.disabled = false;
+          });
+        } catch(error) {
+          staffSelect.innerHTML = '<option value="">Unable to load school staff</option>';
+          showToast(error.message || 'Could not load the Staff Database.', 'error');
+        }
+      })();
+    }
     if (authenticatedProfile && String(authenticatedProfile.role || '').toLowerCase() === 'administrator') {
       var emailSyncPanel = document.createElement('section');
       emailSyncPanel.className = 'um-panel';
@@ -4821,25 +4880,26 @@ function renderUserManagement() {
   async function createAccount() {
     var button = document.getElementById('saCreateBtn');
     var payload = {
-      action: 'create',
-      full_name: document.getElementById('saFullName').value.trim(),
-      username: document.getElementById('saUsername').value.trim(),
-      email: document.getElementById('saEmail').value.trim(),
-      phone: document.getElementById('saPhone').value.trim(),
-      staff_id: document.getElementById('saStaffId').value.trim(),
-      designation: document.getElementById('saDesignation').value.trim(),
+      action: 'assign_existing',
+      profile_id: document.getElementById('saStaffProfile').value,
       responsibilities: document.getElementById('saResponsibilities').value.trim()
     };
-    if (!payload.full_name || !payload.username || !payload.email) { showToast('Full name, username and email are required.', 'error'); return; }
-    button.disabled = true; button.textContent = 'Creating…';
+    if (!payload.profile_id) { showToast('Select an existing active staff member first.', 'error'); return; }
+    button.disabled = true; button.textContent = 'Assigning access…';
     try {
       var result = await supabaseClient.functions.invoke('manage-sub-administrator', { body: payload });
-      if (result.error) throw result.error;
-      if (!result.data || result.data.success !== true) throw new Error(result.data && result.data.error || 'Account creation failed.');
-      notice = 'Account created successfully. Give this temporary password to the staff member securely. They must change it at first login.\n\nUsername: ' + payload.username + '\nEmail: ' + payload.email + '\nTemporary password: ' + result.data.temporary_password;
-      showToast('Sub-Administrator account created.', 'success');
+      if (result.error) {
+        var message = result.error.message || 'Sub-Administrator assignment failed.';
+        if (result.error.context && typeof result.error.context.json === 'function') { try { var body = await result.error.context.json(); if(body&&body.error)message=body.error; } catch(ignored){} }
+        throw new Error(message);
+      }
+      if (!result.data || result.data.success !== true || result.data.login_unchanged !== true) throw new Error(result.data && result.data.error || 'Supabase did not confirm the staff assignment.');
+      notice = 'Sub-Administrator access assigned successfully. The staff member keeps the same Supabase login, username, email and password. No second account or temporary password was created.';
+      showToast('Existing staff member assigned as Sub-Administrator.', 'success');
+      selectedId = payload.profile_id;
       await loadAccounts();
-    } catch (error) { showToast(error.message || 'Account creation failed.', 'error'); button.disabled = false; button.textContent = 'Create Account'; }
+      await loadGrants(payload.profile_id);
+    } catch (error) { showToast(error.message || 'Sub-Administrator assignment failed.', 'error'); button.disabled = false; button.textContent = 'Assign Sub-Administrator Access'; }
   }
   async function loadGrants(profileId) {
     selectedId = profileId; activeGrants = {};
