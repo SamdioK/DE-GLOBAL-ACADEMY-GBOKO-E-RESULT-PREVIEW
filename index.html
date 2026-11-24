@@ -10498,11 +10498,13 @@ async function printArmScoreSheet(className, sessionOverride, termOverride) {
     if(!roster.length)throw new Error('There are no active enrolled students in '+className+'.');
 
     // Retrieve the exact saved subject scores for this class, session and term.
-    // A result is considered entered only when at least one score component exists.
+    // One non-empty score component for any student in any registered subject
+    // is enough to offer the populated/plain score-sheet choice.
     var savedScoresResult = await supabaseClient.from('results')
       .select('student_id,subject_id,ca1,ca2,ca3,examination,total,grade,remark')
       .eq('school_id',schoolId).eq('class_id',cls.data.id)
-      .eq('academic_session_id',sheetSession.id).eq('term_id',sheetTerm.id);
+      .eq('academic_session_id',sheetSession.id).eq('term_id',sheetTerm.id)
+      .in('subject_id',subIds);
     if(savedScoresResult.error)throw savedScoresResult.error;
     var savedScores = savedScoresResult.data || [];
     var hasEnteredScores = savedScores.some(function(row){
