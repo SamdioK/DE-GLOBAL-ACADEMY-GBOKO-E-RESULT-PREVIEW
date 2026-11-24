@@ -15240,7 +15240,7 @@ async function renderSubjectTeacherInput() {
         values[item.key] = Number(row.querySelector('[data-field="' + item.key + '"]').value || 0);
       });
       var total = activeAssessmentFields.reduce(function(sum, item) { return sum + values[item.key]; }, 0);
-      var grade = 'F', remark = 'Failed';
+      var grade = 'E', remark = 'Weak';
       if (total >= 75) { grade = 'A'; remark = 'Distinction'; }
       else if (total >= 65) { grade = 'B'; remark = 'Very good'; }
       else if (total >= 55) { grade = 'C'; remark = 'Good'; }
@@ -15309,7 +15309,7 @@ async function renderSubjectTeacherInput() {
           });
           if (!hasAnyScore) return null;
           var total = activeAssessmentFields.reduce(function(sum, item) { return sum + (values[item.key] == null ? 0 : values[item.key]); }, 0);
-          var grade = 'F', remark = 'Failed';
+          var grade = 'E', remark = 'Weak';
           if (total >= 75) { grade = 'A'; remark = 'Distinction'; }
       else if (total >= 65) { grade = 'B'; remark = 'Very good'; }
       else if (total >= 55) { grade = 'C'; remark = 'Good'; }
