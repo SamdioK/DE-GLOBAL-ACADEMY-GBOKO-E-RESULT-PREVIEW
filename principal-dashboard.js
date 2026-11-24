@@ -170,70 +170,86 @@
       var sessions=await query('academic_sessions','id,name,is_current',{order:'created_at',limit:30});
       var active=sessions.find(function(x){return x.is_current;})||sessions[0];
       if(!active)throw new Error('No academic session is configured.');
-      var all=[],offset=0,batch;
-      do {
-        var result=await supabaseClient.from('student_enrolments')
-          .select('student_id,class_id,register_number,sid,students!inner(first_name,middle_name,last_name,admission_number),classes!inner(class_name)')
-          .eq('school_id',authenticatedProfile.school_id).eq('academic_session_id',active.id).is('archived_at',null)
-          .order('class_id',{ascending:true}).order('register_number',{ascending:true})
-          .range(offset,offset+999);
-        if(result.error)throw result.error;
-        batch=result.data||[];all=all.concat(batch);offset+=batch.length;
-      } while(batch.length===1000);
-      all.sort(function(a,b){return String(a.classes&&a.classes.class_name||'').localeCompare(String(b.classes&&b.classes.class_name||''))||Number(a.register_number||0)-Number(b.register_number||0);});
-      // Match each Principal student to the same official passport record used by
-      // the Administrator's Student Database. Images remain in the private
-      // student-passports bucket; only short-lived signed URLs are created.
+      var terms=await query('terms','id,name,is_current',{limit:20});
+      var activeTerm=terms.find(function(x){return x.is_current;})||terms[0]||null;
+
+      // Follow the Administrator's official Student Database loader exactly:
+      // enrolments -> official students by student UUID -> passport rows by that UUID.
+      var enrolmentResult=await supabaseClient.from('student_enrolments').select('*')
+        .eq('school_id',authenticatedProfile.school_id)
+        .eq('academic_session_id',active.id)
+        .is('archived_at',null)
+        .order('register_number',{ascending:true});
+      if(enrolmentResult.error)throw enrolmentResult.error;
+      var enrolments=enrolmentResult.data||[];
+      var studentIds=Array.from(new Set(enrolments.map(function(e){return e.student_id;}).filter(Boolean)));
+      var officialStudents=[];
+      if(studentIds.length){
+        var studentsResult=await supabaseClient.from('students').select('*')
+          .eq('school_id',authenticatedProfile.school_id).in('id',studentIds);
+        if(studentsResult.error)throw studentsResult.error;
+        var studentById={};
+        (studentsResult.data||[]).forEach(function(student){studentById[String(student.id)]=student;});
+        officialStudents=enrolments.map(function(enrolment){
+          return {enrolment:enrolment,student:studentById[String(enrolment.student_id)]};
+        }).filter(function(item){return !!item.student;});
+      }
+      var classes=await query('classes','id,class_name');
+      var classById={};
+      classes.forEach(function(c){classById[String(c.id)]=c;});
+
       var passportByStudent={};
-      try {
+      if(studentIds.length){
         var passportRows=await supabaseClient.from('student_passports')
-          .select('student_id,storage_path').eq('school_id',authenticatedProfile.school_id);
+          .select('student_id,storage_path')
+          .eq('school_id',authenticatedProfile.school_id)
+          .in('student_id',studentIds);
         if(passportRows.error)throw passportRows.error;
         await Promise.all((passportRows.data||[]).map(async function(photo){
           if(!photo.student_id||!photo.storage_path)return;
           var signed=await supabaseClient.storage.from('student-passports').createSignedUrl(photo.storage_path,3600);
-          if(!signed.error&&signed.data&&signed.data.signedUrl)passportByStudent[String(photo.student_id)]=signed.data.signedUrl;
-          else if(signed.error)console.warn('Principal student photo could not be signed:',signed.error);
+          if(signed.error)throw signed.error;
+          if(signed.data&&signed.data.signedUrl)passportByStudent[String(photo.student_id)]=signed.data.signedUrl;
         }));
-      } catch(photoError) {
-        console.warn('Principal student photos are unavailable under the current Supabase read policy:',photoError);
       }
-      var groups={};all.forEach(function(e){var name=e.classes&&e.classes.class_name||'Unassigned';(groups[name]||(groups[name]=[])).push(e);});
-      var body='<div class="principal-panel"><div class="principal-section-title"><h3>Official Student Register</h3><span class="principal-pill">'+all.length+' students</span></div><p class="principal-muted">Passport photographs are retrieved from the Administrator\'s Student Passport Registration records. Student identifiers and admission numbers are shown from the official Supabase register. This view is read-only.</p>';
+
+      // Supply the same official record objects to the existing Administrator
+      // photocard builder. The Principal does not maintain a second card source.
+      if(typeof studentDbState!=='undefined'){
+        studentDbState.official=officialStudents;
+        studentDbState.classes=classes;
+      }
+
+      var groups={};
+      officialStudents.forEach(function(item){
+        var className=(classById[String(item.enrolment.class_id)]||{}).class_name||'Unassigned';
+        (groups[className]||(groups[className]=[])).push(item);
+      });
+      Object.keys(groups).forEach(function(name){
+        groups[name].sort(function(a,b){
+          return Number(a.enrolment.register_number||0)-Number(b.enrolment.register_number||0);
+        });
+      });
+
+      var body='<div class="principal-panel"><div class="principal-section-title"><h3>Official Student Register</h3><span class="principal-pill">'+officialStudents.length+' students</span></div><p class="principal-muted">This is the same official enrolment, student, passport registration and photocard source used by the Administrator. This view is read-only.</p>';
       Object.keys(groups).sort().forEach(function(name){
         body+='<div class="principal-arm-group"><h4>'+esc(name)+' <small>'+groups[name].length+'</small></h4><div class="principal-table-wrap"><table class="principal-table"><thead><tr><th>Passport</th><th>SID</th><th>Admission No.</th><th>Student Name</th><th>Print Photocard</th></tr></thead><tbody>';
-        body+=groups[name].map(function(e){
-          var st=e.students||{},photo=passportByStudent[String(e.student_id)]||'';
-          var studentName=[st.first_name,st.middle_name,st.last_name].filter(Boolean).join(' ');
-          var sid=e.sid||e.register_number||'—';
-          var admission=st.admission_number||'—';
-          return '<tr><td><span class="principal-student-register-photo">'+(photo?'<img src="'+esc(photo)+'" alt="'+esc(studentName)+' passport photograph" loading="lazy">':'<span aria-hidden="true">👤</span>')+'</span></td><td>'+esc(sid)+'</td><td>'+esc(admission)+'</td><td class="principal-student-register-name">'+esc(studentName)+'</td><td><button type="button" class="principal-refresh" data-principal-photocard="1" data-student-name="'+esc(studentName)+'" data-student-sid="'+esc(sid)+'" data-student-admission="'+esc(admission)+'" data-student-class="'+esc(name)+'" data-student-photo="'+esc(photo)+'">Print Photocard</button></td></tr>';
+        body+=groups[name].map(function(item){
+          var student=item.student||{},enrolment=item.enrolment||{};
+          var photo=passportByStudent[String(student.id)]||'';
+          var studentName=studentDbName(student);
+          var sid=enrolment.sid||enrolment.register_number||'—';
+          var admission=student.admission_number||'—';
+          return '<tr><td><span class="principal-student-register-photo">'+(photo?'<img src="'+esc(photo)+'" alt="'+esc(studentName)+' passport photograph" loading="lazy">':'<span aria-hidden="true">👤</span>')+'</span></td><td>'+esc(sid)+'</td><td>'+esc(admission)+'</td><td class="principal-student-register-name">'+esc(studentName)+'</td><td><button type="button" class="principal-refresh student-photo-card-print" data-student-id="'+esc(student.id)+'" data-session-id="'+esc(active.id)+'" data-session-name="'+esc(active.name||'')+'" '+(activeTerm?'data-term-id="'+esc(activeTerm.id)+'" data-term-name="'+esc(activeTerm.name||'')+'"':'')+'>Print Photocard</button></td></tr>';
         }).join('');
         body+='</tbody></table></div></div>';
       });
       body+='</div>';
       root.innerHTML=frame('principalStudents',body);
-      root.onclick=function(event){
-        var button=event.target&&event.target.closest?event.target.closest('[data-principal-photocard]'):null;
-        if(!button||!root.contains(button))return;
-        printPrincipalPhotocard({
-          name:button.getAttribute('data-student-name')||'',
-          sid:button.getAttribute('data-student-sid')||'—',
-          admission:button.getAttribute('data-student-admission')||'—',
-          className:button.getAttribute('data-student-class')||'',
-          photo:button.getAttribute('data-student-photo')||''
-        });
-      };
-    } catch(e){root.innerHTML=frame('principalStudents','<div class="principal-error">Student register could not be loaded: '+esc(e.message||e)+'</div>');}
-  }
-  function printPrincipalPhotocard(student){
-    var win=window.open('','_blank','width=520,height=720');
-    if(!win){showToast('Allow pop-ups to print the student photocard.','error');return;}
-    var schoolName=schoolInfo&&schoolInfo.name||currentSchool&&currentSchool.schoolName||'DE-GLOBAL ACADEMY';
-    var schoolAddress=schoolInfo&&schoolInfo.address||currentSchool&&currentSchool.address||'';
-    var photo=student.photo?'<img class="photo" src="'+esc(student.photo)+'" alt="Student passport photograph">':'<div class="photo missing">PASSPORT<br>NOT AVAILABLE</div>';
-    var html='<!doctype html><html><head><meta charset="utf-8"><title>Student Photocard - '+esc(student.name)+'</title><style>@page{size:54mm 86mm;margin:0}*{box-sizing:border-box}body{margin:0;font-family:Arial,sans-serif;color:#152b26}.card{width:54mm;height:86mm;border:1px solid #174f40;padding:3.5mm;display:flex;flex-direction:column;align-items:center;text-align:center;overflow:hidden}.school{font-size:10pt;font-weight:800;line-height:1.15;text-transform:uppercase}.address{font-size:6pt;margin:1.5mm 0 2mm;color:#53645d}.rule{width:100%;border-top:1.5px solid #c59b43;margin-bottom:2mm}.photo{width:25mm;height:29mm;object-fit:cover;border:1px solid #b9c8c0;border-radius:2mm}.missing{display:flex;align-items:center;justify-content:center;font-size:7pt;color:#777;background:#f3f5f4}.name{font-size:9pt;font-weight:800;margin:2mm 0 1mm;line-height:1.2}.details{width:100%;text-align:left;font-size:7pt;line-height:1.65;margin-top:1mm}.details b{display:inline-block;width:23mm}.class{margin-top:auto;width:100%;padding:1.5mm;background:#174f40;color:#fff;font-size:7pt;font-weight:700}@media print{body{print-color-adjust:exact;-webkit-print-color-adjust:exact}}</style></head><body><main class="card"><div class="school">'+esc(schoolName)+'</div><div class="address">'+esc(schoolAddress)+'</div><div class="rule"></div>'+photo+'<div class="name">'+esc(student.name)+'</div><div class="details"><div><b>SID:</b> '+esc(student.sid)+'</div><div><b>Admission No.:</b> '+esc(student.admission)+'</div></div><div class="class">'+esc(student.className)+'</div></main><script>window.onload=function(){var img=document.querySelector(".photo");if(img&&img.tagName==="IMG"){img.onload=function(){window.print()};img.onerror=function(){window.print()};if(img.complete)window.print()}else{window.print()}};<\/script></body></html>';
-    win.document.open();win.document.write(html);win.document.close();
+      if(typeof bindStudentPhotoCardPrintEvents==='function')bindStudentPhotoCardPrintEvents(root);
+    } catch(e){
+      root.innerHTML=frame('principalStudents','<div class="principal-error">Student register or passport records could not be loaded: '+esc(e.message||e)+'</div>');
+    }
   }
     async function renderStaff(root) {
     root.innerHTML=frame('principalStaff','<div class="principal-panel">Loading staff directory…</div>');
