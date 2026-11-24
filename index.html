@@ -3620,9 +3620,7 @@ function renderSchoolIdCard() {
     '</div>';
 
   loadSchoolIdCardSettings().then(async function () {
-    // Branding is optional for score retrieval. Do not let private-asset signing or a slow Storage request hold the score-sheet workflow open.
-    // Load it in the background; the score-sheet can still be generated if branding is unavailable.
-    loadSchoolBrandingAssets().catch(function(error){console.warn('Score-sheet branding could not be loaded:',error);});
+    await loadSchoolBrandingAssets();
     renderSchoolIdCardContent();
   }).catch(function () {
     var msg = document.getElementById('idCardMessage');
@@ -10449,7 +10447,9 @@ async function printArmScoreSheet(className, sessionOverride, termOverride) {
   try{
     if(!supabaseClient||!authenticatedProfile||!authenticatedProfile.school_id||!sheetSession||!sheetSession.id||!sheetTerm||!sheetTerm.id)throw new Error('An active academic session and term are required.');
     var schoolId=authenticatedProfile.school_id;
-    await loadSchoolBrandingAssets();
+    // Branding is optional for score retrieval. Do not let private-asset signing or a slow Storage request hold the score-sheet workflow open.
+    // Load it in the background; the score-sheet can still be generated if branding is unavailable.
+    loadSchoolBrandingAssets().catch(function(error){console.warn('Score-sheet branding could not be loaded:',error);});
 
     var cls=await supabaseClient.from('classes').select('id,class_name,level').eq('school_id',schoolId).eq('class_name',className).maybeSingle();
     if(cls.error)throw cls.error;
