@@ -14505,7 +14505,7 @@ function buildStudentSheetHTML(student) {
     '<div style="margin-top:10px;">' + formMasterDisplay + '<br><strong>Form Master Comment:</strong> ' + escapeManagementText(student.formMasterComment || 'No comment') + '</div>' +
     '<div style="margin-top:6px; padding-top:6px; border-top:1px dashed #999;"><strong>Principal\'s Comment:</strong> ' + generatePrincipalComment(student) + '<div style="display:flex; flex-direction:column; align-items:flex-start; gap:0; margin-top:3px; line-height:1;">' + (schoolInfo.principalSignature ? '<img src="' + schoolInfo.principalSignature + '" alt="Principal signature" style="max-width:80px; max-height:34px; object-fit:contain;">' : '') + '<strong style="font-size:10px; color:#111;">' + (schoolInfo.principalName || 'Principal') + '</strong></div></div>' +
     '<div class="result-footer"><div class="result-document-date">Document Date: ' + resultDateText + '</div><div class="result-approval-assets">' + stampHtml + qrHtml + '</div></div>' +
-    '<div style="margin-top:5px; text-align:center; font-size:8px; color:#666;">Grading: A(75-100) Excellent · B(65-74) Very Good · C(55-64) Good · D(40-54) Fair · E(0-39) Poor</div>' +
+    '<div style="margin-top:5px; text-align:center; font-size:8px; color:#666;">Grading: A (75–100) Distinction · B (65–74) Very good · C (55–64) Good · D (40–54) Fair · E (0–39) Weak</div>' +
     '</div>';
 }
 
