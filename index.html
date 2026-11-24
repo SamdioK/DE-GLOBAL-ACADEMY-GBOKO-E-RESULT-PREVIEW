@@ -3620,7 +3620,9 @@ function renderSchoolIdCard() {
     '</div>';
 
   loadSchoolIdCardSettings().then(async function () {
-    await loadSchoolBrandingAssets();
+    // Branding is optional for score retrieval. Do not let private-asset signing or a slow Storage request hold the score-sheet workflow open.
+    // Load it in the background; the score-sheet can still be generated if branding is unavailable.
+    loadSchoolBrandingAssets().catch(function(error){console.warn('Score-sheet branding could not be loaded:',error);});
     renderSchoolIdCardContent();
   }).catch(function () {
     var msg = document.getElementById('idCardMessage');
