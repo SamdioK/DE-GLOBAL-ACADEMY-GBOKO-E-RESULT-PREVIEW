@@ -207,7 +207,22 @@
       root.innerHTML=frame('principalScoreSheet',filterMarkup(f,true)+'<div class="principal-panel"><h3>Printable Class Score Sheet</h3><p class="principal-muted">The printable register retrieves student names and serial numbers from official Supabase enrolments. A separate score-entry sheet is prepared for each subject registered for the selected class arm and term. No results are displayed or changed.</p><button type="button" class="principal-score-print" id="principalPrintScoreSheet">Print Score Sheet</button><div id="principalScoreSheetStatus" class="principal-muted" style="margin-top:10px">Ready to prepare the selected class arm.</div></div>');
       bindFilterEvents(root,'principalScoreSheet',true);
       var button=root.querySelector('#principalPrintScoreSheet');
-      button.addEventListener('click',function(){printPrincipalScoreSheet(root,f);});
+      button.addEventListener('click',function(){
+        var selectedClass=f.classes.find(function(x){return String(x.id)===String(principalFilters.classId);});
+        var selectedSession=f.sessions.find(function(x){return String(x.id)===String(principalFilters.sessionId);});
+        var selectedTerm=f.terms.find(function(x){return String(x.id)===String(principalFilters.termId);});
+        if(!selectedClass||!selectedSession||!selectedTerm){
+          var status=root.querySelector('#principalScoreSheetStatus');
+          if(status)status.textContent='Select a valid academic session, term and class arm.';
+          return;
+        }
+        if(typeof printArmScoreSheet!=='function'){
+          var unavailable=root.querySelector('#principalScoreSheetStatus');
+          if(unavailable)unavailable.textContent='The shared Administrator score-sheet printer is unavailable. Refresh the portal and try again.';
+          return;
+        }
+        printArmScoreSheet(selectedClass.class_name,selectedSession,selectedTerm);
+      });
     }catch(e){root.innerHTML=frame('principalScoreSheet','<div class="principal-error">Score Sheet could not be prepared: '+esc(e.message||e)+'</div>');}
   }
   async function printPrincipalScoreSheet(root, filters) {
