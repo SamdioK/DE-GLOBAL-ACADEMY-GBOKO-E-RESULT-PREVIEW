@@ -26,6 +26,13 @@
     var d = new Date(v);
     return isNaN(d.getTime()) ? esc(v) : d.toLocaleString();
   }
+  function ordinalRank(value) {
+    var rank=Number(value);
+    if(!Number.isFinite(rank)||rank<1)return '—';
+    var mod100=rank%100;
+    var suffix=(mod100>=11&&mod100<=13)?'th':({1:'st',2:'nd',3:'rd'}[rank%10]||'th');
+    return rank+suffix;
+  }
   function rootFor(tab) { return document.getElementById(tab + 'Tab'); }
   function frame(tab, body) {
     var meta = sections[tab] || ['Principal Dashboard', ''];
@@ -42,6 +49,11 @@
     var style = document.createElement('style');
     style.id = 'principalDashboardStyles';
     style.textContent = `
+      .principal-student-register-item{display:flex;align-items:center;gap:10px;min-height:48px;padding:5px 0}
+      .principal-student-register-photo{display:inline-flex;align-items:center;justify-content:center;flex:0 0 36px;width:36px;height:36px;overflow:hidden;border-radius:50%;background:#eef1f7;color:#64748b;border:1px solid #dbe2ec}
+      .principal-student-register-photo img{width:100%;height:100%;object-fit:cover;display:block}
+      .principal-student-register-photo>span{font-size:17px}
+      .principal-student-register-name{min-width:0;overflow-wrap:anywhere}
       .principal-shell{color:#18312d}
       .principal-hero{display:flex;justify-content:space-between;align-items:center;gap:18px;padding:25px 28px;border-radius:18px;background:linear-gradient(120deg,#103d35,#176b59 62%,#d3a84e);color:#fff;box-shadow:0 12px 28px rgba(16,61,53,.16)}
       .principal-hero h2{font-size:clamp(22px,3vw,30px);margin:5px 0}.principal-hero p{margin:0;color:#e2eee9;font-size:13px}
@@ -169,9 +181,26 @@
         batch=result.data||[];all=all.concat(batch);offset+=batch.length;
       } while(batch.length===1000);
       all.sort(function(a,b){return String(a.classes&&a.classes.class_name||'').localeCompare(String(b.classes&&b.classes.class_name||''))||Number(a.register_number||0)-Number(b.register_number||0);});
+      // Match each Principal student to the same official passport record used by
+      // the Administrator's Student Database. Images remain in the private
+      // student-passports bucket; only short-lived signed URLs are created.
+      var passportByStudent={};
+      try {
+        var passportRows=await supabaseClient.from('student_passports')
+          .select('student_id,storage_path').eq('school_id',authenticatedProfile.school_id);
+        if(passportRows.error)throw passportRows.error;
+        await Promise.all((passportRows.data||[]).map(async function(photo){
+          if(!photo.student_id||!photo.storage_path)return;
+          var signed=await supabaseClient.storage.from('student-passports').createSignedUrl(photo.storage_path,3600);
+          if(!signed.error&&signed.data&&signed.data.signedUrl)passportByStudent[String(photo.student_id)]=signed.data.signedUrl;
+          else if(signed.error)console.warn('Principal student photo could not be signed:',signed.error);
+        }));
+      } catch(photoError) {
+        console.warn('Principal student photos are unavailable under the current Supabase read policy:',photoError);
+      }
       var groups={};all.forEach(function(e){var name=e.classes&&e.classes.class_name||'Unassigned';(groups[name]||(groups[name]=[])).push(e);});
-      var body='<div class="principal-panel"><div class="principal-section-title"><h3>Official Student Register</h3><span class="principal-pill">'+all.length+' students</span></div><p class="principal-muted">Names only, arranged by class arm and official register number. This view is read-only.</p>';
-      Object.keys(groups).sort().forEach(function(name){body+='<div class="principal-arm-group"><h4>'+esc(name)+' <small>'+groups[name].length+'</small></h4><ol>'+groups[name].map(function(e){var st=e.students||{};return '<li>'+esc([st.first_name,st.middle_name,st.last_name].filter(Boolean).join(' '))+'</li>';}).join('')+'</ol></div>';});
+      var body='<div class="principal-panel"><div class="principal-section-title"><h3>Official Student Register</h3><span class="principal-pill">'+all.length+' students</span></div><p class="principal-muted">Official student names and available passport photographs, arranged by class arm and register number. This view is read-only.</p>';
+      Object.keys(groups).sort().forEach(function(name){body+='<div class="principal-arm-group"><h4>'+esc(name)+' <small>'+groups[name].length+'</small></h4><ol>'+groups[name].map(function(e){var st=e.students||{},photo=passportByStudent[String(e.student_id)]||'';return '<li class="principal-student-register-item"><span class="principal-student-register-photo">'+(photo?'<img src="'+esc(photo)+'" alt="'+esc([st.first_name,st.middle_name,st.last_name].filter(Boolean).join(' '))+' passport photograph" loading="lazy">':'<span aria-hidden="true">👤</span>')+'</span><span class="principal-student-register-name">'+esc([st.first_name,st.middle_name,st.last_name].filter(Boolean).join(' '))+'</span></li>';}).join('')+'</ol></div>';});
       body+='</div>';
       root.innerHTML=frame('principalStudents',body);
     } catch(e){root.innerHTML=frame('principalStudents','<div class="principal-error">Student register could not be loaded: '+esc(e.message||e)+'</div>');}
@@ -292,7 +321,7 @@
       var board=classStudents.map(function(e){var scores={},values=[];results.filter(function(r){return r.student_id===e.student_id;}).forEach(function(r){scores[r.subject_id]=r.total;if(r.total!==null&&r.total!==undefined&&r.total!=='')values.push(Number(r.total));});var aggregate=values.reduce(function(a,b){return a+b;},0);return {name:[e.students.first_name,e.students.middle_name,e.students.last_name].filter(Boolean).join(' '),reg:Number(e.register_number||0),scores:scores,aggregate:aggregate,average:values.length?aggregate/values.length:null};}).sort(function(a,b){if(a.average===null&&b.average!==null)return 1;if(b.average===null&&a.average!==null)return -1;return (b.average||0)-(a.average||0)||a.reg-b.reg;});
       var last=null,rank=0;board.forEach(function(x,i){if(x.average!==null&&x.average!==last)rank=i+1;x.rank=x.average===null?'—':rank;last=x.average;});
       var body=filterMarkup(f,true)+'<div class="principal-panel"><div class="principal-section-title"><h3>Master Broadsheet</h3><span class="principal-pill">'+classStudents.length+' students</span></div><p class="principal-muted">Review saved subject totals, aggregates, averages and class positions before publication. This screen cannot edit or publish marks.</p><div class="principal-table-wrap"><table class="principal-table"><thead><tr><th>Student</th>'+ids.map(function(id){return '<th>'+esc(subjectMap[id]||'Subject')+'</th>';}).join('')+'<th>Aggregate</th><th>Average</th><th>Rank</th></tr></thead><tbody>';
-      board.forEach(function(x){body+='<tr><td>'+esc(x.name)+'</td>'+ids.map(function(id){var v=x.scores[id];return '<td>'+(v==null||v===''?'—':esc(v))+'</td>';}).join('')+'<td>'+x.aggregate.toFixed(1)+'</td><td>'+(x.average===null?'—':x.average.toFixed(1))+'</td><td>'+x.rank+'</td></tr>';});
+      board.forEach(function(x){body+='<tr><td>'+esc(x.name)+'</td>'+ids.map(function(id){var v=x.scores[id];return '<td>'+(v==null||v===''?'—':esc(v))+'</td>';}).join('')+'<td>'+x.aggregate.toFixed(1)+'</td><td>'+(x.average===null?'—':x.average.toFixed(1))+'</td><td><strong>'+ordinalRank(x.rank)+'</strong></td></tr>';});
       body+='</tbody></table></div></div>';
       root.innerHTML=frame('principalResults',body);bindFilterEvents(root,'principalResults',true);
     } catch(e){root.innerHTML=frame('principalResults','<div class="principal-error">Broadsheet could not be loaded: '+esc(e.message||e)+'</div>');}
