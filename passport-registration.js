@@ -77,9 +77,13 @@
       currentUser.type === 'admin' &&
       String(authenticatedProfile.role || '').toLowerCase() === 'administrator';
 
+    var activeRoles = Array.isArray(authenticatedProfile.active_roles)
+      ? authenticatedProfile.active_roles : [];
+    var hasSubAdministratorRole =
+      String(authenticatedProfile.role || '').toLowerCase() === 'sub_administrator' ||
+      activeRoles.indexOf('sub_administrator') !== -1;
     var isAuthorisedSubAdmin =
-      currentUser.type === 'subadmin' &&
-      String(authenticatedProfile.role || '').toLowerCase() === 'sub_administrator' &&
+      hasSubAdministratorRole &&
       currentUser.permissions &&
       currentUser.permissions.manageStudentPassports === true;
 
@@ -1489,9 +1493,14 @@
 
     var verifiedRole = String(profile && profile.role || '').toLowerCase();
     var verifiedAdministrator = verifiedRole === 'administrator';
-    var verifiedSubAdmin =
-      verifiedRole === 'sub_administrator' &&
-      currentUser.type === 'subadmin' &&
+    var roleRowsResult = await supabaseClient.from('profile_roles')
+      .select('role').eq('profile_id', profile.id).eq('is_active', true);
+    if (roleRowsResult.error) throw roleRowsResult.error;
+    var hasVerifiedSubAdminRole = verifiedRole === 'sub_administrator' ||
+      (roleRowsResult.data || []).some(function (row) {
+        return String(row.role || '').toLowerCase() === 'sub_administrator';
+      });
+    var verifiedSubAdmin = hasVerifiedSubAdminRole &&
       currentUser.permissions &&
       currentUser.permissions.manageStudentPassports === true;
 
