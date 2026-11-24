@@ -10510,14 +10510,7 @@ async function printArmScoreSheet(className, sessionOverride, termOverride) {
     var hasEnteredScores = savedScores.some(function(row){
       return [row.ca1,row.ca2,row.ca3,row.examination,row.total].some(function(value){return value!==null&&value!==undefined&&value!=='';});
     });
-    var includeSavedValues = false;
-    if(hasEnteredScores){
-      includeSavedValues = window.confirm(
-        'Saved scores were found for '+className+' — '+sheetSession.name+', '+sheetTerm.name+'.\\n\\n' +
-        'Choose OK to print/save the score sheet WITH the entered values.\\n' +
-        'Choose Cancel to print a PLAIN, BLANK score sheet.'
-      );
-    }
+    // The print tab presents an explicit on-screen choice; mobile browsers may suppress native confirm dialogs.
     var savedScoreByKey = {};
     savedScores.forEach(function(row){
       savedScoreByKey[String(row.student_id)+'|'+String(row.subject_id)] = row;
@@ -10635,7 +10628,7 @@ async function printArmScoreSheet(className, sessionOverride, termOverride) {
     var documentId=schoolPrefix+'-'+generatedAt.getTime().toString(36).toUpperCase()+'-'+documentRandom;
 
     // Let the browser's Print Setup determine paper size and orientation. One subject flows naturally over as many printable pages as needed.
-    var pageSections=subjectRows.map(function(subject,index){
+    var buildPageSections=function(includeSavedValues){ return subjectRows.map(function(subject,index){
       var rows=roster.map(function(student,i){
         var score=savedScoreByKey[String(student.studentId)+'|'+String(subject.id)]||null;
         var stats=scoreStatsBySubject[String(subject.id)]||{average:null,highest:null,lowest:null,positions:[]};
@@ -10702,8 +10695,10 @@ async function printArmScoreSheet(className, sessionOverride, termOverride) {
         '<div class="stamp-caption">OFFICIAL SCHOOL STAMP</div></div></footer>'+
         '<div class="document-meta"><div>Document generated on '+safe(generatedDate)+'</div><div>Document ID: '+safe(documentId)+'</div></div>'+
         '<div class="page-number">Subject '+(index+1)+' of '+subjectRows.length+'</div></section>';
-    }).join('');
+    }).join(''); };
 
+    var renderScoreSheet=function(includeSavedValues){
+    var pageSections=buildPageSections(includeSavedValues);
     var html='<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>'+safe(className)+' Score Sheets</title><style>'+
       '@page{size:auto;margin:8mm}*{box-sizing:border-box}html,body{margin:0;padding:0;width:100%;font-family:"Times New Roman",Times,serif;color:#111;background:#fff}'+
       '.subject-sheet{width:100%;max-width:100%;display:block;position:relative;break-after:page;page-break-after:always}'+
@@ -10728,6 +10723,16 @@ async function printArmScoreSheet(className, sessionOverride, termOverride) {
       '@media screen{body{padding:8mm}.subject-sheet{margin:0 auto 10mm;max-width:100%}}'+
       '</style></head><body>'+pageSections+'<script>window.onload=function(){window.print();};<\/script></body></html>';
     printWindow.document.open();printWindow.document.write(html);printWindow.document.close();
+    };
+    if(hasEnteredScores){
+      printWindow.document.open();
+      printWindow.document.write('<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1"><title>Score Sheet Options</title><style>body{font-family:Arial,sans-serif;margin:0;padding:28px 20px;background:#f4f5f8;color:#18202b}.panel{max-width:520px;margin:8vh auto;background:#fff;border-radius:16px;padding:26px;box-shadow:0 4px 22px #0002}h2{margin:0 0 12px;font-size:23px}p{line-height:1.5;color:#4b5563}.choice{display:block;width:100%;border:0;border-radius:10px;padding:16px;margin-top:14px;font-size:16px;font-weight:700;color:#fff;background:#278b45}.plain{background:#4e5fc7}.hint{font-size:13px;margin-top:18px}</style></head><body><main class="panel"><h2>Choose Score Sheet Format</h2><p>Saved scores are available for '+safe(className)+' in '+safe(sheetSession.name)+' — '+safe(sheetTerm.name)+'. Select how you want the score sheets prepared.</p><button class="choice" id="withScores">Print Score Sheet with Entered Scores</button><button class="choice plain" id="plainSheet">Print Plain Blank Score Sheet</button><p class="hint">The print preview will open after you select an option.</p></main></body></html>');
+      printWindow.document.close();
+      printWindow.document.getElementById('withScores').addEventListener('click',function(){renderScoreSheet(true);});
+      printWindow.document.getElementById('plainSheet').addEventListener('click',function(){renderScoreSheet(false);});
+    } else {
+      renderScoreSheet(false);
+    }
   }catch(error){
     printWindow.close();
     showToast(error&&error.message||'Unable to generate Score Sheet.','error');
