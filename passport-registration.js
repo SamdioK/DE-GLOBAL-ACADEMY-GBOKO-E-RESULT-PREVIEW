@@ -73,11 +73,20 @@
       throw new Error('Your session is unavailable. Sign in again.');
     }
 
-    if (currentUser.type !== 'admin' ||
-        String(authenticatedProfile.role || '').toLowerCase() !== 'administrator' ||
+    var isAdministrator =
+      currentUser.type === 'admin' &&
+      String(authenticatedProfile.role || '').toLowerCase() === 'administrator';
+
+    var isAuthorisedSubAdmin =
+      currentUser.type === 'subadmin' &&
+      String(authenticatedProfile.role || '').toLowerCase() === 'sub_administrator' &&
+      currentUser.permissions &&
+      currentUser.permissions.manageStudentPassports === true;
+
+    if ((!isAdministrator && !isAuthorisedSubAdmin) ||
         authenticatedProfile.is_active !== true ||
         !authenticatedProfile.school_id) {
-      throw new Error('Only an active school administrator can manage passports.');
+      throw new Error('Student Passport Registration access has not been granted to this account.');
     }
 
     return authenticatedProfile;
@@ -1478,11 +1487,19 @@
 
     var profile = profileResult.data;
 
+    var verifiedRole = String(profile && profile.role || '').toLowerCase();
+    var verifiedAdministrator = verifiedRole === 'administrator';
+    var verifiedSubAdmin =
+      verifiedRole === 'sub_administrator' &&
+      currentUser.type === 'subadmin' &&
+      currentUser.permissions &&
+      currentUser.permissions.manageStudentPassports === true;
+
     if (!profile ||
         String(profile.school_id) !== String(authenticatedProfile.school_id) ||
-        String(profile.role || '').toLowerCase() !== 'administrator' ||
+        (!verifiedAdministrator && !verifiedSubAdmin) ||
         profile.is_active !== true) {
-      throw new Error('Administrator authorization could not be verified.');
+      throw new Error('Passport-management authorisation could not be verified.');
     }
   }
 
