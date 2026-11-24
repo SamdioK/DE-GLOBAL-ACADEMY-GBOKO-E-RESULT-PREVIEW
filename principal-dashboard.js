@@ -8,6 +8,7 @@
     principalDashboard: ['Principal Overview', 'A live executive summary of the school.'],
     principalStudents: ['Student Database', 'Official student names arranged by class arm and register order.'],
     principalScoreSheet: ['Score Sheet', 'Print class-arm score sheets using official Supabase enrolment names and registered subjects.'],
+    principalScoreRecords: ['Score Records', 'View the same official class-arm and subject score registers available to the Administrator.'],
     principalStaff: ['Staff & Teachers', 'Staff directory, designations and employment information.'],
     principalResults: ['Broadsheet Review', 'Interactive class broadsheets, aggregates, averages and rankings before publication.'],
     principalSubmission: ['Submission Tracker', 'Live CA and examination upload progress by class, subject and teacher.'],
@@ -200,6 +201,24 @@
   function bindFilterEvents(root,tab,withClass) {
     root.querySelectorAll('[data-pf]').forEach(function(el){el.addEventListener('change',function(){var k=el.getAttribute('data-pf');if(k==='session')principalFilters.sessionId=el.value;if(k==='term')principalFilters.termId=el.value;if(k==='class')principalFilters.classId=el.value;showTab(tab);});});
   }
+  async function renderPrincipalScoreRecords(root) {
+    root.innerHTML=frame('principalScoreRecords',
+      '<div class="principal-panel"><div class="principal-section-title"><h3>Official Student Score Records</h3><span class="principal-pill">Live Supabase records</span></div>' +
+      '<p class="principal-muted">This is the same read-only score register used by the Administrator’s View tab. Records are retrieved directly from the school’s existing Supabase results, registrations and enrolments.</p>' +
+      '<div id="principalScoreRecordsPanel"><p class="principal-muted">Loading official score records…</p></div></div>');
+    try {
+      if (typeof loadAdminCa1ResultsView !== 'function') {
+        throw new Error('The shared Administrator score-register loader is unavailable. Refresh the portal and try again.');
+      }
+      await loadAdminCa1ResultsView({
+        panel: root.querySelector('#principalScoreRecordsPanel'),
+        allowPrincipal: true
+      });
+    } catch(e) {
+      var panel=root.querySelector('#principalScoreRecordsPanel');
+      if(panel)panel.innerHTML='<div class="principal-error">Score records could not be loaded: '+esc(e.message||e)+'</div>';
+    }
+  }
   async function renderPrincipalScoreSheet(root) {
     root.innerHTML=frame('principalScoreSheet','<div class="principal-panel">Loading class arms and academic session…</div>');
     try {
@@ -372,6 +391,7 @@
     if(tab==='principalDashboard') renderOverview(root);
     else if(tab==='principalStudents') renderStudents(root);
     else if(tab==='principalScoreSheet') renderPrincipalScoreSheet(root);
+    else if(tab==='principalScoreRecords') renderPrincipalScoreRecords(root);
     else if(tab==='principalStaff') renderStaff(root);
     else if(tab==='principalResults') renderResults(root);
     else if(tab==='principalSubmission') renderSubmissionTracker(root);
