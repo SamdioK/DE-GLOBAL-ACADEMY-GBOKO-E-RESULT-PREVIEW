@@ -173,48 +173,84 @@
       var terms=await query('terms','id,name,is_current',{limit:20});
       var activeTerm=terms.find(function(x){return x.is_current;})||terms[0]||null;
 
-      // Follow the Administrator's official Student Database loader exactly:
-      // enrolments -> official students by student UUID -> passport rows by that UUID.
-      var enrolmentResult=await supabaseClient.from('student_enrolments').select('*')
-        .eq('school_id',authenticatedProfile.school_id)
-        .eq('academic_session_id',active.id)
-        .is('archived_at',null)
-        .order('register_number',{ascending:true});
-      if(enrolmentResult.error)throw enrolmentResult.error;
-      var enrolments=enrolmentResult.data||[];
+      // Load the complete school register in bounded pages. A single .in()
+      // containing thousands of UUIDs can exceed the REST request URL limit
+      // and return HTTP 400 on mobile and desktop browsers.
+      var enrolments=[],offset=0,pageSize=500;
+      while(true){
+        var enrolmentPage=await supabaseClient.from('student_enrolments').select('*')
+          .eq('school_id',authenticatedProfile.school_id)
+          .eq('academic_session_id',active.id)
+          .is('archived_at',null)
+          .order('register_number',{ascending:true})
+          .range(offset,offset+pageSize-1);
+        if(enrolmentPage.error)throw new Error('Student enrolments: '+(enrolmentPage.error.message||'Supabase request failed'));
+        var enrolmentBatch=enrolmentPage.data||[];
+        enrolments=enrolments.concat(enrolmentBatch);
+        if(enrolmentBatch.length<pageSize)break;
+        offset+=pageSize;
+      }
+
       var studentIds=Array.from(new Set(enrolments.map(function(e){return e.student_id;}).filter(Boolean)));
       var officialStudents=[];
       if(studentIds.length){
-        var studentsResult=await supabaseClient.from('students').select('*')
-          .eq('school_id',authenticatedProfile.school_id).in('id',studentIds);
-        if(studentsResult.error)throw studentsResult.error;
+        var studentBatches=[];
+        for(var si=0;si<studentIds.length;si+=100){
+          studentBatches.push(studentIds.slice(si,si+100));
+        }
+        var studentResults=await Promise.all(studentBatches.map(function(ids){
+          return supabaseClient.from('students').select('*')
+            .eq('school_id',authenticatedProfile.school_id).in('id',ids);
+        }));
         var studentById={};
-        (studentsResult.data||[]).forEach(function(student){studentById[String(student.id)]=student;});
+        studentResults.forEach(function(result){
+          if(result.error)throw new Error('Official student records: '+(result.error.message||'Supabase request failed'));
+          (result.data||[]).forEach(function(student){studentById[String(student.id)]=student;});
+        });
         officialStudents=enrolments.map(function(enrolment){
           return {enrolment:enrolment,student:studentById[String(enrolment.student_id)]};
         }).filter(function(item){return !!item.student;});
       }
+
       var classes=await query('classes','id,class_name');
       var classById={};
       classes.forEach(function(c){classById[String(c.id)]=c;});
 
-      var passportByStudent={};
+      // Fetch passport metadata in small UUID batches, then request signed
+      // URLs in batches too; do not launch thousands of Storage requests at once.
+      var passportByStudent={},passportRows=[];
       if(studentIds.length){
-        var passportRows=await supabaseClient.from('student_passports')
-          .select('student_id,storage_path')
-          .eq('school_id',authenticatedProfile.school_id)
-          .in('student_id',studentIds);
-        if(passportRows.error)throw passportRows.error;
-        await Promise.all((passportRows.data||[]).map(async function(photo){
-          if(!photo.student_id||!photo.storage_path)return;
-          var signed=await supabaseClient.storage.from('student-passports').createSignedUrl(photo.storage_path,3600);
-          if(signed.error)throw signed.error;
-          if(signed.data&&signed.data.signedUrl)passportByStudent[String(photo.student_id)]=signed.data.signedUrl;
+        var passportBatches=[];
+        for(var pi=0;pi<studentIds.length;pi+=100){
+          passportBatches.push(studentIds.slice(pi,pi+100));
+        }
+        var passportResults=await Promise.all(passportBatches.map(function(ids){
+          return supabaseClient.from('student_passports')
+            .select('student_id,storage_path')
+            .eq('school_id',authenticatedProfile.school_id)
+            .in('student_id',ids);
         }));
+        passportResults.forEach(function(result){
+          if(result.error)throw new Error('Student passport records: '+(result.error.message||'Supabase request failed'));
+          passportRows=passportRows.concat(result.data||[]);
+        });
+        var passportByPath={};
+        passportRows.forEach(function(photo){
+          if(photo.student_id&&photo.storage_path)passportByPath[String(photo.storage_path)]=String(photo.student_id);
+        });
+        var paths=passportRows.map(function(photo){return photo.storage_path;}).filter(Boolean);
+        for(var pathIndex=0;pathIndex<paths.length;pathIndex+=100){
+          var pathBatch=paths.slice(pathIndex,pathIndex+100);
+          var signed=await supabaseClient.storage.from('student-passports').createSignedUrls(pathBatch,3600);
+          if(signed.error)throw new Error('Student passport images: '+(signed.error.message||'Unable to create secure image links'));
+          (signed.data||[]).forEach(function(item){
+            var studentId=passportByPath[String(item.path||'')];
+            if(studentId&&item.signedUrl)passportByStudent[studentId]=item.signedUrl;
+          });
+        }
       }
 
-      // Supply the same official record objects to the existing Administrator
-      // photocard builder. The Principal does not maintain a second card source.
+      // Share the official records with the existing Administrator photocard builder.
       if(typeof studentDbState!=='undefined'){
         studentDbState.official=officialStudents;
         studentDbState.classes=classes;
@@ -248,10 +284,11 @@
       root.innerHTML=frame('principalStudents',body);
       if(typeof bindStudentPhotoCardPrintEvents==='function')bindStudentPhotoCardPrintEvents(root);
     } catch(e){
+      console.error('Principal Student Database load failed:',e);
       root.innerHTML=frame('principalStudents','<div class="principal-error">Student register or passport records could not be loaded: '+esc(e.message||e)+'</div>');
     }
   }
-    async function renderStaff(root) {
+  async function renderStaff(root) {
     root.innerHTML=frame('principalStaff','<div class="principal-panel">Loading staff directory…</div>');
     try {
       var rows=await query('school_staff_directory','id,staff_id,full_name,designation,department,employment_type,status',{order:'created_at',limit:500});
