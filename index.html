@@ -10493,9 +10493,53 @@ async function printArmScoreSheet(className, sessionOverride, termOverride) {
 
     var roster=enrol.data.map(function(e){
       var student=studentsById[String(e.student_id)]||{};
-      return {sid:e.sid,name:[student.first_name,student.middle_name,student.last_name].filter(Boolean).join(' ')};
+      return {studentId:e.student_id,sid:e.sid,name:[student.first_name,student.middle_name,student.last_name].filter(Boolean).join(' ')};
     });
     if(!roster.length)throw new Error('There are no active enrolled students in '+className+'.');
+
+    // Retrieve the exact saved subject scores for this class, session and term.
+    // A result is considered entered only when at least one score component exists.
+    var savedScoresResult = await supabaseClient.from('results')
+      .select('student_id,subject_id,ca1,ca2,ca3,examination,total,grade,remark')
+      .eq('school_id',schoolId).eq('class_id',cls.data.id)
+      .eq('academic_session_id',sheetSession.id).eq('term_id',sheetTerm.id);
+    if(savedScoresResult.error)throw savedScoresResult.error;
+    var savedScores = savedScoresResult.data || [];
+    var hasEnteredScores = savedScores.some(function(row){
+      return [row.ca1,row.ca2,row.ca3,row.examination,row.total].some(function(value){return value!==null&&value!==undefined&&value!=='';});
+    });
+    var includeSavedValues = false;
+    if(hasEnteredScores){
+      includeSavedValues = window.confirm(
+        'Saved scores were found for '+className+' — '+sheetSession.name+', '+sheetTerm.name+'.\\n\\n' +
+        'Choose OK to print/save the score sheet WITH the entered values.\\n' +
+        'Choose Cancel to print a PLAIN, BLANK score sheet.'
+      );
+    }
+    var savedScoreByKey = {};
+    savedScores.forEach(function(row){
+      savedScoreByKey[String(row.student_id)+'|'+String(row.subject_id)] = row;
+    });
+    var scoreStatsBySubject = {};
+    subjectRows.forEach(function(subject){
+      var values = roster.map(function(student){
+        var row=savedScoreByKey[String(student.studentId||'')+'|'+String(subject.id)];
+        if(!row)return null;
+        var raw=row.total;
+        if(raw===null||raw===undefined||raw===''){
+          var parts=[row.ca1,row.ca2,row.ca3,row.examination].filter(function(v){return v!==null&&v!==undefined&&v!=='';}).map(Number);
+          raw=parts.length?parts.reduce(function(sum,v){return sum+v;},0):null;
+        }
+        return raw===null||raw===undefined||raw===''||!Number.isFinite(Number(raw))?null:Number(raw);
+      }).filter(function(value){return value!==null;});
+      values.sort(function(a,b){return b-a;});
+      scoreStatsBySubject[String(subject.id)]={
+        average:values.length?values.reduce(function(sum,v){return sum+v;},0)/values.length:null,
+        highest:values.length?values[0]:null,
+        lowest:values.length?values[values.length-1]:null,
+        positions:values
+      };
+    });
 
     var classPhase = /^(BASIC|JSS)/i.test(String(cls.data.level||'')+' '+String(cls.data.class_name||className)) ? 'BASIC' : 'SS';
     var subjectTeacherById = {};
@@ -10591,9 +10635,32 @@ async function printArmScoreSheet(className, sessionOverride, termOverride) {
     // Let the browser's Print Setup determine paper size and orientation. One subject flows naturally over as many printable pages as needed.
     var pageSections=subjectRows.map(function(subject,index){
       var rows=roster.map(function(student,i){
+        var score=savedScoreByKey[String(student.studentId)+'|'+String(subject.id)]||null;
+        var stats=scoreStatsBySubject[String(subject.id)]||{average:null,highest:null,lowest:null,positions:[]};
+        function cell(value){return value===null||value===undefined||value===''?'':safe(value);}
+        var total=score?score.total:null;
+        if(score&&(total===null||total===undefined||total==='')){
+          var parts=[score.ca1,score.ca2,score.ca3,score.examination].filter(function(v){return v!==null&&v!==undefined&&v!=='';}).map(Number);
+          total=parts.length?parts.reduce(function(sum,v){return sum+v;},0):null;
+        }
+        var position='';
+        if(total!==null&&total!==undefined&&total!==''){
+          var numericTotal=Number(total);
+          if(Number.isFinite(numericTotal)){
+            var ordered=stats.positions;
+            var rank=ordered.indexOf(numericTotal);
+            if(rank!==-1){var first=ordered.indexOf(numericTotal);position=first+1;}
+          }
+        }
+        var values=includeSavedValues&&score;
         return '<tr><td class="sn">'+(i+1)+'</td><td class="sid">'+safe(student.sid||'—')+'</td>'+
           '<td class="student"><span class="student-name">'+safe(student.name||'Student')+'</span></td>'+
-          '<td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td></tr>';
+          '<td>'+ (values?cell(score.ca1):'') +'</td><td>'+ (values?cell(score.ca2):'') +'</td>'+
+          '<td>'+ (values?cell(score.ca3):'') +'</td><td>'+ (values?cell(score.examination):'') +'</td>'+
+          '<td>'+ (values?cell(total):'') +'</td><td>'+ (values&&stats.average!==null?cell(stats.average.toFixed(1)):'') +'</td>'+
+          '<td>'+ (values?cell(position):'') +'</td><td>'+ (values?cell(stats.highest):'') +'</td>'+
+          '<td>'+ (values?cell(stats.lowest):'') +'</td><td>'+ (values?cell(score.grade):'') +'</td>'+
+          '<td>'+ (values?cell(score.remark):'') +'</td><td></td></tr>';
       }).join('');
       var schoolLogo=logo?'<img class="school-logo" src="'+safe(logo)+'" alt="School badge">':'<div class="logo-placeholder">SCHOOL<br>BADGE</div>';
       var stamp=stampArtwork?
