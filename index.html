@@ -1806,7 +1806,12 @@ async function handleSupabaseLogin(userType, errorDiv, restoringSession) {
     if (existingSessionResult.error) throw existingSessionResult.error;
     var existingSession = existingSessionResult.data && existingSessionResult.data.session;
     var authResult;
-    if (existingSession && existingSession.user && (restoringSession || String(existingSession.user.email || '').toLowerCase() === email.toLowerCase())) {
+    // Subject Teacher logins must always verify the password entered on this screen.
+    // Do not silently reuse an older session after an administrator has issued a temporary password.
+    var canResumeExistingSession = restoringSession ||
+      (userType === 'formmaster' && existingSession && existingSession.user &&
+       String(existingSession.user.email || '').toLowerCase() === email.toLowerCase());
+    if (existingSession && existingSession.user && canResumeExistingSession) {
       authResult = { data: { user: existingSession.user }, error: null };
     } else {
       if (existingSession) await supabaseClient.auth.signOut();
@@ -1891,7 +1896,10 @@ async function handleSupabaseLogin(userType, errorDiv, restoringSession) {
     var selectedRole = expectedRoles[userType].find(function(role) { return activeRoles.indexOf(role) !== -1; });
     var appType = { administrator: 'admin', principal: 'principal', sub_administrator: 'subadmin', form_master: 'formmaster', subject_teacher: 'subjectteacher', portal_developer: 'developer', student: 'student' }[selectedRole];
     currentUser = { type: appType, role: selectedRole, id: profile.id, name: profile.full_name, email: authResult.data.user.email, profile: profile };
-    if (appType === 'subjectteacher' && profile.must_change_password === true) {
+    var subjectTeacherMustChangePassword =
+      profile.must_change_password === true ||
+      !!(authResult.data.user.user_metadata && authResult.data.user.user_metadata.must_change_password === true);
+    if (appType === 'subjectteacher' && subjectTeacherMustChangePassword) {
       subjectTeacherPasswordChangePending = true;
       document.getElementById('studentNewPassword').value = '';
       document.getElementById('studentConfirmNewPassword').value = '';
