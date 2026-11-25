@@ -1149,6 +1149,7 @@ var studentPasswordChangePending = false;
 var formMasterPasswordChangePending = false;
 var subAdminPasswordChangePending = false;
 var principalPasswordChangePending = false;
+var subjectTeacherPasswordChangePending = false;
 var activeAcademicSession = null;
 var activeAssessmentTerm = null;
 var availableAcademicSessions = [];
@@ -1648,14 +1649,17 @@ async function handleStudentPasswordChange() {
   var changingFormMasterPassword = formMasterPasswordChangePending;
   var changingSubAdminPassword = subAdminPasswordChangePending;
   var changingPrincipalPassword = principalPasswordChangePending;
+  var changingSubjectTeacherPassword = subjectTeacherPasswordChangePending;
   var validPasswordChangeProfile = changingPrincipalPassword
     ? !!(currentUser && currentUser.type === 'principal' && authenticatedProfile && String(currentUser.id) === String(authenticatedProfile.id))
     : changingFormMasterPassword
     ? !!(currentUser && currentUser.type === 'formmaster' && authenticatedProfile && String(currentUser.id) === String(authenticatedProfile.id))
-    : changingSubAdminPassword
-      ? !!(currentUser && currentUser.type === 'subadmin' && authenticatedProfile && String(currentUser.id) === String(authenticatedProfile.id))
-      : !!(authenticatedProfile && String(authenticatedProfile.role || '').toLowerCase() === 'student');
-  if ((!studentPasswordChangePending && !formMasterPasswordChangePending && !subAdminPasswordChangePending && !principalPasswordChangePending) || !authenticatedProfile || !validPasswordChangeProfile) {
+    : changingSubjectTeacherPassword
+      ? !!(currentUser && currentUser.type === 'subjectteacher' && authenticatedProfile && String(currentUser.id) === String(authenticatedProfile.id))
+      : changingSubAdminPassword
+        ? !!(currentUser && currentUser.type === 'subadmin' && authenticatedProfile && String(currentUser.id) === String(authenticatedProfile.id))
+        : !!(authenticatedProfile && String(authenticatedProfile.role || '').toLowerCase() === 'student');
+  if ((!studentPasswordChangePending && !formMasterPasswordChangePending && !subAdminPasswordChangePending && !principalPasswordChangePending && !subjectTeacherPasswordChangePending) || !authenticatedProfile || !validPasswordChangeProfile) {
     statusElement.textContent = 'Your authenticated session has expired. Sign in again.';
     statusElement.classList.remove('hidden');
     return;
@@ -1681,7 +1685,7 @@ async function handleStudentPasswordChange() {
     }
     var result = changingPrincipalPassword
       ? await supabaseClient.functions.invoke('change-principal-password', { body: { new_password: newPassword } })
-      : changingFormMasterPassword
+      : (changingFormMasterPassword || changingSubjectTeacherPassword)
         ? await supabaseClient.functions.invoke('change-form-master-password', { body: { new_password: newPassword } })
         : changingSubAdminPassword
         ? await supabaseClient.functions.invoke('change-sub-administrator-password', { body: { new_password: newPassword } })
@@ -1702,6 +1706,7 @@ async function handleStudentPasswordChange() {
     passwordInput.value = '';
     confirmInput.value = '';
     var completedFormMaster = changingFormMasterPassword;
+    var completedSubjectTeacher = changingSubjectTeacherPassword;
     var completedSubAdmin = changingSubAdminPassword;
     var completedPrincipal = changingPrincipalPassword;
     var formMasterArm = currentUser && currentUser.arm || '';
@@ -1711,6 +1716,7 @@ async function handleStudentPasswordChange() {
     formMasterPasswordChangePending = false;
     subAdminPasswordChangePending = false;
     principalPasswordChangePending = false;
+    subjectTeacherPasswordChangePending = false;
     currentUser = null;
     authenticatedProfile = null;
     try { await supabaseClient.auth.signOut(); } catch (signOutError) {}
@@ -1718,17 +1724,21 @@ async function handleStudentPasswordChange() {
     document.getElementById('loginView').classList.remove('hidden');
     document.getElementById('loginContainer').style.display = 'flex';
     document.getElementById('appContainer').classList.remove('active');
-    document.getElementById('userType').value = completedFormMaster ? 'formmaster' : (completedSubAdmin ? 'subadmin' : (completedPrincipal ? 'principal' : 'student'));
-    document.getElementById('genericAuthEmailGroup').classList.toggle('hidden', !(completedFormMaster || completedSubAdmin));
+    document.getElementById('userType').value = completedFormMaster ? 'formmaster' : (completedSubjectTeacher ? 'subjectteacher' : (completedSubAdmin ? 'subadmin' : (completedPrincipal ? 'principal' : 'student')));
+    document.getElementById('genericAuthEmailGroup').classList.toggle('hidden', !(completedFormMaster || completedSubAdmin || completedSubjectTeacher));
     document.getElementById('adminLoginFields').classList.add('hidden');
     document.getElementById('principalLoginFields').classList.toggle('hidden', !completedPrincipal);
     document.getElementById('formmasterFields').classList.toggle('hidden', !completedFormMaster);
-    document.getElementById('subjectTeacherFields').classList.add('hidden');
+    document.getElementById('subjectTeacherFields').classList.toggle('hidden', !completedSubjectTeacher);
     document.getElementById('subadminLoginFields').classList.toggle('hidden', !completedSubAdmin);
-    document.getElementById('studentLoginFields').classList.toggle('hidden', completedFormMaster || completedSubAdmin || completedPrincipal);
+    document.getElementById('studentLoginFields').classList.toggle('hidden', completedFormMaster || completedSubjectTeacher || completedSubAdmin || completedPrincipal);
     if (completedFormMaster) {
       document.getElementById('selectedArm').value = formMasterArm;
       document.getElementById('authEmail').value = formMasterEmail;
+    }
+    if (completedSubjectTeacher) {
+      document.getElementById('authEmail').value = formMasterEmail;
+      document.getElementById('assignmentPassword').value = '';
     }
     if (completedSubAdmin) {
       document.getElementById('authEmail').value = formMasterEmail;
@@ -1740,7 +1750,7 @@ async function handleStudentPasswordChange() {
     document.getElementById('studentPassword').value = '';
     document.getElementById('armPassword').value = '';
     var loginMessage = document.getElementById('loginError');
-    loginMessage.textContent = (completedFormMaster || completedSubAdmin)
+    loginMessage.textContent = (completedFormMaster || completedSubjectTeacher || completedSubAdmin)
       ? 'Password changed successfully. Sign in again with your email and new password.'
       : 'Password changed successfully. Sign in again with your admission number and new password.';
     loginMessage.classList.remove('hidden');
@@ -1881,6 +1891,15 @@ async function handleSupabaseLogin(userType, errorDiv, restoringSession) {
     var selectedRole = expectedRoles[userType].find(function(role) { return activeRoles.indexOf(role) !== -1; });
     var appType = { administrator: 'admin', principal: 'principal', sub_administrator: 'subadmin', form_master: 'formmaster', subject_teacher: 'subjectteacher', portal_developer: 'developer', student: 'student' }[selectedRole];
     currentUser = { type: appType, role: selectedRole, id: profile.id, name: profile.full_name, email: authResult.data.user.email, profile: profile };
+    if (appType === 'subjectteacher' && profile.must_change_password === true) {
+      subjectTeacherPasswordChangePending = true;
+      document.getElementById('studentNewPassword').value = '';
+      document.getElementById('studentConfirmNewPassword').value = '';
+      document.getElementById('studentPasswordChangeError').classList.add('hidden');
+      document.getElementById('loginView').classList.add('hidden');
+      document.getElementById('studentPasswordChangeView').classList.remove('hidden');
+      return;
+    }
     if (appType === 'principal' && profile.must_change_password === true) {
       principalPasswordChangePending = true;
       document.getElementById('studentNewPassword').value = '';
@@ -11365,7 +11384,7 @@ async function renderMasters() {
   } else {
     html += '<div style="overflow-x:auto;"><table><thead><tr><th>Class</th><th>Subject</th><th>Teacher</th><th>Email</th><th>Account</th><th>Assignment</th><th>Action</th></tr></thead><tbody>';
     subjectAssignments.forEach(function(a) {
-      html += '<tr><td>' + escapeManagementText(a.className) + '</td><td>' + escapeManagementText(a.subject) + '</td><td>' + escapeManagementText(a.teacherName) + '</td><td>' + escapeManagementText(a.teacherEmail || '—') + '</td><td>' + (a.teacherIsActive ? '<span style="color:#15803d">Active</span>' : '<span style="color:#b45309">Inactive / unavailable</span>') + '</td><td>' + (a.activated ? '<span style="color:#15803d">✓ Active</span>' : '<span style="color:#6b7280">○ Inactive</span>') + '</td><td style="white-space:nowrap;"><button type="button" class="btn ' + (a.activated ? 'btn-danger' : 'btn-success') + ' subject-assignment-toggle" data-id="' + escapeManagementText(a.id) + '" data-next-active="' + (!a.activated) + '" style="padding:4px 10px;font-size:11px;margin-right:5px;">' + (a.activated ? 'Deactivate' : 'Activate') + '</button><button type="button" class="btn btn-danger subject-assignment-remove" data-id="' + escapeManagementText(a.id) + '" style="padding:4px 10px;font-size:11px;">Remove</button></td></tr>';
+      html += '<tr><td>' + escapeManagementText(a.className) + '</td><td>' + escapeManagementText(a.subject) + '</td><td>' + escapeManagementText(a.teacherName) + '</td><td>' + escapeManagementText(a.teacherEmail || '—') + '</td><td>' + (a.teacherIsActive ? '<span style="color:#15803d">Active</span>' : '<span style="color:#b45309">Inactive / unavailable</span>') + '</td><td>' + (a.activated ? '<span style="color:#15803d">✓ Active</span>' : '<span style="color:#6b7280">○ Inactive</span>') + '</td><td style="white-space:nowrap;"><button type="button" class="btn btn-primary subject-assignment-reset" data-teacher-id="' + escapeManagementText(a.teacherId) + '" data-teacher-name="' + escapeManagementText(a.teacherName) + '" data-teacher-email="' + escapeManagementText(a.teacherEmail || '') + '" ' + (a.teacherIsActive ? '' : 'disabled title="Only active teacher accounts can be reset"') + ' style="padding:4px 10px;font-size:11px;margin:0 5px 5px 0;">Reset Password</button><button type="button" class="btn ' + (a.activated ? 'btn-danger' : 'btn-success') + ' subject-assignment-toggle" data-id="' + escapeManagementText(a.id) + '" data-next-active="' + (!a.activated) + '" style="padding:4px 10px;font-size:11px;margin:0 5px 5px 0;">' + (a.activated ? 'Deactivate' : 'Activate') + '</button><button type="button" class="btn btn-danger subject-assignment-remove" data-id="' + escapeManagementText(a.id) + '" style="padding:4px 10px;font-size:11px;">Remove</button></td></tr>';
     });
     html += '</tbody></table></div>';
   }
@@ -11434,6 +11453,38 @@ async function renderMasters() {
   renderSubjectAllocationGroups('');
   var allocationSearch = document.getElementById('subjectAllocationSearch');
   if (allocationSearch) allocationSearch.addEventListener('input', function(){renderSubjectAllocationGroups(this.value);});
+
+  document.querySelectorAll('.subject-assignment-reset').forEach(function(button) {
+    button.addEventListener('click', async function() {
+      var teacherId = button.getAttribute('data-teacher-id');
+      var teacherName = button.getAttribute('data-teacher-name') || 'this Subject Teacher';
+      if (!teacherId || !window.confirm('Reset the password for ' + teacherName + '? A temporary password will be generated, and the teacher must set a new password at the next login.')) return;
+      button.disabled = true;
+      var originalText = button.textContent;
+      button.textContent = 'Resetting…';
+      try {
+        var reset = await supabaseClient.functions.invoke('reset-subject-teacher-password', { body: { teacher_id: String(teacherId) } });
+        if (reset.error || !reset.data || reset.data.success !== true || typeof reset.data.temporary_password !== 'string') {
+          var resetMessage = reset.data && (reset.data.error || reset.data.message) || reset.error && reset.error.message || 'The reset outcome was not confirmed.';
+          if (reset.error && reset.error.context && typeof reset.error.context.json === 'function') {
+            try { var errorBody = await reset.error.context.json(); if (errorBody && (errorBody.error || errorBody.message)) resetMessage = errorBody.error || errorBody.message; } catch (ignored) {}
+          }
+          throw new Error(resetMessage);
+        }
+        showStudentDbDialog('Subject Teacher Password Reset',
+          '<p class="alert alert-success">Password reset confirmed. Share this temporary password privately. The teacher must create a new password at the next login.</p>' +
+          '<p><strong>Teacher:</strong> ' + escapeManagementText(reset.data.full_name || teacherName) + '</p>' +
+          '<p><strong>Login email:</strong> ' + escapeManagementText(reset.data.email || button.getAttribute('data-teacher-email') || '') + '</p>' +
+          '<div class="input-group"><label for="subjectTeacherResetTemporaryPassword">Temporary password — share privately</label><input id="subjectTeacherResetTemporaryPassword" type="text" readonly autocomplete="off" value="' + escapeManagementText(reset.data.temporary_password) + '"></div>');
+        logActivity('Reset Subject Teacher password', (reset.data.full_name || teacherName) + ' / ' + (reset.data.email || ''));
+      } catch (error) {
+        showToast(error.message || 'Subject Teacher password reset could not be confirmed.', 'error');
+      } finally {
+        button.disabled = false;
+        button.textContent = originalText;
+      }
+    });
+  });
 
   document.querySelectorAll('.subject-assignment-toggle').forEach(function(button) {
     button.addEventListener('click', async function() {
