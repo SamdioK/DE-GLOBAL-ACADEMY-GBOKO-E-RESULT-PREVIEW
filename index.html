@@ -15157,6 +15157,31 @@ async function renderSubjectTeacherInputLegacy() {
   renderPanel();
 }
 
+function showAssessmentSubmissionFeedback(root, type, title, message) {
+  if (!root) return;
+  var existing = root.querySelector('#stAssessmentSubmissionFeedback');
+  if (existing) existing.remove();
+  var panel = document.createElement('section');
+  panel.id = 'stAssessmentSubmissionFeedback';
+  panel.setAttribute('role', type === 'error' ? 'alert' : 'status');
+  panel.setAttribute('aria-live', 'assertive');
+  panel.style.cssText = 'display:block;margin:12px 0 16px;padding:14px 15px;border-radius:11px;border:1px solid ' +
+    (type === 'error' ? '#f2b8b5' : '#b7dfc4') + ';background:' +
+    (type === 'error' ? '#fff4f2' : '#effaf2') + ';color:' +
+    (type === 'error' ? '#9f241c' : '#176b37') + ';font-size:14px;line-height:1.55;';
+  var heading = document.createElement('strong');
+  heading.textContent = title;
+  heading.style.cssText = 'display:block;margin-bottom:5px;font-size:15px;';
+  var body = document.createElement('div');
+  body.textContent = message;
+  panel.appendChild(heading);
+  panel.appendChild(body);
+  var firstCard = root.querySelector('.card');
+  if (firstCard) root.insertBefore(panel, firstCard);
+  else root.insertBefore(panel, root.firstChild);
+  panel.scrollIntoView({behavior:'smooth',block:'center'});
+}
+
 function showAssessmentSubmissionSuccess(componentLabel, classLabel, subjectLabel) {
   var modal = document.createElement('div');
   modal.id = 'stAssessmentSubmissionSuccess';
@@ -15822,7 +15847,24 @@ async function renderSubjectTeacherInput() {
 
         if(chosen===123){
           var studentRows=Array.from(root.querySelectorAll('tbody tr[data-student-id]'));
-          var collectCa=function(field,maximum){return studentRows.map(function(row){var input=row.querySelector('[data-field="'+field+'"]');if(!input)throw new Error(field.toUpperCase()+' is unavailable.');var raw=String(input.value||'').trim();if(raw==='')throw new Error('Complete '+field.toUpperCase()+' for every student. Use 0 for zero or - for confirmed non-participation.');if(raw==='-')return {student_id:row.getAttribute('data-student-id'),score:'-'};var score=Number(raw);if(!Number.isFinite(score)||score<0||score>maximum)throw new Error('Invalid '+field.toUpperCase()+' score for '+row.cells[1].textContent+'.');return {student_id:row.getAttribute('data-student-id'),score:String(score)};});};
+          var collectCa=function(field,maximum){
+            var missing=[];
+            var entries=studentRows.map(function(row){
+              var input=row.querySelector('[data-field="'+field+'"]');
+              if(!input)throw new Error(field.toUpperCase()+' is unavailable.');
+              var raw=String(input.value||'').trim();
+              if(raw===''){
+                missing.push((row.cells[0]?row.cells[0].textContent.trim():'')+' — '+(row.cells[1]?row.cells[1].textContent.trim():'Student'));
+                return null;
+              }
+              if(raw==='-')return {student_id:row.getAttribute('data-student-id'),score:'-'};
+              var score=Number(raw);
+              if(!Number.isFinite(score)||score<0||score>maximum)throw new Error('Invalid '+field.toUpperCase()+' score for '+(row.cells[1]?row.cells[1].textContent:'student')+'.');
+              return {student_id:row.getAttribute('data-student-id'),score:String(score)};
+            });
+            if(missing.length)throw new Error('Submission stopped: '+missing.length+' student(s) have no '+field.toUpperCase()+' score. Enter a score, 0, or - only for confirmed non-participation. Missing: '+missing.join('; '));
+            return entries;
+          };
           var bundle=await supabaseClient.rpc('submit_result_assessment_ca_bundle',{p_class_id:classId,p_subject_id:subjectId,p_academic_session_id:sessionId,p_term_id:selectedTerm.id,p_ca1_entries:collectCa('ca1',maxima.ca1),p_ca2_entries:collectCa('ca2',maxima.ca2),p_ca3_entries:collectCa('ca3',maxima.ca3)});
           if(bundle.error)throw bundle.error;
           var bundleData=Array.isArray(bundle.data)?bundle.data[0]:bundle.data;
@@ -15837,16 +15879,24 @@ async function renderSubjectTeacherInput() {
         var selectedStage=stageOptions.find(function(item){return item.stage===chosen;});
         var scoreRows=Array.from(root.querySelectorAll('tbody tr[data-student-id]'));
         if(!scoreRows.length) throw new Error('There are no enrolled students to submit.');
+        var missingStageEntries=[];
         var entries=scoreRows.map(function(row){
           var input=row.querySelector('[data-field="'+selectedStage.field+'"]');
           if(!input) throw new Error(selectedStage.label+' is not enabled for this class and term.');
           var raw=String(input.value||'').trim();
-          if(raw==='') throw new Error('Enter a '+selectedStage.label+' score for every student before submitting. Use 0 where the student earned zero.');
+          if(raw===''){
+            missingStageEntries.push((row.cells[0]?row.cells[0].textContent.trim():'')+' — '+(row.cells[1]?row.cells[1].textContent.trim():'Student'));
+            return null;
+          }
+          if(raw==='-')return {student_id:row.getAttribute('data-student-id'),score:'-'};
           var score=Number(raw);
           if(!Number.isFinite(score)||score<0||score>selectedStage.maximum)
             throw new Error('Invalid '+selectedStage.label+' score for '+row.cells[1].textContent+'. Enter a value from 0 to '+selectedStage.maximum+'.');
           return {student_id:row.getAttribute('data-student-id'),score:String(score)};
         });
+        if(missingStageEntries.length){
+          throw new Error('Submission stopped: '+missingStageEntries.length+' student(s) have no '+selectedStage.label+' score. Enter a score, 0, or - only for confirmed non-participation. Missing: '+missingStageEntries.join('; '));
+        }
         button.textContent='Saving '+selectedStage.label+' scores…';
         var savedStage=await supabaseClient.rpc('save_result_assessment_stage_scores',{
           p_class_id:classId,p_subject_id:subjectId,p_academic_session_id:sessionId,
@@ -15872,7 +15922,9 @@ async function renderSubjectTeacherInput() {
         await renderSubjectTeacherInput();
       } catch(error) {
         console.error('Assessment component submission failed:',error);
-        showToast('Submission failed: '+(error.message||'Unknown error'),'error');
+        var submissionError=error.message||'Unknown error';
+        showToast('Submission failed: '+submissionError,'error');
+        showAssessmentSubmissionFeedback(root,'error','Submission not completed',submissionError);
         button.disabled=false;
         button.textContent='Submit Scores for Approval';
       }
