@@ -11360,7 +11360,17 @@ async function renderMasters() {
   html += '<div class="card">';
   html += '<div style="background: #f9f9f9; padding: 15px; border-radius: 8px; margin-bottom: 20px;"><h3 style="margin: 0 0 15px 0; font-size: 16px;">Add Subject Teacher</h3>' +
     '<p class="alert alert-info" style="margin-bottom:14px">Important: If the teacher is already a Form Master or Form Mistress, select Existing Staff Member and choose that person. Their current Supabase account and password will be used for both roles.</p><div class="input-group"><label>Subject Teacher Account Type</label><div class="subject-teacher-account-options"><label class="subject-teacher-account-option"><input type="radio" name="subjectTeacherAccountType" value="existing" checked> Existing Staff Member</label><label class="subject-teacher-account-option"><input type="radio" name="subjectTeacherAccountType" value="new"> New Staff Member</label></div></div>' +
-    '<div id="existingStaffFields"><div class="input-group"><label for="existingStaffSearch">Search existing staff</label><input type="search" id="existingStaffSearch" placeholder="Search staff name, username or email..."></div><div class="input-group"><label for="existingStaffProfile">Select Existing Staff Member</label><select id="existingStaffProfile"><option value="">Loading enrolled staff records...</option></select></div><div id="existingStaffDetails" class="alert alert-info">Select a staff member to view their account and responsibilities.</div><div id="existingStaffLoadError" class="hidden alert alert-error"></div></div>' +
+    '<div id="existingStaffFields">
+      <div class="input-group"><label for="existingStaffSearch">Find a staff member</label><input type="search" id="existingStaffSearch" placeholder="Search name, staff ID, email or designation…" autocomplete="off"></div>
+      <div class="input-group"><label id="existingStaffPickerLabel">Choose Existing Staff Member</label>
+        <select id="existingStaffProfile" aria-hidden="true" tabindex="-1" style="display:none"><option value="">Loading enrolled staff records...</option></select>
+        <div id="existingStaffOptions" role="listbox" aria-labelledby="existingStaffPickerLabel" aria-label="Enrolled staff members" style="max-height:260px;overflow-y:auto;border:1px solid #dce3ee;border-radius:12px;background:#fff;padding:7px;box-shadow:inset 0 1px 3px rgba(25,40,75,.035);">
+          <p style="margin:8px;padding:12px;color:#64748b;font-size:13px;">Loading enrolled staff records…</p>
+        </div>
+      </div>
+      <div id="existingStaffDetails" class="alert alert-info">Select a staff member to view their account and responsibilities.</div>
+      <div id="existingStaffLoadError" class="hidden alert alert-error"></div>
+    </div>' +
     '<div class="input-group"><label for="newStSubjectSearch">Find a subject</label><input type="search" id="newStSubjectSearch" placeholder="Search registered subjects…" autocomplete="off"></div>' +
     '<div class="input-group"><label for="newStSubject">Subject to assign</label><select id="newStSubject"><option value="">Loading registered subjects…</option></select></div>' +
     '<div id="stClassArmAllocationPanel" style="margin:16px 0 12px;padding:16px;border:1px solid #dfe5f2;border-radius:12px;background:linear-gradient(145deg,#f7f9ff,#fff);">' +
@@ -11561,7 +11571,8 @@ async function renderMasters() {
   function renderExistingStaffOptions() {
     var select = document.getElementById('existingStaffProfile');
     var search = document.getElementById('existingStaffSearch');
-    if (!select || !search) return;
+    var list = document.getElementById('existingStaffOptions');
+    if (!select || !search || !list) return;
     var query = search.value.trim().toLowerCase();
     var selectedId = select.value;
     var matches = existingStaffProfiles.filter(function(profile) {
@@ -11573,16 +11584,52 @@ async function renderMasters() {
         directory.employment_type, directory.date_employed, directory.status, directory.biography
       ].join(' ').toLowerCase().indexOf(query) !== -1;
     });
-    select.innerHTML = '<option value="">' + (matches.length ? 'Select an enrolled staff member' : 'No matching staff members') + '</option>' + matches.map(function(profile) {
-      var roles = profile.responsibilities || [profile.role];
-      var additional = roles.filter(function(role) { return role !== profile.role; });
-      var directory = profile.staffRecord || {};
-      var accountState = profile.hasAccountProfile ? (profile.is_active ? 'Account active' : 'Account inactive') : 'No login account linked';
-      var detail = (directory.designation || subjectTeacherRoleLabel(profile.role || 'staff')) + ' · ' + (directory.department || 'Department not entered') + ' · ' + accountState;
-      return '<option value="' + escapeManagementText(profile.id) + '"' + (String(profile.id) === String(selectedId) ? ' selected' : '') + '>' +
-        escapeManagementText(directory.full_name || profile.full_name || profile.username || profile.email || 'Staff member') +
-        ' — ' + escapeManagementText(detail) + (additional.length ? ' — ' + escapeManagementText(additional.map(subjectTeacherRoleLabel).join(', ')) : '') + '</option>';
+    var selectedProfile = existingStaffProfiles.find(function(profile) { return String(profile.id) === String(selectedId); });
+    var selectProfiles = matches.slice();
+    if (selectedProfile && !selectProfiles.some(function(profile) { return String(profile.id) === String(selectedId); })) {
+      selectProfiles.unshift(selectedProfile);
+    }
+    select.innerHTML = '<option value="">Select an enrolled staff member</option>' + selectProfiles.map(function(profile) {
+      return '<option value="' + escapeManagementText(profile.id) + '"' +
+        (String(profile.id) === String(selectedId) ? ' selected' : '') + '>' +
+        escapeManagementText(profile.full_name || profile.username || profile.email || 'Staff member') + '</option>';
     }).join('');
+    if (selectedId) select.value = selectedId;
+    if (!matches.length) {
+      list.innerHTML = '<div style="padding:20px 12px;text-align:center;color:#64748b;"><div style="font-size:22px;margin-bottom:5px;">⌕</div><strong style="display:block;font-size:13px;color:#334155;">No matching staff found</strong><span style="font-size:12px;">Try another name, staff ID, email or designation.</span></div>';
+    } else {
+      list.innerHTML = '<div style="display:flex;justify-content:space-between;align-items:center;padding:5px 7px 9px;color:#64748b;font-size:11px;"><span>ENROLLED STAFF DIRECTORY</span><strong>' + matches.length + ' result(s)</strong></div>' +
+        matches.map(function(profile) {
+          var directory = profile.staffRecord || {};
+          var name = directory.full_name || profile.full_name || profile.username || profile.email || 'Staff member';
+          var designation = directory.designation || subjectTeacherRoleLabel(profile.role || 'Staff member');
+          var department = directory.department || 'Department not entered';
+          var roles = profile.responsibilities || [profile.role];
+          var additional = roles.filter(function(role) { return role && role !== profile.role; });
+          var accountActive = profile.hasAccountProfile && profile.is_active;
+          var accountLabel = !profile.hasAccountProfile ? 'No login linked' : (accountActive ? 'Account active' : 'Account inactive');
+          var chosen = String(profile.id) === String(selectedId);
+          var available = profile.hasAccountProfile && profile.is_active && (!directory.status || String(directory.status).toLowerCase() === 'active');
+          return '<button type="button" role="option" aria-selected="' + chosen + '" data-staff-option="' + escapeManagementText(profile.id) + '" style="display:flex;width:100%;align-items:center;gap:11px;text-align:left;padding:11px 10px;margin:0 0 6px;border:1px solid ' + (chosen ? '#6579dc' : '#e5eaf2') + ';border-radius:10px;background:' + (chosen ? '#f0f3ff' : '#fff') + ';cursor:pointer;color:#24324a;box-shadow:' + (chosen ? '0 0 0 2px rgba(101,121,220,.10)' : 'none') + ';">' +
+            '<span style="width:34px;height:34px;flex:0 0 34px;border-radius:50%;display:flex;align-items:center;justify-content:center;background:' + (chosen ? '#e0e7ff' : '#eef2f7') + ';color:#4558a8;font-size:13px;font-weight:800;">' +
+              escapeManagementText(String(name).trim().split(/\\s+/).slice(0,2).map(function(part){return part.charAt(0);}).join('').toUpperCase() || 'S') + '</span>' +
+            '<span style="display:block;min-width:0;flex:1;">' +
+              '<strong style="display:block;font-size:13px;line-height:1.35;color:#1e293b;overflow-wrap:anywhere;">' + escapeManagementText(name) + '</strong>' +
+              '<span style="display:block;margin-top:3px;font-size:11px;line-height:1.4;color:#64748b;">' + escapeManagementText(designation) + ' · ' + escapeManagementText(department) + '</span>' +
+              (additional.length ? '<span style="display:block;margin-top:2px;font-size:10px;color:#64748b;">Also: ' + escapeManagementText(additional.map(subjectTeacherRoleLabel).join(', ')) + '</span>' : '') +
+            '</span>' +
+            '<span style="flex:0 0 auto;text-align:right;max-width:100px;"><span style="display:inline-block;padding:4px 7px;border-radius:20px;background:' + (available ? '#eaf8ef' : '#fff4e5') + ';color:' + (available ? '#187044' : '#9a5b12') + ';font-size:9px;font-weight:700;white-space:normal;">' + escapeManagementText(accountLabel) + '</span>' +
+            (chosen ? '<span style="display:block;margin-top:4px;color:#465bc0;font-size:10px;font-weight:700;">SELECTED ✓</span>' : '') +
+            '</span></button>';
+        }).join('');
+      list.querySelectorAll('[data-staff-option]').forEach(function(button) {
+        button.addEventListener('click', function() {
+          select.value = button.getAttribute('data-staff-option');
+          select.dispatchEvent(new Event('change', {bubbles:true}));
+          renderExistingStaffOptions();
+        });
+      });
+    }
     updateExistingStaffDetails();
   }
   function updateExistingStaffDetails() {
