@@ -13994,6 +13994,12 @@ function resultAssessmentStatusText(status) {
   return labels[String(status || 'draft').toLowerCase()] || String(status || 'Draft').replace(/_/g, ' ');
 }
 
+function resultAssessmentDisplayScore(row, field) {
+  if (!row) return '—';
+  if (row[field] !== null && row[field] !== undefined) return row[field];
+  return row[field + '_not_participated'] === true ? 'NP' : '—';
+}
+
 function buildResultAssessmentStatusHtml(submissions, fallbackStatus) {
   var rows = Array.isArray(submissions) ? submissions : [];
   var stages = [
@@ -14072,7 +14078,7 @@ async function loadFormMasterSubjectResultsView() {
     }).filter(function(item) { return item.student && item.enrolment; });
     students.sort(compareStudentRegisterOrder);
     var result = await supabaseClient.from('results')
-      .select('id,student_id,subject_id,term_id,ca1,ca2,ca3,examination,total,grade,remark,status,updated_at')
+      .select('id,student_id,subject_id,term_id,ca1,ca2,ca3,examination,total,grade,remark,status,updated_at,ca1_not_participated,ca2_not_participated,ca3_not_participated,examination_not_participated')
       .eq('school_id', schoolId).eq('class_id', classId)
       .eq('academic_session_id', activeAcademicSession.id).in('term_id', termIds)
       .in('subject_id', subjectIds);
@@ -14135,7 +14141,7 @@ async function loadFormMasterSubjectResultsView() {
         var name = [student.first_name,student.middle_name,student.last_name].filter(Boolean).join(' ') || 'Student';
         var statusHtml = buildResultAssessmentStatusHtml(selectedAssessmentRows, row && row.status);
         html += '<tr><td><strong>'+esc(enrolment.sid || '—')+'</strong></td><td>'+esc(name)+'</td>';
-        html += '<td class="score-value">'+esc(row && row.ca1 != null ? row.ca1 : '—')+'</td><td class="score-value">'+esc(row && row.ca2 != null ? row.ca2 : '—')+'</td><td class="score-value">'+esc(row && row.ca3 != null ? row.ca3 : '—')+'</td><td class="score-value">'+esc(row && row.examination != null ? row.examination : '—')+'</td><td class="score-value"><strong>'+esc(row && row.total != null ? row.total : '—')+'</strong></td><td class="grade-value">'+esc(row && row.grade || '—')+'</td><td>'+statusHtml+'</td><td>'+esc(row && row.updated_at ? new Date(row.updated_at).toLocaleString() : '—')+'</td></tr>';
+        html += '<td class="score-value">'+esc(resultAssessmentDisplayScore(row, 'ca1'))+'</td><td class="score-value">'+esc(resultAssessmentDisplayScore(row, 'ca2'))+'</td><td class="score-value">'+esc(resultAssessmentDisplayScore(row, 'ca3'))+'</td><td class="score-value">'+esc(resultAssessmentDisplayScore(row, 'examination'))+'</td><td class="score-value"><strong>'+esc(row && row.total != null ? row.total : '—')+'</strong></td><td class="grade-value">'+esc(row && row.grade || '—')+'</td><td>'+statusHtml+'</td><td>'+esc(row && row.updated_at ? new Date(row.updated_at).toLocaleString() : '—')+'</td></tr>';
       });
       html += '</tbody></table></div>';
       html += '<section style="margin-top:18px;padding:15px;border:1px solid #dbe4f0;border-radius:12px;background:#f8fafc">';
@@ -14185,8 +14191,7 @@ async function loadFormMasterSubjectResultsView() {
         var record = scoreMap[String(student.id)];
         var name = [student.first_name, student.middle_name, student.last_name].filter(Boolean).join(' ') || 'Student';
         var cells = pendingCa.map(function(submission) {
-          var value = record && record[stageFields[Number(submission.assessment_stage)]] != null
-            ? record[stageFields[Number(submission.assessment_stage)]] : '—';
+          var value = resultAssessmentDisplayScore(record, stageFields[Number(submission.assessment_stage)]);
           return '<td style="padding:8px;text-align:center;font-weight:700">' + esc(value) + '</td>';
         }).join('');
         return '<tr><td style="padding:8px;white-space:nowrap">' + esc(enrolment.sid || '—') + '</td><td style="padding:8px;min-width:150px">' + esc(name) + '</td>' + cells + '</tr>';
