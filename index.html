@@ -14015,8 +14015,9 @@ function buildResultAssessmentStatusHtml(submissions, fallbackStatus) {
       var record = rows.find(function(item) {
         return Number(item.assessment_stage) === stage.number;
       });
-      var status = record ? String(record.status || 'draft').toLowerCase() :
-        (fallbackStatus && fallbackStatus !== 'pending' ? String(fallbackStatus).toLowerCase() : 'draft');
+      // Each component has its own approval record. Never copy the overall
+      // results.status onto a different CA or Examination stage.
+      var status = record ? String(record.status || 'draft').toLowerCase() : 'draft';
       var colour = colours[status] || ['#f1f5f9', '#475569'];
       var label = stage.label + ': ' + resultAssessmentStatusText(status);
       return '<span title="' + escapeManagementText(label) +
