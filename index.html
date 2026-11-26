@@ -13982,6 +13982,52 @@ async function loadAdminCa1ResultsView(options) {
   }
 }
 
+function resultAssessmentStatusText(status) {
+  var labels = {
+    draft: 'Draft',
+    submitted_to_form_master: 'Pending Form Master approval',
+    submitted_to_admin: "Waiting Administrator's approval",
+    approved: 'Approved',
+    returned_to_teacher: 'Returned to Subject Teacher',
+    returned_by_admin: 'Returned by Administrator'
+  };
+  return labels[String(status || 'draft').toLowerCase()] || String(status || 'Draft').replace(/_/g, ' ');
+}
+
+function buildResultAssessmentStatusHtml(submissions, fallbackStatus) {
+  var rows = Array.isArray(submissions) ? submissions : [];
+  var stages = [
+    { number: 1, label: 'CA1' },
+    { number: 2, label: 'CA2' },
+    { number: 3, label: 'CA3' },
+    { number: 4, label: 'Exam' }
+  ];
+  var colours = {
+    draft: ['#eff6ff', '#1d4ed8'],
+    submitted_to_form_master: ['#fff7ed', '#9a3412'],
+    submitted_to_admin: ['#fef3c7', '#92400e'],
+    approved: ['#ecfdf3', '#067647'],
+    returned_to_teacher: ['#fef2f2', '#b42318'],
+    returned_by_admin: ['#fef2f2', '#b42318']
+  };
+  return '<div style="display:flex;flex-wrap:wrap;gap:4px;min-width:145px">' +
+    stages.map(function(stage) {
+      var record = rows.find(function(item) {
+        return Number(item.assessment_stage) === stage.number;
+      });
+      var status = record ? String(record.status || 'draft').toLowerCase() :
+        (fallbackStatus && fallbackStatus !== 'pending' ? String(fallbackStatus).toLowerCase() : 'draft');
+      var colour = colours[status] || ['#f1f5f9', '#475569'];
+      var label = stage.label + ': ' + resultAssessmentStatusText(status);
+      return '<span title="' + escapeManagementText(label) +
+        '" style="display:inline-block;padding:4px 7px;border-radius:6px;background:' +
+        colour[0] + ';color:' + colour[1] +
+        ';font-size:10px;font-weight:700;line-height:1.35">' +
+        escapeManagementText(stage.label + ' · ' + resultAssessmentStatusText(status)) +
+        '</span>';
+    }).join('') + '</div>';
+}
+
 async function loadFormMasterSubjectResultsView() {
   var panel = document.getElementById('formMasterSubjectResultsPanel');
   if (!panel || !supabaseClient || !authenticatedProfile || !activeAcademicSession || !currentUser || currentUser.type !== 'formmaster') return;
@@ -14036,7 +14082,7 @@ async function loadFormMasterSubjectResultsView() {
     });
     if(assessmentQueue.error) throw assessmentQueue.error;
     var caQueueRows=(Array.isArray(assessmentQueue.data)?assessmentQueue.data:[]).filter(function(item){
-      return [1,2,3].indexOf(Number(item.assessment_stage))>=0;
+      return [1,2,3,4].indexOf(Number(item.assessment_stage))>=0;
     });
     var termSubjects = {};
     (registrationItems.data || []).forEach(function(item) {
@@ -14053,6 +14099,12 @@ async function loadFormMasterSubjectResultsView() {
     if (activeSubjectIds.indexOf(selectedSubjectId) === -1) selectedSubjectId = activeSubjectIds[0] || '';
     var selectedTerm = terms.find(function(t) { return String(t.id) === selectedTermId; });
     var selectedSubjectName = subjectMap[selectedSubjectId] || 'Selected subject';
+    var selectedAssessmentRows = caQueueRows.filter(function(item) {
+      return String(item.subject_id) === String(selectedSubjectId) && String(item.term_id) === String(selectedTermId);
+    });
+    var pendingCa = selectedAssessmentRows.filter(function(item) {
+      return Number(item.assessment_stage) >= 1 && Number(item.assessment_stage) <= 3 && item.status === 'submitted_to_form_master';
+    }).sort(function(a,b) { return Number(a.assessment_stage) - Number(b.assessment_stage); });
     var termScoreRows = scoreRows.filter(function(row) { return String(row.term_id) === selectedTermId; });
     var subjectScoreRows = termScoreRows.filter(function(row) { return String(row.subject_id) === selectedSubjectId; });
     var scoreMap = {};
@@ -14080,46 +14132,114 @@ async function loadFormMasterSubjectResultsView() {
       students.forEach(function(item) {
         var student = item.student, enrolment = item.enrolment, row = scoreMap[String(student.id)];
         var name = [student.first_name,student.middle_name,student.last_name].filter(Boolean).join(' ') || 'Student';
-        var status = row ? String(row.status || 'draft').toLowerCase() : 'pending';
-        var badgeStyle = status === 'published' || status === 'approved' || status === 'submitted'
-          ? 'background:#ecfdf3;color:#067647' : status === 'draft' ? 'background:#eff6ff;color:#1d4ed8' : 'background:#fff7ed;color:#c2410c';
+        var statusHtml = buildResultAssessmentStatusHtml(selectedAssessmentRows, row && row.status);
         html += '<tr><td><strong>'+esc(enrolment.sid || '—')+'</strong></td><td>'+esc(name)+'</td>';
-        html += '<td class="score-value">'+esc(row && row.ca1 != null ? row.ca1 : '—')+'</td><td class="score-value">'+esc(row && row.ca2 != null ? row.ca2 : '—')+'</td><td class="score-value">'+esc(row && row.ca3 != null ? row.ca3 : '—')+'</td><td class="score-value">'+esc(row && row.examination != null ? row.examination : '—')+'</td><td class="score-value"><strong>'+esc(row && row.total != null ? row.total : '—')+'</strong></td><td class="grade-value">'+esc(row && row.grade || '—')+'</td><td><span style="display:inline-block;padding:4px 8px;border-radius:20px;font-size:11px;font-weight:700;'+badgeStyle+'">'+esc(status === 'pending' ? 'NOT ENTERED' : status.toUpperCase())+'</span></td><td>'+esc(row && row.updated_at ? new Date(row.updated_at).toLocaleString() : '—')+'</td></tr>';
+        html += '<td class="score-value">'+esc(row && row.ca1 != null ? row.ca1 : '—')+'</td><td class="score-value">'+esc(row && row.ca2 != null ? row.ca2 : '—')+'</td><td class="score-value">'+esc(row && row.ca3 != null ? row.ca3 : '—')+'</td><td class="score-value">'+esc(row && row.examination != null ? row.examination : '—')+'</td><td class="score-value"><strong>'+esc(row && row.total != null ? row.total : '—')+'</strong></td><td class="grade-value">'+esc(row && row.grade || '—')+'</td><td>'+statusHtml+'</td><td>'+esc(row && row.updated_at ? new Date(row.updated_at).toLocaleString() : '—')+'</td></tr>';
       });
       html += '</tbody></table></div>';
-      var pendingCa=caQueueRows.filter(function(item){return item.status==='submitted_to_form_master' && String(item.subject_id)===String(selectedSubjectId) && String(item.term_id)===String(selectedTermId);});
-      html += '<div style="margin-top:18px;padding:14px;border:1px solid #dbe4f0;border-radius:12px;background:#f8fafc"><div style="display:flex;justify-content:space-between;gap:10px;align-items:center;flex-wrap:wrap"><div><h4 style="margin:0;color:#293968">CA Approval Queue</h4><p style="margin:4px 0;color:#64748b;font-size:12px">Select one CA to forward individually, or select all submitted CAs and forward them together.</p></div><button type="button" class="btn btn-primary" id="fmForwardSelectedCa" '+(pendingCa.length?'':'disabled')+'>Forward selected CA submissions</button></div>';
-      if(pendingCa.length){
-        html += '<div style="overflow-x:auto;margin-top:10px"><table style="min-width:560px;width:100%"><thead><tr><th>Select</th><th>Component</th><th>Submitted</th><th>Status</th></tr></thead><tbody>';
-        pendingCa.forEach(function(item){
-          html += '<tr><td><input type="checkbox" class="fm-ca-queue-check" value="'+esc(item.id)+'" aria-label="Select CA'+Number(item.assessment_stage)+'"></td><td><strong>CA'+Number(item.assessment_stage)+'</strong></td><td>'+esc(item.submitted_at?new Date(item.submitted_at).toLocaleString():'—')+'</td><td>Awaiting Form Master</td></tr>';
-        });
-        html += '</tbody></table></div>';
+      html += '<section style="margin-top:18px;padding:15px;border:1px solid #dbe4f0;border-radius:12px;background:#f8fafc">';
+      html += '<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap"><div><h4 style="margin:0;color:#293968">CA Submission for Form Master Review</h4><p style="margin:5px 0 0;color:#64748b;font-size:13px">Review the Subject Teacher’s submitted CA scores before forwarding them to the Administrator for final approval.</p></div>';
+      if (pendingCa.length) {
+        html += '<span style="display:inline-block;padding:6px 10px;border-radius:20px;background:#fff7ed;color:#9a3412;font-size:12px;font-weight:700">' + pendingCa.length + ' CA component(s) awaiting your review</span>';
       } else {
-        html += '<p style="margin:12px 0 0;color:#64748b;font-size:13px">No CA components are currently awaiting your review for this subject.</p>';
+        html += '<span style="display:inline-block;padding:6px 10px;border-radius:20px;background:#eef2f7;color:#475569;font-size:12px;font-weight:700">No pending CA review</span>';
       }
       html += '</div>';
+      if (pendingCa.length) {
+        html += '<div style="margin-top:12px;display:grid;gap:8px">';
+        pendingCa.forEach(function(item) {
+          html += '<div style="padding:10px 12px;border:1px solid #e2e8f0;border-radius:9px;background:#fff"><strong>CA' + Number(item.assessment_stage) + ' submitted by Subject Teacher</strong><div style="font-size:12px;color:#64748b;margin-top:3px">Submitted ' + esc(item.submitted_at ? new Date(item.submitted_at).toLocaleString() : 'at an unrecorded time') + ' · Pending Form Master approval</div></div>';
+        });
+        html += '</div><button type="button" class="btn btn-primary" id="fmReviewSubmittedCa" style="margin-top:12px;width:100%">Review submitted CA scores</button>';
+      } else {
+        var waitingAdmin = selectedAssessmentRows.filter(function(item) {
+          return [1,2,3].indexOf(Number(item.assessment_stage)) >= 0 && item.status === 'submitted_to_admin';
+        });
+        html += '<p style="margin:12px 0 0;color:#64748b;font-size:13px">' +
+          (waitingAdmin.length ? 'The submitted CA component(s) have been forwarded and are waiting for the Administrator’s approval.' : 'No CA component has been submitted by the Subject Teacher for your review yet.') +
+          '</p>';
+      }
+      html += '</section>';
       if (!students.length) html += '<p class="alert alert-info">There are no active students enrolled in this class for the current session.</p>';
     }
     panel.innerHTML = html;
     panel.setAttribute('data-selected-term', selectedTermId);
     panel.setAttribute('data-selected-subject', selectedSubjectId);
-    var forwardButton=panel.querySelector('#fmForwardSelectedCa');
-    if(forwardButton) forwardButton.addEventListener('click',async function(){
-      var ids=Array.from(panel.querySelectorAll('.fm-ca-queue-check:checked')).map(function(input){return input.value;});
-      if(!ids.length){showToast('Select at least one submitted CA component.','error');return;}
-      forwardButton.disabled=true;forwardButton.textContent='Forwarding…';
-      try{
-        var reviewed=await supabaseClient.rpc('review_result_assessment_submissions',{p_submission_ids:ids,p_decision:'approve',p_comment:null});
-        if(reviewed.error)throw reviewed.error;
-        var data=Array.isArray(reviewed.data)?reviewed.data[0]:reviewed.data;
-        if(!data||data.success!==true||Number(data.reviewed_count)!==ids.length)throw new Error('Supabase did not confirm every selected CA review.');
-        showToast(ids.length+' CA submission(s) forwarded to the Administrator.','success');
-        await loadFormMasterSubjectResultsView();
-      }catch(error){
-        showToast('CA review failed: '+(error.message||'Unknown error'),'error');
-        forwardButton.disabled=false;forwardButton.textContent='Forward selected CA submissions';
+    var reviewCaButton = panel.querySelector('#fmReviewSubmittedCa');
+    if (reviewCaButton) reviewCaButton.addEventListener('click', function() {
+      var submissionIds = pendingCa.map(function(item) { return item.id; });
+      if (!submissionIds.length) return;
+      var stageFields = { 1: 'ca1', 2: 'ca2', 3: 'ca3' };
+      var modal = document.createElement('div');
+      modal.id = 'fmCaSubmissionReviewDialog';
+      modal.setAttribute('role', 'dialog');
+      modal.setAttribute('aria-modal', 'true');
+      modal.setAttribute('aria-labelledby', 'fmCaReviewTitle');
+      modal.style.cssText = 'position:fixed;inset:0;z-index:12500;background:rgba(12,18,35,.72);display:flex;align-items:center;justify-content:center;padding:12px;';
+      var headers = pendingCa.map(function(item) {
+        return '<th style="padding:9px;text-align:center;white-space:nowrap">CA' + Number(item.assessment_stage) + '</th>';
+      }).join('');
+      var previewRows = students.map(function(item) {
+        var student = item.student, enrolment = item.enrolment;
+        var record = scoreMap[String(student.id)];
+        var name = [student.first_name, student.middle_name, student.last_name].filter(Boolean).join(' ') || 'Student';
+        var cells = pendingCa.map(function(submission) {
+          var value = record && record[stageFields[Number(submission.assessment_stage)]] != null
+            ? record[stageFields[Number(submission.assessment_stage)]] : '—';
+          return '<td style="padding:8px;text-align:center;font-weight:700">' + esc(value) + '</td>';
+        }).join('');
+        return '<tr><td style="padding:8px;white-space:nowrap">' + esc(enrolment.sid || '—') + '</td><td style="padding:8px;min-width:150px">' + esc(name) + '</td>' + cells + '</tr>';
+      }).join('');
+      var submittedDetails = pendingCa.map(function(item) {
+        return '<span style="display:inline-block;margin:3px 5px 3px 0;padding:5px 8px;border-radius:7px;background:#fff7ed;color:#9a3412;font-size:12px;font-weight:700">CA' +
+          Number(item.assessment_stage) + ' · Submitted ' + esc(item.submitted_at ? new Date(item.submitted_at).toLocaleString() : 'time unavailable') + '</span>';
+      }).join('');
+      modal.innerHTML = '<div style="width:min(100%,900px);max-height:94vh;overflow:auto;background:#fff;border-radius:15px;padding:18px;box-shadow:0 18px 55px rgba(0,0,0,.3);color:#182033">' +
+        '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px"><div><h3 id="fmCaReviewTitle" style="margin:0 0 5px;color:#24345b">Review Submitted CA Scores</h3><p style="margin:0;color:#64748b;font-size:13px">' + esc(selectedSubjectName) + ' · ' + esc(selectedTerm ? selectedTerm.name : '') + ' · ' + esc(currentUser.arm || '') + '</p></div><button type="button" class="btn btn-secondary" data-fm-ca-close>Close</button></div>' +
+        '<div style="margin:14px 0;padding:12px;border-left:4px solid #536bd8;border-radius:8px;background:#f2f5ff;color:#263b70;font-size:13px;line-height:1.55"><strong>Verification notice</strong><br>These scores were submitted by the Subject Teacher. Check every student’s SID, name and CA score carefully. If you find an error, return the submission to the Subject Teacher with a correction note. Do not edit the submitted scores here. Once the Administrator approves a submission, it is locked against further editing.</div>' +
+        '<div style="margin-bottom:10px">' + submittedDetails + '</div>' +
+        '<div style="overflow:auto;border:1px solid #e2e8f0;border-radius:9px;max-height:48vh"><table style="width:100%;min-width:520px;border-collapse:collapse"><thead><tr style="background:#f1f5f9"><th style="padding:9px;text-align:left">SID</th><th style="padding:9px;text-align:left">Student</th>' + headers + '</tr></thead><tbody>' + previewRows + '</tbody></table></div>' +
+        '<label for="fmCaReturnComment" style="display:block;margin-top:14px;font-size:13px;font-weight:700">Correction note (required only when returning)</label><textarea id="fmCaReturnComment" rows="2" style="width:100%;box-sizing:border-box;margin-top:5px;padding:10px;border:1px solid #cbd5e1;border-radius:8px" placeholder="Describe the score or student record that needs correction"></textarea>' +
+        '<div id="fmCaReviewNotice" role="status" aria-live="polite" style="margin-top:8px;font-size:13px;color:#b42318"></div>' +
+        '<div style="display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap;margin-top:14px"><button type="button" class="btn btn-secondary" data-fm-ca-return>Return to Subject Teacher</button><button type="button" class="btn btn-primary" data-fm-ca-forward>Forward to Administrator</button></div></div>';
+      document.body.appendChild(modal);
+      var closeModal = function() { if (modal.isConnected) modal.remove(); };
+      modal.querySelector('[data-fm-ca-close]').addEventListener('click', closeModal);
+      async function recordDecision(decision) {
+        var note = modal.querySelector('#fmCaReturnComment').value.trim();
+        var notice = modal.querySelector('#fmCaReviewNotice');
+        if (decision === 'return' && !note) {
+          notice.textContent = 'Enter a correction note before returning these scores.';
+          return;
+        }
+        var buttons = modal.querySelectorAll('button');
+        buttons.forEach(function(button) { button.disabled = true; });
+        notice.style.color = '#475569';
+        notice.textContent = decision === 'approve' ? 'Forwarding submitted CA scores to the Administrator…' : 'Returning scores to the Subject Teacher…';
+        try {
+          var reviewed = await supabaseClient.rpc('review_result_assessment_submissions', {
+            p_submission_ids: submissionIds,
+            p_decision: decision,
+            p_comment: decision === 'return' ? note : null
+          });
+          if (reviewed.error) throw reviewed.error;
+          var data = Array.isArray(reviewed.data) ? reviewed.data[0] : reviewed.data;
+          if (!data || data.success !== true || Number(data.reviewed_count) !== submissionIds.length) {
+            throw new Error('Supabase did not confirm every CA review decision.');
+          }
+          closeModal();
+          showToast(decision === 'approve'
+            ? pendingCa.length + ' CA submission(s) forwarded to the Administrator for final approval.'
+            : pendingCa.length + ' CA submission(s) returned to the Subject Teacher for correction.', 'success');
+          await loadFormMasterSubjectResultsView();
+        } catch (error) {
+          notice.style.color = '#b42318';
+          notice.textContent = 'The review was not completed: ' + (error.message || 'Unknown error');
+          buttons.forEach(function(button) { button.disabled = false; });
+        }
       }
+      modal.querySelector('[data-fm-ca-forward]').addEventListener('click', function() { recordDecision('approve'); });
+      modal.querySelector('[data-fm-ca-return]').addEventListener('click', function() { recordDecision('return'); });
     });
     var refresh = panel.querySelector('#refreshFormMasterSubjectResults');
     if (refresh) refresh.addEventListener('click', loadFormMasterSubjectResultsView);
@@ -15124,6 +15244,15 @@ async function renderSubjectTeacherInput() {
     var resultsByStudent = {};
     (resultsResult.data || []).forEach(function(result) { resultsByStudent[String(result.student_id)] = result; });
 
+    var teacherSubmissionResult = await supabaseClient.rpc('list_result_assessment_submissions', {
+      p_class_id: classId, p_academic_session_id: sessionId, p_term_id: selectedTerm.id, p_stage: null
+    });
+    if (teacherSubmissionResult.error) throw teacherSubmissionResult.error;
+    var teacherAssessmentSubmissions = (Array.isArray(teacherSubmissionResult.data) ? teacherSubmissionResult.data : [])
+      .filter(function(item) { return String(item.subject_id) === String(subjectId) && [1,2,3,4].indexOf(Number(item.assessment_stage)) >= 0; });
+    var teacherSubmissionByStage = {};
+    teacherAssessmentSubmissions.forEach(function(item) { teacherSubmissionByStage[Number(item.assessment_stage)] = item; });
+
     var classLevel = normalizeAssessmentLevel(assessmentLevelForArm(className));
     var configResult = await supabaseClient.from('assessment_configurations')
       .select('ca1_max,ca2_max,ca3_max,examination_max,total_max')
@@ -15181,11 +15310,15 @@ async function renderSubjectTeacherInput() {
         '<td>' + escapeManagementText(student.admissionNumber) + '</td>' +
         activeAssessmentFields.map(function(item) {
           var value = existing && existing[item.key] != null ? existing[item.key] : '';
-          return '<td><input type="number" inputmode="decimal" autocomplete="off" class="st-score" data-field="' + item.key + '" min="0" max="' + item.maximum + '" step="0.01" value="' + escapeManagementText(value) + '" aria-label="' + escapeManagementText(student.name + ' ' + item.label) + '"></td>';
+          var stageNumber = item.key === 'examination' ? 4 : Number(item.key.replace('ca', ''));
+          var stageRecord = teacherSubmissionByStage[stageNumber];
+          var stageLocked = !!(stageRecord && ['submitted_to_form_master','submitted_to_admin','approved'].indexOf(String(stageRecord.status)) !== -1);
+          var lockTitle = stageLocked ? 'Submitted scores are locked pending the approval workflow. Ask the Form Master to return them if correction is required.' : '';
+          return '<td><input type="number" inputmode="decimal" autocomplete="off" class="st-score" data-field="' + item.key + '" min="0" max="' + item.maximum + '" step="0.01" value="' + escapeManagementText(value) + '" aria-label="' + escapeManagementText(student.name + ' ' + item.label) + '"' + (stageLocked ? ' disabled title="' + escapeManagementText(lockTitle) + '"' : '') + '></td>';
         }).join('') +
         '<td class="st-total">' + escapeManagementText(existing && existing.total != null ? existing.total : '—') + '</td>' +
         '<td class="st-grade grade-value">' + escapeManagementText(existing && existing.grade || '—') + '</td>' +
-        '<td class="st-status">' + escapeManagementText(existing && existing.status || 'new') + '</td></tr>';
+        '<td class="st-status">' + buildResultAssessmentStatusHtml(teacherAssessmentSubmissions, existing && existing.status) + '</td></tr>';
     });
     html += '</tbody></table></div><p>' + officialStudents.length + ' officially enrolled student(s).</p>' +
       '<div style="display:flex;gap:8px;flex-wrap:wrap"><button type="button" class="btn btn-success" id="saveAllScoresBtn">Save scores as draft</button><button type="button" class="btn btn-primary" id="submitScoresForApprovalBtn">Submit Scores for Approval</button></div></div><div id="stScoreValidation" role="alert" aria-live="assertive" style="display:none;margin-top:10px;padding:10px 12px;border:1px solid #dc2626;border-radius:8px;background:#fef2f2;color:#b91c1c;font-weight:700;font-size:13px"></div><div id="stKeypad" class="st-keypad" aria-label="Score keypad"><div class="st-keypad-inner"><div class="st-keypad-head"><strong id="stKeypadStudent">Score entry</strong><span id="stActiveScoreLabel">Select a score cell</span></div><div class="st-keypad-display" id="stKeypadDisplay" aria-live="polite">—</div><div class="st-keypad-grid" id="stNumericKeys">' + ['1','2','3','4','5','6','7','8','9','0','.','⌫','Clear','Next'].map(function(key) { return '<button type="button" class="st-key" data-key="' + key + '">' + key + '</button>'; }).join('') + '</div><div id="stTouchTilePanel" hidden><div class="st-touch-tiles" id="stTouchTiles"></div><div class="st-touch-adjust">' + [-5,-1,1,5].map(function(amount){return '<button type="button" class="st-key st-adjust" data-adjust="' + amount + '">' + (amount>0?'+':'') + amount + '</button>';}).join('') + '</div><div class="st-touch-actions"><button type="button" class="st-key" data-key="Back">Back</button><button type="button" class="st-key" data-key="Skip">Skip</button><button type="button" class="st-key st-touch-confirm" data-key="Save and next">Save and next</button></div></div><div id="stKeypadMessage" class="st-keypad-message" aria-live="polite">Choose a score to continue</div></div></div><style>.st-entry-controls label{display:block;font-size:12px;font-weight:700;margin-bottom:5px}.st-entry-controls select{min-width:145px;padding:8px;border:1px solid #ccd5e5;border-radius:8px;background:#fff}.st-score{width:64px;min-width:58px;max-width:68px;padding:7px 3px;text-align:center;font-weight:700;border:1px solid #d5deeb;border-radius:7px}.st-score:focus{outline:2px solid #536bd8;border-color:#536bd8;background:#f2f5ff}.st-score-invalid{border:2px solid #dc2626!important;background:#fff1f2!important}.st-keypad{position:fixed;left:0;right:0;bottom:0;z-index:10500;padding:10px 14px calc(12px + env(safe-area-inset-bottom));border-top:2px solid #536bd8;background:#fff;box-shadow:0 -5px 24px rgba(0,0,0,.22);max-height:48vh;overflow-y:auto;color:#202124}.st-keypad-inner{max-width:620px;margin:0 auto}.st-keypad-head{display:flex;justify-content:space-between;gap:8px;align-items:center;margin-bottom:5px;font-size:12px}.st-keypad-display{min-height:38px;text-align:center;font-size:30px;font-weight:900;line-height:1.2;margin:3px 0 8px;color:#263f91}.st-keypad-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:7px}.st-key{min-height:42px;border:1px solid #cbd5ea;border-radius:8px;background:#fff;color:#26386f;font-weight:800;font-size:16px;touch-action:manipulation}.st-touch-tiles{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:7px}.st-touch-tiles .st-key{min-height:48px;font-size:18px}.st-touch-tiles .selected{background:#263f91;color:#fff;border-color:#263f91}.st-touch-adjust,.st-touch-actions{display:flex;gap:7px;margin-top:7px}.st-touch-adjust .st-key,.st-touch-actions .st-key{flex:1;min-height:44px}.st-touch-confirm{background:#263f91;color:#fff}.st-keypad-message{min-height:18px;text-align:center;font-size:11px;font-weight:700;margin-top:6px;color:#536184}.st-key:active{background:#e6ebff}.st-key[data-key="Next"]{background:#263f91;color:#fff}.st-key[data-key="Clear"]{font-size:12px}.st-keypad[data-style="smart"]{background:#eef3ff;border-color:#aab9ed}.st-keypad[data-style="touch"] .st-key{min-height:58px;font-size:20px;border-radius:12px}.st-keypad[data-style="touch"]{padding:16px}#inputTab[data-score-keyboard-style="touch"] .st-score{width:82px;min-width:78px;min-height:54px;font-size:18px;border-radius:11px}#inputTab[data-score-keyboard-style="touch"] .st-keypad{padding:16px}.st-score[readonly]{background:#f4f7ff;cursor:pointer}.st-keypad[hidden]{display:none!important}@media(max-width:600px){.st-score{width:54px;min-width:50px}.st-keypad{padding:9px}.st-key{min-height:46px}}/* Final approved landing-page image composition — use committed image assets */#loginContainer{  background:#321064 url("assets/landing/school-background.webp") center center / cover no-repeat;  min-height:100vh;min-height:100svh;}#loginContainer:before{  content:"";position:absolute;z-index:-2;inset:0;height:100%;  background-image:linear-gradient(90deg,rgba(50,5,91,.76) 0%,rgba(50,5,91,.42) 36%,rgba(30,10,62,.08) 76%),url("assets/landing/school-background.webp");  background-size:cover;background-position:center;background-repeat:no-repeat;opacity:1;}#loginContainer:after{  opacity:.88;  background:linear-gradient(160deg,transparent 72%,rgba(255,193,7,.92) 72.2%,rgba(255,193,7,.92) 73%,transparent 73.2%),linear-gradient(165deg,transparent 75%,rgba(0,112,57,.84) 75.2%,rgba(0,112,57,.84) 78%,transparent 78.2%);}#loginContainer .landing-campus-scene{  position:absolute;z-index:-1;inset:0 0 auto;height:min(74vh,900px);min-height:540px;  overflow:hidden;pointer-events:none;  background-image:linear-gradient(90deg,rgba(48,5,91,.70) 0%,rgba(48,5,91,.28) 39%,rgba(22,14,45,.02) 78%),linear-gradient(0deg,rgba(38,5,72,.30),transparent 32%),url("assets/landing/school-building.webp");  background-size:cover;background-position:center 48%;background-repeat:no-repeat;  -webkit-mask-image:linear-gradient(to bottom,#000 0%,#000 76%,transparent 100%);  mask-image:linear-gradient(to bottom,#000 0%,#000 76%,transparent 100%);}#loginContainer .landing-graduation{display:flex;align-items:center;justify-content:center;width:100%;min-height:0;height:auto;margin:18px auto 5px}#loginContainer .landing-graduation-art{display:block;width:min(100%,640px);height:auto;max-height:280px;object-fit:contain;filter:drop-shadow(0 8px 12px rgba(0,0,0,.24))}@media(max-width:1050px){  #loginContainer .landing-campus-scene{height:52vh;min-height:360px;background-position:center 44%;-webkit-mask-image:linear-gradient(to bottom,#000 0%,#000 72%,transparent 100%);mask-image:linear-gradient(to bottom,#000 0%,#000 72%,transparent 100%)}  #loginContainer .landing-graduation{margin:12px auto 5px!important}  #loginContainer .landing-graduation-art{width:min(100%,540px);max-height:245px}}@media(max-width:600px){  #loginContainer{background-position:center top}  #loginContainer .landing-campus-scene{height:390px;min-height:0;background-position:58% center;-webkit-mask-image:linear-gradient(to bottom,#000 0%,#000 65%,transparent 100%);mask-image:linear-gradient(to bottom,#000 0%,#000 65%,transparent 100%)}  #loginContainer .landing-graduation-art{width:100%;max-height:210px}}</style></div>';
