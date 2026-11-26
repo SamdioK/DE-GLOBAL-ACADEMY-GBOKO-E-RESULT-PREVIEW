@@ -15157,6 +15157,35 @@ async function renderSubjectTeacherInputLegacy() {
   renderPanel();
 }
 
+function showAssessmentSubmissionSuccess(componentLabel, classLabel, subjectLabel) {
+  var modal = document.createElement('div');
+  modal.id = 'stAssessmentSubmissionSuccess';
+  modal.setAttribute('role', 'dialog');
+  modal.setAttribute('aria-modal', 'true');
+  modal.setAttribute('aria-labelledby', 'stAssessmentSuccessTitle');
+  modal.style.cssText = 'position:fixed;inset:0;z-index:12600;background:rgba(12,18,35,.72);display:flex;align-items:center;justify-content:center;padding:18px;';
+  modal.innerHTML = '<div style="width:min(100%,430px);background:#fff;border-radius:20px;padding:24px 20px;text-align:center;box-shadow:0 20px 60px rgba(0,0,0,.3);color:#182033">' +
+    '<div style="width:150px;height:140px;margin:0 auto 10px;display:flex;align-items:center;justify-content:center">' +
+    '<svg viewBox="0 0 180 165" role="img" aria-label="Thumbs-up approval avatar" style="width:100%;height:100%;overflow:visible">' +
+    '<defs><linearGradient id="stThumbCuff" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#d52cff"/><stop offset="1" stop-color="#6800a8"/></linearGradient><linearGradient id="stThumbGold" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ffe86a"/><stop offset="1" stop-color="#f2a900"/></linearGradient></defs>' +
+    '<path d="M12 82 Q14 66 31 66 H70 Q84 35 103 8 Q115 -4 128 7 Q139 17 135 34 L124 67 Q153 63 165 75 Q174 84 169 98 Q178 111 166 123 Q170 139 155 147 Q146 158 126 153 L70 146 H32 Q12 145 12 126 Z" fill="#fff" stroke="#4b006f" stroke-width="7" stroke-linejoin="round"/>' +
+    '<path d="M14 83 Q14 72 29 72 H66 L69 142 H30 Q14 142 14 126 Z" fill="url(#stThumbCuff)" stroke="#520078" stroke-width="5"/>' +
+    '<path d="M68 73 Q82 45 106 13 Q115 3 124 11 Q132 19 128 33 L111 77 Q108 84 119 83 L151 82 Q164 81 166 91 Q168 101 155 105 L124 108 Q162 107 164 118 Q165 130 150 133 L118 135 Q148 135 146 145 Q143 154 127 149 L72 141 Z" fill="#fff" stroke="#d8dcf0" stroke-width="4" stroke-linejoin="round"/>' +
+    '<path d="M72 73 L72 143" stroke="#d8dcf0" stroke-width="6"/>' +
+    '<circle cx="41" cy="111" r="15" fill="url(#stThumbGold)" stroke="#f3b400" stroke-width="4"/>' +
+    '</svg></div>' +
+    '<h3 id="stAssessmentSuccessTitle" style="font-size:22px;line-height:1.25;margin:8px 0 10px;color:#172554">You have successfully submitted!</h3>' +
+    '<p style="font-size:15px;line-height:1.55;color:#475569;margin:0 0 8px"><strong>' + escapeManagementText(componentLabel) + '</strong> for <strong>' + escapeManagementText(classLabel) + ' — ' + escapeManagementText(subjectLabel) + '</strong> has been submitted successfully.</p>' +
+    '<div style="margin:14px 0;padding:12px;border-radius:11px;background:#fff7ed;color:#9a3412;font-size:14px;line-height:1.5;font-weight:700">Your submission is awaiting the Form Master’s review and approval.</div>' +
+    '<p style="font-size:12px;color:#64748b;margin:0 0 18px">You can monitor the approval status in the Status column. The scores are locked while the submission is under review.</p>' +
+    '<button type="button" class="btn btn-primary" data-st-success-close style="min-width:140px">Continue</button></div>';
+  document.body.appendChild(modal);
+  var close = function() { if (modal.isConnected) modal.remove(); };
+  modal.querySelector('[data-st-success-close]').addEventListener('click', close);
+  modal.addEventListener('click', function(event) { if (event.target === modal) close(); });
+  modal.addEventListener('keydown', function(event) { if (event.key === 'Escape') close(); });
+}
+
 async function renderSubjectTeacherInput() {
   var root = document.getElementById('inputTab');
   if (!root) return;
@@ -15795,8 +15824,15 @@ async function renderSubjectTeacherInput() {
           var studentRows=Array.from(root.querySelectorAll('tbody tr[data-student-id]'));
           var collectCa=function(field,maximum){return studentRows.map(function(row){var input=row.querySelector('[data-field="'+field+'"]');if(!input)throw new Error(field.toUpperCase()+' is unavailable.');var raw=String(input.value||'').trim();if(raw==='')throw new Error('Complete '+field.toUpperCase()+' for every student. Use 0 for zero or - for confirmed non-participation.');if(raw==='-')return {student_id:row.getAttribute('data-student-id'),score:'-'};var score=Number(raw);if(!Number.isFinite(score)||score<0||score>maximum)throw new Error('Invalid '+field.toUpperCase()+' score for '+row.cells[1].textContent+'.');return {student_id:row.getAttribute('data-student-id'),score:String(score)};});};
           var bundle=await supabaseClient.rpc('submit_result_assessment_ca_bundle',{p_class_id:classId,p_subject_id:subjectId,p_academic_session_id:sessionId,p_term_id:selectedTerm.id,p_ca1_entries:collectCa('ca1',maxima.ca1),p_ca2_entries:collectCa('ca2',maxima.ca2),p_ca3_entries:collectCa('ca3',maxima.ca3)});
-          if(bundle.error)throw bundle.error;var bundleData=Array.isArray(bundle.data)?bundle.data[0]:bundle.data;if(!bundleData||bundleData.success!==true)throw new Error('Supabase did not confirm the combined CA submission.');
-          showToast('CA1, CA2 and CA3 submitted together to the Form Master.','success');await renderSubjectTeacherInput();return;
+          if(bundle.error)throw bundle.error;
+          var bundleData=Array.isArray(bundle.data)?bundle.data[0]:bundle.data;
+          if(!bundleData||bundleData.success!==true)throw new Error('Supabase did not confirm the combined CA submission.');
+          var bundleReadback=await supabaseClient.rpc('list_result_assessment_submissions',{p_class_id:classId,p_academic_session_id:sessionId,p_term_id:selectedTerm.id,p_stage:null});
+          if(bundleReadback.error)throw bundleReadback.error;
+          var confirmedBundleStages=(Array.isArray(bundleReadback.data)?bundleReadback.data:[]).filter(function(item){return String(item.subject_id)===String(subjectId)&&[1,2,3].indexOf(Number(item.assessment_stage))>=0&&item.status==='submitted_to_form_master';});
+          if([1,2,3].some(function(stage){return !confirmedBundleStages.some(function(item){return Number(item.assessment_stage)===stage;});}))throw new Error('Supabase saved the combined CA response but did not confirm all three approval statuses. Refresh and check the submission status before trying again.');
+          showAssessmentSubmissionSuccess('CA1 + CA2 + CA3',className,subjectName);
+          await renderSubjectTeacherInput();return;
         }
         var selectedStage=stageOptions.find(function(item){return item.stage===chosen;});
         var scoreRows=Array.from(root.querySelectorAll('tbody tr[data-student-id]'));
@@ -15828,7 +15864,11 @@ async function renderSubjectTeacherInput() {
         if(submitted.error) throw submitted.error;
         var submittedData=Array.isArray(submitted.data)?submitted.data[0]:submitted.data;
         if(!submittedData||submittedData.success!==true) throw new Error((submittedData&&(submittedData.error||submittedData.message))||'Supabase did not confirm the assessment submission.');
-        showToast(selectedStage.label+' scores submitted to the Form Master for review.','success');
+        var stageReadback=await supabaseClient.rpc('list_result_assessment_submissions',{p_class_id:classId,p_academic_session_id:sessionId,p_term_id:selectedTerm.id,p_stage:null});
+        if(stageReadback.error)throw stageReadback.error;
+        var confirmedStage=(Array.isArray(stageReadback.data)?stageReadback.data:[]).find(function(item){return String(item.subject_id)===String(subjectId)&&Number(item.assessment_stage)===chosen;});
+        if(!confirmedStage||confirmedStage.status!=='submitted_to_form_master')throw new Error('Supabase did not confirm the pending Form Master approval status. Refresh and check the submission status before trying again.');
+        showAssessmentSubmissionSuccess(selectedStage.label,className,subjectName);
         await renderSubjectTeacherInput();
       } catch(error) {
         console.error('Assessment component submission failed:',error);
